@@ -2,8 +2,9 @@ services:
   - type: web
     name: communityshield-backend
     runtime: go
-    repo: https://github.com/YOUR_USERNAME/security-platform
     plan: free
+    buildCommand: cd backend && go build -o main .
+    startCommand: cd backend && ./main
     envVars:
       - key: DB_HOST
         fromDatabase:
@@ -59,7 +60,6 @@ services:
   - type: web
     name: communityshield-frontend
     runtime: static
-    repo: https://github.com/YOUR_USERNAME/security-platform
     plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
