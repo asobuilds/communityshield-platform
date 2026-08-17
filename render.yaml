@@ -1,0 +1,72 @@
+services:
+  - type: web
+    name: communityshield-backend
+    runtime: go
+    repo: https://github.com/YOUR_USERNAME/security-platform
+    plan: free
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: communityshield-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: communityshield-db
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: communityshield-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: communityshield-db
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: communityshield-db
+          property: database
+      - key: PORT
+        value: 8080
+      - key: GIN_MODE
+        value: release
+      - key: JWT_SECRET
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: AT_USERNAME
+        sync: false
+      - key: AT_API_KEY
+        sync: false
+      - key: AT_SHORTCODE
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+
+  - type: web
+    name: communityshield-frontend
+    runtime: static
+    repo: https://github.com/YOUR_USERNAME/security-platform
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://communityshield-backend.onrender.com/api/v1
+
+databases:
+  - name: communityshield-db
+    plan: free

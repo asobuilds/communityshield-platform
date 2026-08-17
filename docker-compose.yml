@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: communityshield-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: security_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - communityshield-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: communityshield-backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: security_platform
+      PORT: 8080
+      GIN_MODE: release
+      JWT_SECRET: your-production-secret
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: your-email@gmail.com
+      SMTP_PASSWORD: your-app-password
+      SMTP_FROM: your-email@gmail.com
+      AT_USERNAME: your-username
+      AT_API_KEY: your-api-key
+      AT_SHORTCODE: your-shortcode
+      OPENROUTER_API_KEY: your-key
+      VAPID_PUBLIC_KEY: your-public-key
+      VAPID_PRIVATE_KEY: your-private-key
+      VAPID_SUBJECT: mailto:your-email@example.com
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - communityshield-network
+    volumes:
+      - ./backend/uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: communityshield-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - communityshield-network
+
+volumes:
+  postgres_data:
+
+networks:
+  communityshield-network:
+    driver: bridge
