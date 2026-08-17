@@ -60,7 +60,7 @@ services:
   - type: web
     name: communityshield-frontend
     runtime: static
-    plan: free
+    plan: starter
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
     envVars:
