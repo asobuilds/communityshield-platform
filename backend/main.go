@@ -3,10 +3,11 @@ package main
 import (
 	"log"
 	"net/http"
-        "os"
+	"os"
 	"security-solution/handlers"
 	"security-solution/models"
 	"time"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
@@ -17,13 +18,13 @@ var DB *gorm.DB
 
 func main() {
 	// Get DATABASE_URL from environment
-        dbURL := os.Getenv("DATABASE_URL")
-        if dbURL == "" {
-            log.Fatal("DATABASE_URL environment variable is not set")
-        }
-        DB, err = gorm.Open(postgres.Open(dbURL), &gorm.Config{})
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("DATABASE_URL environment variable is not set")
+	}
+
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	DB, err = gorm.Open(postgres.Open(dbURL), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
@@ -48,7 +49,7 @@ func main() {
 		&models.CaseTransfer{},
 		&models.OTP{},
 		&models.PushSubscription{},
-		&models.Report{}, // 🔥 NEW
+		&models.Report{},
 	)
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
@@ -165,7 +166,7 @@ func main() {
 			push.GET("/vapid-public-key", handlers.GetVAPIDPublicKey)
 		}
 
-		reports := api.Group("/reports") // 🔥 NEW
+		reports := api.Group("/reports")
 		{
 			reports.POST("", handlers.CreateReport)
 		}
@@ -192,8 +193,8 @@ func main() {
 			admin.GET("/cases/archived", handlers.AdminGetArchivedCases)
 			admin.PUT("/cases/:id/restore", handlers.RestoreArchivedCase)
 			admin.DELETE("/cases/:id/permanent", handlers.AdminDeleteArchivedCase)
-			admin.GET("/reports", handlers.AdminGetReports)                    // 🔥 NEW
-			admin.PUT("/reports/:id/status", handlers.AdminUpdateReportStatus) // 🔥 NEW
+			admin.GET("/reports", handlers.AdminGetReports)
+			admin.PUT("/reports/:id/status", handlers.AdminUpdateReportStatus)
 		}
 
 		transactions := api.Group("/transactions")
@@ -223,12 +224,8 @@ func main() {
 		api.GET("/ws", handlers.WebSocketHandler)
 		api.GET("/chat/history", handlers.GetChatHistory)
 		api.GET("/officers/week", handlers.GetOfficersOfTheWeek)
-                api.GET("/leaderboard/units", handlers.GetUnitLeaderboard)
-                api.GET("/leaderboard", handlers.GetUnitLeaderboard)
-                api.GET("/twitter/monitor", handlers.MonitorTwitterAlerts)
 	}
 
-	// Archiving scheduler: runs every 24 hours
 	go func() {
 		for {
 			time.Sleep(24 * time.Hour)
