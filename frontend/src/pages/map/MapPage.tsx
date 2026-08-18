@@ -81,8 +81,10 @@ export default function MapPage() {
   };
 
   const filteredIncidents = incidents.filter(incident => {
-    if (filter === 'all') return true;
-    return incident.type === filter;
+   if (filter === 'all') return true;
+   if (filter === 'cases') return incident.type === 'case';
+   if (filter === 'units') return incident.type === 'unit';
+   return true;
   });
 
   return (

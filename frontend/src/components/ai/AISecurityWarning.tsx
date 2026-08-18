@@ -12,9 +12,10 @@ export default function AISecurityWarning({ location, onWarningGenerated }: AISe
   const [warning, setWarning] = useState('');
   const [incidentIds, setIncidentIds] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [loc, setLoc] = useState(location);
 
   const handleGenerateWarning = async () => {
-    if (!location) {
+    if (!loc) {
       toast.error('Please enter a location');
       return;
     }
@@ -22,7 +23,7 @@ export default function AISecurityWarning({ location, onWarningGenerated }: AISe
     setLoading(true);
     try {
       const response = await axios.post('/api/v1/ai/security-warning', {
-        location,
+        location: loc,
         incidentIds: incidentIds,
       });
       setWarning(response.data.warning);
@@ -55,8 +56,8 @@ export default function AISecurityWarning({ location, onWarningGenerated }: AISe
             <input
               type="text"
               placeholder="Location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              value={loc}
+              onChange={(e) => setLoc(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
             />
           </div>

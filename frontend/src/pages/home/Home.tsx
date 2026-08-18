@@ -63,10 +63,6 @@ export default function Home() {
     }
   };
 
-  const isAdmin = user?.role === 'unit_admin' || user?.role === 'super_admin';
-  const isOfficer = user?.role === 'officer';
-  const canViewSuspects = isAdmin || isOfficer;
-
   return (
     <div>
       {/* Welcome Section */}
@@ -148,7 +144,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Quick Actions - Conditional based on role */}
+      {/* Quick Actions */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Link to="/my-cases">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow text-center hover:shadow-md transition cursor-pointer">
@@ -180,32 +176,12 @@ export default function Home() {
             <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">Alerts</p>
           </div>
         </Link>
-        
-        {/* Only show suspects if admin or officer */}
-        {canViewSuspects && (
-          <Link to="/suspects">
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl">🕵️</div>
-              <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">Suspects</p>
-            </div>
-          </Link>
-        )}
-        
         <Link to="/profile">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow text-center hover:shadow-md transition cursor-pointer">
             <div className="text-3xl">👤</div>
             <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">Profile</p>
           </div>
         </Link>
-        
-        {isAdmin && (
-          <Link to="/admin">
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow text-center hover:shadow-md transition cursor-pointer">
-              <div className="text-3xl">⚙️</div>
-              <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">Admin</p>
-            </div>
-          </Link>
-        )}
       </div>
     </div>
   );
