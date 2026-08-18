@@ -31,7 +31,7 @@ func main() {
 
 	handlers.DB = DB
 
-	// Migrate the schema (if it fails, log but continue – tables may already exist)
+	// Auto-migrate all models – if tables already exist, we skip the error
 	err = DB.AutoMigrate(
 		&models.User{},
 		&models.Case{},
@@ -52,7 +52,7 @@ func main() {
 		&models.Report{},
 	)
 	if err != nil {
-		// If migration fails, we still continue – tables likely already exist
+		// Log the error but continue – tables likely already exist
 		log.Println("⚠️ Migration warning (tables may already exist):", err)
 	} else {
 		log.Println("✅ Database migrated!")
@@ -228,6 +228,7 @@ func main() {
 		api.GET("/officers/week", handlers.GetOfficersOfTheWeek)
 	}
 
+	// Archiving scheduler
 	go func() {
 		for {
 			time.Sleep(24 * time.Hour)
