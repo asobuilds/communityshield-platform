@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -14,35 +13,32 @@ import (
 var DB *gorm.DB
 
 func ConnectDatabase() {
-	// Get environment variables
-	host := os.Getenv("DB_HOST")
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASSWORD")
-	dbname := os.Getenv("DB_NAME")
-	port := os.Getenv("DB_PORT")
+	// Use DATABASE_URL from environment
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		// Fallback to individual variables
+		host := os.Getenv("DB_HOST")
+		user := os.Getenv("DB_USER")
+		password := os.Getenv("DB_PASSWORD")
+		dbname := os.Getenv("DB_NAME")
+		port := os.Getenv("DB_PORT")
 
-	// Set defaults if not provided
-	if host == "" {
-		host = "localhost"
-	}
-	if port == "" {
-		port = "5432"
-	}
-	if user == "" {
-		user = "postgres"
-	}
-	if password == "" {
-		password = "postgres"  // Your password
-	}
-	if dbname == "" {
-		dbname = "postgres"  // Use default database
+		if host == "" {
+			host = "localhost"
+		}
+		if port == "" {
+			port = "5432"
+		}
+		if user == "" {
+			user = "postgres"
+		}
+		if dbname == "" {
+			dbname = "postgres"
+		}
+		dsn = "host=" + host + " user=" + user + " password=" + password + " dbname=" + dbname + " port=" + port + " sslmode=require TimeZone=UTC"
 	}
 
-	// Proper DSN format
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
-		host, user, password, dbname, port)
-
-	log.Printf("📊 Connecting to database: %s@%s:%s/%s", user, host, port, dbname)
+	log.Println("📊 Connecting to database...")
 
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
