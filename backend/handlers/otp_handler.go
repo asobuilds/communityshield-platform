@@ -37,6 +37,7 @@ func SendOTP(c *gin.Context) {
 	}
 
 	code := generateOTP()
+        log.Printf("🔑 OTP for user %s: %s", userID, code)
 	expiresAt := time.Now().Add(10 * time.Minute)
 
 	otp := models.OTP{
