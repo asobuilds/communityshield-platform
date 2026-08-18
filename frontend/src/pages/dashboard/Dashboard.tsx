@@ -1,7 +1,7 @@
 import NotificationBell from '../../components/NotificationBell';
-import { Card, CardContent } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { Card, CardContent } from '../../components/ui/Card';
 
 function Dashboard() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');

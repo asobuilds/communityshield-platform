@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Button from '../../components/ui/Button';
-import { Card, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
+import { Card, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 
 function LandingPage() {
   const navigate = useNavigate();

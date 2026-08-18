@@ -3,9 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import Button from '../../components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 
 function ReportCase() {
   const navigate = useNavigate();
@@ -260,22 +260,22 @@ function ReportCase() {
             <div className="mt-2">
               <div className="flex flex-wrap gap-2 items-end">
                 <div className="flex-1 min-w-[150px]">
-                  <input
+                  <Input
                     type="text"
                     value={addressQuery}
                     onChange={(e) => setAddressQuery(e.target.value)}
                     placeholder="Search address, bus stop, street"
-                    className="w-full px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-white"
                   />
                 </div>
-                <button
+                <Button
                   onClick={searchAddress}
                   disabled={addressLoading}
-                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                  variant="primary"
+                  size="sm"
                 >
                   {addressLoading ? 'Searching...' : 'Search'}
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => {
                     const lat = parseFloat(manualLat);
                     const lng = parseFloat(manualLng);
@@ -287,27 +287,26 @@ function ReportCase() {
                       toast.error('Enter valid numbers');
                     }
                   }}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                  variant="primary"
+                  size="sm"
                 >
                   Set Coords
-                </button>
+                </Button>
               </div>
               <div className="flex gap-2 mt-2">
-                <input
+                <Input
                   type="number"
                   step="any"
                   placeholder="Latitude"
                   value={manualLat}
                   onChange={(e) => setManualLat(e.target.value)}
-                  className="w-1/2 px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-white"
                 />
-                <input
+                <Input
                   type="number"
                   step="any"
                   placeholder="Longitude"
                   value={manualLng}
                   onChange={(e) => setManualLng(e.target.value)}
-                  className="w-1/2 px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-white"
                 />
               </div>
             </div>
@@ -436,13 +435,15 @@ function ReportCase() {
             </label>
           </div>
 
-          <button
+          <Button
             type="submit"
             disabled={loading || uploadingEvidence}
-            className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 text-lg font-semibold"
+            variant="primary"
+            size="lg"
+            className="w-full"
           >
             {loading ? 'Submitting...' : uploadingEvidence ? 'Uploading evidence...' : 'Submit Case'}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-6">
