@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"security-solution/models"
@@ -37,7 +38,8 @@ func SendOTP(c *gin.Context) {
 	}
 
 	code := generateOTP()
-        log.Printf("🔑 OTP for user %s: %s", userID, code)
+	log.Printf("🔑 OTP for user %s: %s", userID, code)
+
 	expiresAt := time.Now().Add(10 * time.Minute)
 
 	otp := models.OTP{
@@ -147,13 +149,14 @@ func ResendOTP(c *gin.Context) {
 		return
 	}
 
-	// Delete old unverified OTPs for this user
 	if err := DB.Where("user_id = ? AND verified = ?", userID, false).Delete(&models.OTP{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear old OTPs"})
 		return
 	}
 
 	code := generateOTP()
+	log.Printf("🔑 Resent OTP for user %s: %s", userID, code)
+
 	expiresAt := time.Now().Add(10 * time.Minute)
 
 	otp := models.OTP{
