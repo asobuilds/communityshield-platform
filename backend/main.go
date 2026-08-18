@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+        "os"
 	"security-solution/handlers"
 	"security-solution/models"
 	"time"
@@ -15,7 +16,12 @@ import (
 var DB *gorm.DB
 
 func main() {
-	dsn := "host=localhost user=postgres password=postgres dbname=security_platform port=5432 sslmode=disable"
+	// Get DATABASE_URL from environment
+        dbURL := os.Getenv("DATABASE_URL")
+        if dbURL == "" {
+            log.Fatal("DATABASE_URL environment variable is not set")
+        }
+        DB, err = gorm.Open(postgres.Open(dbURL), &gorm.Config{})
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
