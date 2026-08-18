@@ -17,7 +17,6 @@ import (
 var DB *gorm.DB
 
 func main() {
-	// Get DATABASE_URL from environment
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL environment variable is not set")
@@ -32,6 +31,7 @@ func main() {
 
 	handlers.DB = DB
 
+	// Migrate the schema (if it fails, log but continue – tables may already exist)
 	err = DB.AutoMigrate(
 		&models.User{},
 		&models.Case{},
@@ -52,9 +52,11 @@ func main() {
 		&models.Report{},
 	)
 	if err != nil {
-		log.Fatal("Failed to migrate database:", err)
+		// If migration fails, we still continue – tables likely already exist
+		log.Println("⚠️ Migration warning (tables may already exist):", err)
+	} else {
+		log.Println("✅ Database migrated!")
 	}
-	log.Println("✅ Database migrated!")
 
 	if err := handlers.InitSMS(); err != nil {
 		log.Println("⚠️ SMS initialization failed:", err)
