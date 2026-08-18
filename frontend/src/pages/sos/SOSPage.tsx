@@ -36,10 +36,7 @@ function SOSPage() {
     setLocationError('Getting your location...');
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
+        setLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
         setLocationError('');
         toast.success('📍 Location captured');
         findNearestUnit(position.coords.latitude, position.coords.longitude);
@@ -74,7 +71,7 @@ function SOSPage() {
         toast.success(`Nearest unit: ${units[0].name} (${units[0].distance.toFixed(1)} km)`);
       } else {
         setNearestUnit(null);
-        toast.info('No units found nearby. SOS will be sent to all units.');
+        toast('No units found nearby. SOS will be sent to all units.', { icon: 'ℹ️' });
       }
     } catch (error) {
       console.error('Failed to find nearest unit:', error);

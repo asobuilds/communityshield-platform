@@ -67,7 +67,7 @@ function WalkieTalkie({ unitId, userId, userName }: WalkieTalkieProps) {
 
   const handlePushStart = () => {
     setIsPushing(true);
-    toast.info('Push-to-talk: Press to speak (text mode for demo)');
+    toast('Push-to-talk: Press to speak (text mode for demo)', { icon: 'ℹ️' });
   };
 
   const handlePushEnd = () => {

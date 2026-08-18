@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import Button from '../../components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
+import Input from '../../components/ui/Input';
+import Badge from '../../components/ui/Badge';
 
 function ReportCase() {
   const navigate = useNavigate();
@@ -28,13 +32,12 @@ function ReportCase() {
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
 
-  // 🔥 Check for unit query param
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const unitId = params.get('unit');
     if (unitId) {
       setSelectedUnitId(unitId);
-      toast.info('Unit pre-selected from search');
+      toast('Unit pre-selected from search', { icon: 'ℹ️' });
     }
   }, [location.search]);
 
@@ -317,7 +320,6 @@ function ReportCase() {
           <div className="flex justify-between items-center flex-wrap gap-2">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">🏢 Nearby Security Units</h2>
             <div className="flex gap-2">
-              {/* 🔥 Link to Find Units page */}
               <a
                 href="/units"
                 className="px-3 py-1 rounded text-sm bg-blue-600 text-white hover:bg-blue-700"
@@ -378,11 +380,10 @@ function ReportCase() {
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Case Title *</label>
-            <input
+            <Input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 dark:text-white"
               required
             />
           </div>
@@ -398,11 +399,10 @@ function ReportCase() {
           </div>
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location Address (optional)</label>
-            <input
+            <Input
               type="text"
               value={locationAddress}
               onChange={(e) => setLocationAddress(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 dark:text-white"
               placeholder="e.g., Lagos, Nigeria"
             />
           </div>
