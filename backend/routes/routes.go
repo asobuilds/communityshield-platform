@@ -1,0 +1,216 @@
+package routes
+
+import (
+	"github.com/gin-gonic/gin"
+	"security-solution/handlers"
+	"security-solution/middleware"
+)
+
+func SetupRoutes(router *gin.Engine) {
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "ok",
+			"message": "CommunityShield API is running",
+			"version": "1.0.0",
+		})
+	})
+
+	// API v1 routes
+	api := router.Group("/api/v1")
+	{
+		// Auth routes
+		authHandler := handlers.NewAuthHandler()
+		auth := api.Group("/auth")
+		{
+			auth.POST("/register", authHandler.Register)
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/logout", authHandler.Logout)
+			auth.GET("/profile", middleware.AuthMiddleware(), authHandler.GetProfile)
+		}
+
+		// OTP routes
+		otp := api.Group("/otp")
+		{
+			otp.POST("/send", handlers.SendOTP)
+			otp.POST("/verify", handlers.VerifyOTP)
+			otp.POST("/resend", handlers.ResendOTP)
+		}
+
+		// Unit routes
+		units := api.Group("/units")
+		{
+			units.GET("/nearby", handlers.GetNearbyUnits)
+			units.GET("", handlers.GetAllUnits)
+			units.GET("/:id", handlers.GetUnitByID)
+			units.POST("", middleware.AuthMiddleware(), handlers.CreateUnit)
+			units.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateUnit)
+		}
+
+		// Case routes
+		cases := api.Group("/cases")
+		{
+			cases.GET("", handlers.GetAllCases)
+			cases.POST("", middleware.AuthMiddleware(), handlers.CreateCase)
+			cases.GET("/:id", handlers.GetCaseByID)
+			cases.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateCaseStatus)
+		}
+
+		// Evidence routes
+		evidence := api.Group("/evidence")
+		{
+			evidence.POST("/upload", middleware.AuthMiddleware(), handlers.UploadEvidence)
+			evidence.GET("/:id", handlers.GetEvidenceByCase)
+			evidence.DELETE("/:id", middleware.AuthMiddleware(), handlers.DeleteEvidence)
+			evidence.PATCH("/:id/verify", middleware.AuthMiddleware(), handlers.VerifyEvidence)
+		}
+
+		// Rating routes
+		ratings := api.Group("/ratings")
+		{
+			ratings.GET("/units/:unitId", handlers.GetUnitRatings)
+			ratings.POST("", middleware.AuthMiddleware(), handlers.SubmitRating)
+		}
+
+		// SOS routes
+		sos := api.Group("/sos")
+		{
+			sos.POST("/send", middleware.AuthMiddleware(), handlers.SendSOSAlert)
+			sos.GET("", middleware.AuthMiddleware(), handlers.GetSOSAlerts)
+			sos.GET("/my", middleware.AuthMiddleware(), handlers.GetUserSOSAlerts)
+			sos.GET("/:id", middleware.AuthMiddleware(), handlers.GetSOSAlertByID)
+			sos.PUT("/:id/status", middleware.AuthMiddleware(), handlers.UpdateSOSAlertStatus)
+		}
+
+		// Suspect routes
+		suspects := api.Group("/suspects")
+		{
+			suspects.POST("", middleware.AuthMiddleware(), handlers.CreateSuspect)
+			suspects.GET("", middleware.AuthMiddleware(), handlers.GetAllSuspects)
+			suspects.GET("/:id", middleware.AuthMiddleware(), handlers.GetSuspectByID)
+			suspects.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateSuspect)
+			suspects.DELETE("/:id", middleware.AuthMiddleware(), handlers.DeleteSuspect)
+			suspects.POST("/:id/sighting", middleware.AuthMiddleware(), handlers.ReportSighting)
+			suspects.GET("/:id/sightings", middleware.AuthMiddleware(), handlers.GetSuspectSightings)
+			suspects.GET("/:id/cases", middleware.AuthMiddleware(), handlers.GetSuspectCases)
+		}
+
+		// Transfer routes
+		transfers := api.Group("/transfers")
+		{
+			transfers.POST("", middleware.AuthMiddleware(), handlers.RequestTransfer)
+			transfers.POST("/:id/approve", middleware.AuthMiddleware(), handlers.ApproveTransfer)
+			transfers.POST("/:id/reject", middleware.AuthMiddleware(), handlers.RejectTransfer)
+			transfers.GET("", middleware.AuthMiddleware(), handlers.GetTransferRequests)
+			transfers.GET("/:id/approvals", middleware.AuthMiddleware(), handlers.GetTransferApprovals)
+		}
+
+		// News routes
+		news := api.Group("/news")
+		{
+			news.POST("", middleware.AuthMiddleware(), handlers.CreateNews)
+			news.GET("", middleware.AuthMiddleware(), handlers.GetAllNews)
+			news.GET("/:id", middleware.AuthMiddleware(), handlers.GetNewsByID)
+		}
+
+		// Alerts routes
+		alerts := api.Group("/alerts")
+		{
+			alerts.GET("/news", middleware.AuthMiddleware(), handlers.GetNewsAlerts)
+		}
+
+		// AI routes
+		ai := api.Group("/ai")
+		{
+			ai.POST("/analyze-location", middleware.AuthMiddleware(), handlers.AIAnalyzeLocation)
+			ai.POST("/map-insights", middleware.AuthMiddleware(), handlers.AIGetMapInsights)
+			ai.POST("/security-warning", middleware.AuthMiddleware(), handlers.AIGenerateSecurityWarning)
+			ai.POST("/analyze-news", middleware.AuthMiddleware(), handlers.AIAnalyzeNews)
+			ai.POST("/smart-tips", middleware.AuthMiddleware(), handlers.AIGetSmartTips)
+			ai.POST("/predict-hotspots", middleware.AuthMiddleware(), handlers.AIPredictHotspots)
+			ai.POST("/community-alert", middleware.AuthMiddleware(), handlers.AIGenerateCommunityAlert)
+		}
+
+                // Mobile API routes
+                mobile := api.Group("/mobile")
+                {
+	                mobile.GET("/config", middleware.AuthMiddleware(), handlers.MobileAppConfig)
+	                mobile.GET("/dashboard", middleware.AuthMiddleware(), handlers.MobileDashboard)
+	                mobile.GET("/notifications", middleware.AuthMiddleware(), handlers.MobileNotifications)
+	                mobile.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MobileMarkNotificationRead)
+	                mobile.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MobileMarkAllRead)
+	                mobile.GET("/sync", middleware.AuthMiddleware(), handlers.MobileSync)
+ 	                mobile.POST("/crash-report", middleware.AuthMiddleware(), handlers.MobileCrashReport)
+                }
+
+		// Bank Account routes
+		bank := api.Group("/bank")
+		{
+			bank.POST("/accounts", middleware.AuthMiddleware(), handlers.AddBankAccount)
+			bank.GET("/:unitId/accounts", middleware.AuthMiddleware(), handlers.GetBankAccounts)
+			bank.PUT("/accounts/:id", middleware.AuthMiddleware(), handlers.UpdateBankAccount)
+			bank.DELETE("/accounts/:id", middleware.AuthMiddleware(), handlers.DeleteBankAccount)
+			bank.POST("/donations", middleware.AuthMiddleware(), handlers.RecordDonation)
+			bank.POST("/donations/:id/confirm", middleware.AuthMiddleware(), handlers.ConfirmDonation)
+			bank.GET("/:unitId/donations", middleware.AuthMiddleware(), handlers.GetDonations)
+		}
+
+		// Finance routes
+		finance := api.Group("/finance")
+		{
+			finance.POST("/transactions", middleware.AuthMiddleware(), handlers.CreateTransaction)
+			finance.POST("/transactions/:id/approve", middleware.AuthMiddleware(), handlers.ApproveTransaction)
+			finance.POST("/transactions/:id/reject", middleware.AuthMiddleware(), handlers.RejectTransaction)
+			finance.GET("/units/:unitId/transactions", middleware.AuthMiddleware(), handlers.GetTransactions)
+			finance.GET("/transactions/:id", middleware.AuthMiddleware(), handlers.GetTransactionByID)
+			finance.GET("/units/:unitId/summary", middleware.AuthMiddleware(), handlers.GetTransactionSummary)
+			finance.POST("/budgets", middleware.AuthMiddleware(), handlers.CreateBudget)
+			finance.GET("/units/:unitId/budgets", middleware.AuthMiddleware(), handlers.GetBudgets)
+			finance.POST("/reports", middleware.AuthMiddleware(), handlers.GenerateFinancialReport)
+			finance.GET("/units/:unitId/reports", middleware.AuthMiddleware(), handlers.GetFinancialReports)
+		}
+
+		// Community routes
+		community := api.Group("/community")
+		{
+			community.POST("/posts", middleware.AuthMiddleware(), handlers.CreateForumPost)
+			community.GET("/posts", middleware.AuthMiddleware(), handlers.GetForumPosts)
+			community.GET("/posts/:id", middleware.AuthMiddleware(), handlers.GetForumPostByID)
+			community.POST("/replies", middleware.AuthMiddleware(), handlers.CreateForumReply)
+			community.POST("/announcements", middleware.AuthMiddleware(), handlers.CreateCommunityAnnouncement)
+			community.GET("/announcements", middleware.AuthMiddleware(), handlers.GetCommunityAnnouncements)
+			community.POST("/events", middleware.AuthMiddleware(), handlers.CreateCommunityEvent)
+			community.GET("/events", middleware.AuthMiddleware(), handlers.GetCommunityEvents)
+			community.POST("/events/:id/rsvp", middleware.AuthMiddleware(), handlers.RSVPToEvent)
+		}
+
+		// Audit routes
+		audit := api.Group("/audit")
+		{
+			audit.POST("/activity", middleware.AuthMiddleware(), handlers.LogActivity)
+			audit.GET("/activities", middleware.AuthMiddleware(), handlers.GetActivityLogs)
+			audit.GET("/logs", middleware.AuthMiddleware(), handlers.GetAuditLogs)
+			audit.POST("/logs", middleware.AuthMiddleware(), handlers.CreateAuditLog)
+			audit.GET("/health", middleware.AuthMiddleware(), handlers.GetSystemHealth)
+			audit.POST("/health", middleware.AuthMiddleware(), handlers.UpdateSystemHealth)
+			audit.GET("/notifications", middleware.AuthMiddleware(), handlers.GetNotificationLogs)
+		}
+
+		// Settings routes
+		settings := api.Group("/settings")
+		{
+			settings.GET("/public", handlers.GetPublicSettings)
+			settings.GET("/:key", middleware.AuthMiddleware(), handlers.GetSystemSetting)
+			settings.PUT("/:key", middleware.AuthMiddleware(), handlers.UpdateSystemSetting)
+			settings.GET("/templates/:name", middleware.AuthMiddleware(), handlers.GetEmailTemplate)
+			settings.PUT("/templates/:name", middleware.AuthMiddleware(), handlers.UpdateEmailTemplate)
+			settings.POST("/exports", middleware.AuthMiddleware(), handlers.CreateDataExport)
+			settings.GET("/exports", middleware.AuthMiddleware(), handlers.GetDataExports)
+			settings.GET("/onboarding", middleware.AuthMiddleware(), handlers.GetUserOnboarding)
+			settings.PUT("/onboarding", middleware.AuthMiddleware(), handlers.UpdateUserOnboarding)
+		}
+	}
+
+	// WebSocket route (protected)
+	router.GET("/ws", middleware.AuthMiddleware(), handlers.HandleWebSocket)
+}

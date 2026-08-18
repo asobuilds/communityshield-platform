@@ -1,150 +1,117 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import api from '../../services/api';
 
-function VerifyOTP() {
+export default function VerifyOTP() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [otp, setOtp] = useState('');
   const [userId, setUserId] = useState('');
-  const [otpType, setOtpType] = useState('both');
-  const [resendTimer, setResendTimer] = useState(0);
-  const [timer, setTimer] = useState(300); // 5 minutes countdown
 
   useEffect(() => {
-    // Get userId from location state or URL params
-    const state = location.state as any;
-    if (state?.userId) {
-      setUserId(state.userId);
-      setOtpType(state.type || 'both');
-    } else {
-      // Fallback: try to get from localStorage
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (user.id) {
-        setUserId(user.id);
-      } else {
-        toast.error('User not found. Please register first.');
-        navigate('/register');
-      }
+    const storedUserId = localStorage.getItem('userId');
+    if (!storedUserId) {
+      navigate('/register');
+      return;
     }
-  }, [location]);
-
-  useEffect(() => {
-    if (timer > 0) {
-      const interval = setInterval(() => {
-        setTimer(prev => prev - 1);
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [timer]);
+    setUserId(storedUserId);
+  }, [navigate]);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otp || otp.length !== 6) {
+    if (otp.length !== 6) {
       toast.error('Please enter a valid 6-digit OTP');
       return;
     }
+
     setLoading(true);
     try {
-      const response = await axios.post('/api/v1/otp/verify', {
-        userId,
+      await api.post('/api/v1/otp/verify', {
+        userId: userId,
         code: otp,
       });
+
       toast.success('OTP verified successfully!');
-      // Update user in localStorage with verification status
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      user.emailVerified = response.data.user.emailVerified;
-      user.phoneVerified = response.data.user.phoneVerified;
-      localStorage.setItem('user', JSON.stringify(user));
-      navigate('/dashboard');
+      navigate('/login');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Invalid OTP');
+      const message = error.response?.data?.error || 'OTP verification failed';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResendOTP = async () => {
-    if (resendTimer > 0) return;
+  const handleResend = async () => {
+    setResending(true);
     try {
-      await axios.post('/api/v1/otp/resend', {
-        userId,
-        type: otpType,
+      await api.post('/api/v1/otp/resend', {
+        userId: userId,
+        type: 'email',
       });
-      toast.success('OTP resent!');
-      setResendTimer(60);
-      setTimer(300);
-      const interval = setInterval(() => {
-        setResendTimer(prev => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      toast.success('OTP resent successfully!');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to resend OTP');
+      const message = error.response?.data?.error || 'Failed to resend OTP';
+      toast.error(message);
+    } finally {
+      setResending(false);
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-md">
-        <div className="flex items-center mb-6">
-          <button onClick={() => navigate('/')} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mr-4">← Back</button>
-          <h2 className="text-2xl font-bold text-center flex-1 text-gray-800 dark:text-gray-100">Verify Your Account</h2>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Verify your email
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            We've sent a 6-digit code to your email. Please enter it below.
+          </p>
         </div>
-        <p className="text-gray-600 dark:text-gray-300 mb-4">
-          We've sent a 6-digit OTP to your {otpType === 'email' ? 'email' : otpType === 'phone' ? 'phone' : 'email and phone'}.
-          Please enter it below to verify your account.
-        </p>
-        <form onSubmit={handleVerify}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enter OTP</label>
+
+        <form className="mt-8 space-y-6" onSubmit={handleVerify}>
+          <div>
             <input
               type="text"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white text-center text-2xl tracking-widest"
-              placeholder="000000"
-              maxLength={6}
               required
+              maxLength={6}
+              className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm text-center text-2xl tracking-widest"
+              placeholder="Enter 6-digit code"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
             />
           </div>
-          <div className="flex justify-between items-center text-sm mb-4">
-            <span className="text-gray-500 dark:text-gray-400">Time remaining: {formatTime(timer)}</span>
+
+          <div>
             <button
-              type="button"
-              onClick={handleResendOTP}
-              disabled={resendTimer > 0}
-              className={`text-blue-600 dark:text-blue-400 hover:underline ${resendTimer > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              type="submit"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
             >
-              {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
+              {loading ? 'Verifying...' : 'Verify OTP'}
             </button>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Verifying...' : 'Verify OTP'}
-          </button>
+
+          <div className="text-sm text-center">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending}
+              className="font-medium text-primary-600 hover:text-primary-500 disabled:opacity-50"
+            >
+              {resending ? 'Sending...' : 'Resend OTP'}
+            </button>
+          </div>
+
+          <div className="text-sm text-center">
+            <a href="/login" className="font-medium text-gray-600 hover:text-gray-500">
+              Back to login
+            </a>
+          </div>
         </form>
-        <div className="mt-4 text-center">
-          <a href="/login" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">Already verified? Login</a>
-        </div>
       </div>
     </div>
   );
 }
-
-export default VerifyOTP;

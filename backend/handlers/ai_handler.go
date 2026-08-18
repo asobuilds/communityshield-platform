@@ -1,323 +1,393 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"security-solution/models"
-	"strings"
 	"time"
+
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/mmcdole/gofeed"
+
+	"security-solution/config"
+	"security-solution/models"
+	"security-solution/services"
 )
 
-// callOpenRouter sends a prompt to OpenRouter and returns the response
-func callOpenRouter(prompt string) (string, error) {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	if apiKey == "" {
-		return "", fmt.Errorf("OPENROUTER_API_KEY not set")
-	}
-
-	url := "https://openrouter.ai/api/v1/chat/completions"
-
-	payload := map[string]interface{}{
-		"model": "deepseek/deepseek-r1:free", // Free model
-		"messages": []map[string]string{
-			{"role": "user", "content": prompt},
-		},
-	}
-
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error: %s - %s", resp.Status, string(body))
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", err
-	}
-
-	choices, ok := result["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return "", fmt.Errorf("no response from OpenRouter")
-	}
-
-	msg, ok := choices[0].(map[string]interface{})["message"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid response format")
-	}
-
-	content, ok := msg["content"].(string)
-	if !ok {
-		return "", fmt.Errorf("no content in response")
-	}
-
-	return content, nil
-}
-
-// SummarizeText uses OpenRouter to summarize any text
-func SummarizeText(c *gin.Context) {
+// AIAnalyzeLocation analyzes security risk for a location
+func AIAnalyzeLocation(c *gin.Context) {
 	var input struct {
-		Text string `json:"text" binding:"required"`
+		Latitude  float64 `json:"latitude" binding:"required"`
+		Longitude float64 `json:"longitude" binding:"required"`
+		Location  string  `json:"location"`
+		Radius    float64 `json:"radius"`
 	}
+
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	prompt := fmt.Sprintf(`Summarize the following text concisely (max 200 words). Extract key points, threat level (low/medium/high/critical if security-related), and sentiment (positive/neutral/negative):
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
 
-%s`, input.Text)
+	var incidents []models.Case
+	query := config.DB.Model(&models.Case{}).Where("status != ?", "closed")
 
-	summary, err := callOpenRouter(prompt)
+	if userObj.Role == "officer" || userObj.Role == "unit_admin" {
+		if userObj.UnitID != nil {
+			query = query.Where("unit_id = ?", userObj.UnitID)
+		}
+	}
+
+	if err := query.Order("created_at desc").Limit(20).Find(&incidents).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch incidents"})
+		return
+	}
+
+	recentIncidents := ""
+	for i, inc := range incidents {
+		if i >= 10 {
+			break
+		}
+		recentIncidents += fmt.Sprintf("Title: %s\nStatus: %s\nLocation: %s\n---\n", inc.Title, inc.Status, inc.Location)
+	}
+
+	aiService := services.NewAIService()
+	analysis, err := aiService.AnalyzeLocationRisk(input.Latitude, input.Longitude, input.Location, recentIncidents)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI failed: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI analysis failed: " + err.Error()})
 		return
 	}
 
-	// Save analysis to DB
-	analysis := models.AIAnalysis{
-		SourceType:   "text",
-		OriginalText: input.Text,
-		Summary:      summary,
-		Sentiment:    "neutral",
-		ThreatLevel:  "low",
-		Keywords:     "",
-	}
-	DB.Create(&analysis)
-
 	c.JSON(http.StatusOK, gin.H{
-		"summary":   summary,
-		"analysis":  analysis,
+		"location":      input.Location,
+		"latitude":      input.Latitude,
+		"longitude":     input.Longitude,
+		"analysis":      analysis,
+		"incidentCount": len(incidents),
 	})
 }
 
-// SummarizeCase generates AI summary for a case
-func SummarizeCase(c *gin.Context) {
-	caseID := c.Param("id")
-	parsedID, err := uuid.Parse(caseID)
+// AIGetMapInsights provides insights for map markers
+func AIGetMapInsights(c *gin.Context) {
+	var input struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	var cases []models.Case
+	query := config.DB.Model(&models.Case{}).Where("status != ?", "closed")
+
+	if userObj.Role == "officer" || userObj.Role == "unit_admin" {
+		if userObj.UnitID != nil {
+			query = query.Where("unit_id = ?", userObj.UnitID)
+		}
+	}
+
+	if err := query.Order("created_at desc").Limit(30).Find(&cases).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch cases"})
+		return
+	}
+
+	var incidents []string
+	for _, c := range cases {
+		incidents = append(incidents, fmt.Sprintf("Title: %s | Location: %s | Status: %s", c.Title, c.Location, c.Status))
+	}
+
+	aiService := services.NewAIService()
+	analysis, err := aiService.AnalyzeIncidentPatterns("Current View", incidents)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid case ID"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI analysis failed: " + err.Error()})
 		return
 	}
 
-	var caseItem models.Case
-	if err := DB.First(&caseItem, "id = ?", parsedID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
+	c.JSON(http.StatusOK, gin.H{
+		"analysis":   analysis,
+		"caseCount":  len(cases),
+		"viewLat":    input.Latitude,
+		"viewLng":    input.Longitude,
+	})
+}
+
+// AIGenerateSecurityWarning generates security warnings
+func AIGenerateSecurityWarning(c *gin.Context) {
+	var input struct {
+		Location    string   `json:"location"`
+		IncidentIDs []string `json:"incidentIds"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	text := fmt.Sprintf("Case: %s\nDescription: %s\nLocation: %s\nStatus: %s",
-		caseItem.Title, caseItem.Description, caseItem.Location, caseItem.Status)
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
 
-	prompt := fmt.Sprintf(`Analyze this security case and provide:
-1. A brief summary (max 100 words)
-2. Threat level (low/medium/high/critical)
-3. Recommended action
+	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can generate security warnings"})
+		return
+	}
 
-Text: %s`, text)
+	var incidentsData string
+	if len(input.IncidentIDs) > 0 {
+		var cases []models.Case
+		if err := config.DB.Where("id IN (?)", input.IncidentIDs).Find(&cases).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch incidents"})
+			return
+		}
+		for _, c := range cases {
+			incidentsData += fmt.Sprintf("Title: %s\nDescription: %s\nLocation: %s\nStatus: %s\n---\n", c.Title, c.Description, c.Location, c.Status)
+		}
+	} else {
+		var cases []models.Case
+		query := config.DB.Model(&models.Case{}).Where("status != ?", "closed")
+		if input.Location != "" {
+			query = query.Where("location ILIKE ?", "%"+input.Location+"%")
+		}
+		if userObj.UnitID != nil {
+			query = query.Where("unit_id = ?", userObj.UnitID)
+		}
+		if err := query.Order("created_at desc").Limit(10).Find(&cases).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch incidents"})
+			return
+		}
+		for _, c := range cases {
+			incidentsData += fmt.Sprintf("Title: %s\nLocation: %s\nStatus: %s\n---\n", c.Title, c.Location, c.Status)
+		}
+	}
 
-	summary, err := callOpenRouter(prompt)
+	if incidentsData == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No incident data found to generate warning"})
+		return
+	}
+
+	aiService := services.NewAIService()
+	warning, err := aiService.GenerateSecurityWarning(incidentsData)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI failed: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate warning: " + err.Error()})
 		return
 	}
 
-	// Extract threat level from response
-	threatLevel := "medium"
-	if strings.Contains(strings.ToLower(summary), "critical") {
-		threatLevel = "critical"
-	} else if strings.Contains(strings.ToLower(summary), "high") {
-		threatLevel = "high"
-	} else if strings.Contains(strings.ToLower(summary), "low") {
-		threatLevel = "low"
-	}
-
-	analysis := models.AIAnalysis{
-		SourceType:   "case",
-		SourceID:     caseID,
-		OriginalText: text,
-		Summary:      summary,
-		Sentiment:    "neutral",
-		ThreatLevel:  threatLevel,
-		Keywords:     "",
-	}
-	DB.Create(&analysis)
-
 	c.JSON(http.StatusOK, gin.H{
-		"summary":     summary,
-		"threatLevel": threatLevel,
-		"analysis":    analysis,
+		"warning":     warning,
+		"location":    input.Location,
+		"generatedAt": time.Now(),
 	})
 }
 
-// MonitorRSSFeeds scrapes RSS feeds and creates announcements for security threats
-func MonitorRSSFeeds(c *gin.Context) {
-	feeds := []string{
-		"https://newsng.ng/feed/",
-		"https://www.premiumtimesng.com/security/feed",
-		"https://www.vanguardngr.com/category/security/feed",
-		"https://dailypost.ng/category/security/feed",
-		"https://punchng.com/topics/security/feed",
-		"https://www.channelstv.com/category/news/security/feed",
+// AIAnalyzeNews analyzes news for security implications
+func AIAnalyzeNews(c *gin.Context) {
+	var input struct {
+		Content string `json:"content" binding:"required"`
+		Source  string `json:"source"`
 	}
 
-	fp := gofeed.NewParser()
-	var announcements []models.Announcement
-
-	for _, feedURL := range feeds {
-		feed, err := fp.ParseURL(feedURL)
-		if err != nil {
-			continue
-		}
-
-		for _, item := range feed.Items {
-			title := strings.ToLower(item.Title)
-			desc := strings.ToLower(item.Description)
-
-			securityKeywords := []string{"kidnap", "bandit", "terror", "attack", "security", "alert", "warning", "shooting", "bomb", "explosion", "crisis", "violence", "abduction"}
-			isSecurity := false
-			for _, kw := range securityKeywords {
-				if strings.Contains(title, kw) || strings.Contains(desc, kw) {
-					isSecurity = true
-					break
-				}
-			}
-			if !isSecurity {
-				continue
-			}
-
-			// Check if already exists (by title)
-			var existing models.Announcement
-			if err := DB.Where("title = ?", item.Title).First(&existing).Error; err == nil {
-				continue
-			}
-
-			severity := "medium"
-			if strings.Contains(title, "kidnap") || strings.Contains(title, "terror") || strings.Contains(title, "attack") {
-				severity = "high"
-			}
-			if strings.Contains(title, "critical") || strings.Contains(title, "emergency") {
-				severity = "critical"
-			}
-
-			var admin models.User
-			DB.Where("role = ?", "unit_admin").First(&admin)
-
-			announcement := models.Announcement{
-				CreatedBy: admin.ID,
-				Title:     item.Title,
-				Content:   item.Description,
-				Type:      "alert",
-				Severity:  severity,
-				IsPublic:  true,
-			}
-			DB.Create(&announcement)
-			announcements = append(announcements, announcement)
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":       "RSS monitoring complete",
-		"announcements": announcements,
-		"count":         len(announcements),
-	})
-}
-
-// SocialMediaMonitor simulates social media monitoring (mock)
-func SocialMediaMonitor(c *gin.Context) {
-	mockData := []struct {
-		Source  string
-		Content string
-	}{
-		{"Twitter", "Breaking: Kidnapping reported along Abuja-Kaduna highway. Travelers advised to be cautious."},
-		{"Facebook", "Community alert: Suspicious persons seen in Ogun State. Report any unusual activity."},
-		{"Twitter", "Security update: Bandits attack village in Zamfara, 10 abducted."},
-	}
-
-	var announcements []models.Announcement
-	var admin models.User
-	DB.Where("role = ?", "unit_admin").First(&admin)
-
-	for _, post := range mockData {
-		// Check if already exists (simplified)
-		var existing models.Announcement
-		if err := DB.Where("title LIKE ?", "%"+post.Content[:30]+"%").First(&existing).Error; err == nil {
-			continue
-		}
-
-		severity := "medium"
-		if strings.Contains(strings.ToLower(post.Content), "kidnap") || strings.Contains(strings.ToLower(post.Content), "attack") {
-			severity = "high"
-		}
-		if strings.Contains(strings.ToLower(post.Content), "critical") || strings.Contains(strings.ToLower(post.Content), "emergency") {
-			severity = "critical"
-		}
-
-		announcement := models.Announcement{
-			CreatedBy: admin.ID,
-			Title:     "Social Media Alert: " + post.Source,
-			Content:   post.Content,
-			Type:      "alert",
-			Severity:  severity,
-			IsPublic:  true,
-		}
-		DB.Create(&announcement)
-		announcements = append(announcements, announcement)
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":       "Social media monitoring complete",
-		"announcements": announcements,
-		"count":         len(announcements),
-	})
-}
-
-// GetAIAnalysis retrieves AI analysis for a specific source
-func GetAIAnalysis(c *gin.Context) {
-	sourceType := c.Query("sourceType")
-	sourceID := c.Query("sourceId")
-
-	query := DB.Model(&models.AIAnalysis{})
-	if sourceType != "" {
-		query = query.Where("source_type = ?", sourceType)
-	}
-	if sourceID != "" {
-		query = query.Where("source_id = ?", sourceID)
-	}
-
-	var analyses []models.AIAnalysis
-	if err := query.Order("created_at desc").Find(&analyses).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch analyses"})
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"analyses": analyses})
+	aiService := services.NewAIService()
+	analysis, err := aiService.AnalyzeNewsSentiment(input.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "News analysis failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"analysis":   analysis,
+		"source":     input.Source,
+		"analyzedAt": time.Now(),
+	})
+}
+
+// AIGetSmartTips provides context-aware safety tips
+func AIGetSmartTips(c *gin.Context) {
+	var input struct {
+		Location      string `json:"location"`
+		TimeOfDay     string `json:"timeOfDay"`
+		RecentThreats string `json:"recentThreats"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if input.TimeOfDay == "" {
+		hour := time.Now().Hour()
+		if hour < 6 {
+			input.TimeOfDay = "Night (Late)"
+		} else if hour < 12 {
+			input.TimeOfDay = "Morning"
+		} else if hour < 18 {
+			input.TimeOfDay = "Afternoon"
+		} else {
+			input.TimeOfDay = "Evening"
+		}
+	}
+
+	var recentIncidents []models.Case
+	query := config.DB.Model(&models.Case{}).Where("created_at > ?", time.Now().Add(-7*24*time.Hour))
+	if userObj.UnitID != nil {
+		query = query.Where("unit_id = ?", userObj.UnitID)
+	}
+	if input.Location != "" {
+		query = query.Where("location ILIKE ?", "%"+input.Location+"%")
+	}
+	query.Order("created_at desc").Limit(5).Find(&recentIncidents)
+
+	recentThreats := input.RecentThreats
+	if recentThreats == "" && len(recentIncidents) > 0 {
+		for _, inc := range recentIncidents {
+			recentThreats += inc.Title + ", "
+		}
+	}
+
+	aiService := services.NewAIService()
+	tips, err := aiService.GetSmartSafetyTips(input.Location, userObj.Role, input.TimeOfDay, recentThreats)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get safety tips: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"tips":       tips,
+		"location":   input.Location,
+		"timeOfDay":  input.TimeOfDay,
+		"userRole":   userObj.Role,
+	})
+}
+
+// AIPredictHotspots predicts risk hotspots
+func AIPredictHotspots(c *gin.Context) {
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can predict hotspots"})
+		return
+	}
+
+	var cases []models.Case
+	query := config.DB.Model(&models.Case{}).Where("created_at > ?", time.Now().Add(-30*24*time.Hour))
+	if userObj.UnitID != nil {
+		query = query.Where("unit_id = ?", userObj.UnitID)
+	}
+
+	if err := query.Find(&cases).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch cases"})
+		return
+	}
+
+	if len(cases) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Not enough data for prediction",
+		})
+		return
+	}
+
+	historicalData := ""
+	for _, c := range cases {
+		historicalData += fmt.Sprintf("Title: %s\nLocation: %s\nStatus: %s\n---\n", c.Title, c.Location, c.Status)
+	}
+
+	aiService := services.NewAIService()
+	prediction, err := aiService.PredictRiskHotspots(historicalData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Prediction failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"prediction":  prediction,
+		"caseCount":   len(cases),
+		"generatedAt": time.Now(),
+	})
+}
+
+// AIGenerateCommunityAlert generates community alerts
+func AIGenerateCommunityAlert(c *gin.Context) {
+	var input struct {
+		AlertType string `json:"alertType" binding:"required"`
+		Location  string `json:"location" binding:"required"`
+		Data      string `json:"data" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can generate community alerts"})
+		return
+	}
+
+	aiService := services.NewAIService()
+	alertContent, err := aiService.GenerateCommunityAlert(input.AlertType, input.Location, input.Data)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate alert: " + err.Error()})
+		return
+	}
+
+	alertObj := models.Alert{
+		Title:     input.AlertType + " Alert - " + input.Location,
+		Content:   alertContent,
+		Type:      input.AlertType,
+		Location:  input.Location,
+		Severity:  "high",
+		Status:    "active",
+		CreatedBy: userObj.ID,
+	}
+
+	if err := config.DB.Create(&alertObj).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save alert"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"alert":       alertContent,
+		"alertId":     alertObj.ID,
+		"location":    input.Location,
+		"generatedAt": time.Now(),
+	})
 }

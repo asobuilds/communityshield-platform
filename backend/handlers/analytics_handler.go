@@ -2,123 +2,103 @@ package handlers
 
 import (
 	"net/http"
-	"security-solution/models"
 	"time"
+
 	"github.com/gin-gonic/gin"
+
+	"security-solution/config"
+	"security-solution/models"
 )
 
-// GetCaseAnalytics returns case statistics
-func GetCaseAnalytics(c *gin.Context) {
-	// Count by status
-	var statusCounts []struct {
-		Status string
-		Count  int
-	}
-	if err := DB.Model(&models.Case{}).
-		Select("status, count(*) as count").
-		Group("status").
-		Scan(&statusCounts).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch case status counts"})
-		return
-	}
-
-	// Count by priority
-	var priorityCounts []struct {
-		Priority string
-		Count    int
-	}
-	if err := DB.Model(&models.Case{}).
-		Select("priority, count(*) as count").
-		Group("priority").
-		Scan(&priorityCounts).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch case priority counts"})
-		return
-	}
-
-	// Total cases
-	var totalCases int64
-	DB.Model(&models.Case{}).Count(&totalCases)
-
-	c.JSON(http.StatusOK, gin.H{
-		"statusCounts":   statusCounts,
-		"priorityCounts": priorityCounts,
-		"totalCases":     totalCases,
-	})
-}
-
-// GetSOSAnalytics returns SOS statistics (last 7 days)
-func GetSOSAnalytics(c *gin.Context) {
-	// Daily SOS count for last 7 days
-	var dailySOS []struct {
-		Date  string
-		Count int
-	}
-	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
-	if err := DB.Model(&models.SOSAlert{}).
-		Select("DATE(created_at) as date, count(*) as count").
-		Where("created_at >= ?", sevenDaysAgo).
-		Group("DATE(created_at)").
-		Order("date asc").
-		Scan(&dailySOS).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch SOS daily counts"})
-		return
-	}
-
-	// Total SOS
-	var totalSOS int64
-	DB.Model(&models.SOSAlert{}).Count(&totalSOS)
-
-	// SOS by status
-	var statusCounts []struct {
-		Status string
-		Count  int
-	}
-	if err := DB.Model(&models.SOSAlert{}).
-		Select("status, count(*) as count").
-		Group("status").
-		Scan(&statusCounts).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch SOS status counts"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"dailySOS":     dailySOS,
-		"totalSOS":     totalSOS,
-		"statusCounts": statusCounts,
-	})
-}
-
-// GetUnitAnalytics returns unit performance
+// GetUnitAnalytics returns analytics for a specific unit
 func GetUnitAnalytics(c *gin.Context) {
-	var units []models.Unit
-	if err := DB.Find(&units).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch units"})
+	unitID := c.Param("id")
+
+	var totalCases int64
+	var resolvedCases int64
+	var pendingCases int64
+
+	config.DB.Model(&models.Case{}).Where("unit_id = ?", unitID).Count(&totalCases)
+	config.DB.Model(&models.Case{}).Where("unit_id = ? AND status = ?", unitID, "resolved").Count(&resolvedCases)
+	config.DB.Model(&models.Case{}).Where("unit_id = ? AND status = ?", unitID, "pending").Count(&pendingCases)
+
+	var monthlyStats []struct {
+		Month string
+		Count int64
+	}
+	config.DB.Model(&models.Case{}).
+		Select("to_char(created_at, 'YYYY-MM') as month, count(*) as count").
+		Where("unit_id = ?", unitID).
+		Group("month").
+		Order("month desc").
+		Limit(6).
+		Scan(&monthlyStats)
+
+	c.JSON(http.StatusOK, gin.H{
+		"totalCases":    totalCases,
+		"resolvedCases": resolvedCases,
+		"pendingCases":  pendingCases,
+		"monthlyStats":  monthlyStats,
+	})
+}
+
+// GetCaseAnalytics returns analytics for a specific case
+func GetCaseAnalytics(c *gin.Context) {
+	caseID := c.Param("id")
+
+	var caseObj models.Case
+	if err := config.DB.Preload("Evidence").Preload("Progress").First(&caseObj, "id = ?", caseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
 		return
 	}
 
-	type UnitStats struct {
-		UnitID    string  `json:"unitId"`
-		Name      string  `json:"name"`
-		CaseCount int64   `json:"caseCount"`
-		AvgRating float64 `json:"avgRating"`
+	// Get evidence count
+	var evidenceCount int64
+	config.DB.Model(&models.Evidence{}).Where("case_id = ?", caseID).Count(&evidenceCount)
+
+	// Get progress count
+	var progressCount int64
+	config.DB.Model(&models.Progress{}).Where("case_id = ?", caseID).Count(&progressCount)
+
+	// Calculate time since creation
+	timeSince := time.Since(caseObj.CreatedAt).Hours() / 24 // in days
+
+	c.JSON(http.StatusOK, gin.H{
+		"case":          caseObj,
+		"evidenceCount": evidenceCount,
+		"progressCount": progressCount,
+		"daysOpen":      int(timeSince),
+	})
+}
+
+// GetUserActivity returns user activity analytics
+func GetUserActivity(c *gin.Context) {
+	var userStats []struct {
+		UserID    string
+		Email     string
+		CaseCount int64
 	}
-	var stats []UnitStats
+	config.DB.Table("users").
+		Select("users.id as user_id, users.email, count(cases.id) as case_count").
+		Joins("left join cases on cases.reported_by = users.id").
+		Group("users.id, users.email").
+		Order("case_count desc").
+		Limit(10).
+		Scan(&userStats)
 
-	for _, u := range units {
-		var count int64
-		DB.Model(&models.Case{}).Where("unit_id = ?", u.ID).Count(&count)
-
-		var avgRating float64
-		DB.Model(&models.Rating{}).Where("unit_id = ?", u.ID).
-			Select("COALESCE(AVG(rating), 0)").Scan(&avgRating)
-
-		stats = append(stats, UnitStats{
-			UnitID:    u.ID.String(),
-			Name:      u.Name,
-			CaseCount: count,
-			AvgRating: avgRating,
-		})
+	var dailyActivity []struct {
+		Date  string
+		Count int64
 	}
+	config.DB.Model(&models.Case{}).
+		Select("to_char(created_at, 'YYYY-MM-DD') as date, count(*) as count").
+		Group("date").
+		Order("date desc").
+		Limit(7).
+		Scan(&dailyActivity)
 
-	c.JSON(http.StatusOK, gin.H{"unitStats": stats})
+	c.JSON(http.StatusOK, gin.H{
+		"topUsers":      userStats,
+		"dailyActivity": dailyActivity,
+	})
 }

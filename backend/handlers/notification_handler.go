@@ -2,79 +2,110 @@ package handlers
 
 import (
 	"net/http"
-	"security-solution/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"security-solution/config"
+	"security-solution/models"
 )
 
-// CreateNotification saves a notification for a user
-func CreateNotification(userID uuid.UUID, caseID uuid.UUID, title, message string) error {
-	notif := models.Notification{
-		UserID:  userID,
-		CaseID:  caseID,
-		Title:   title,
-		Message: message,
-		Read:    false,
+func SendNotification(c *gin.Context) {
+	var input struct {
+		UserID  string `json:"userId" binding:"required"`
+		Title   string `json:"title" binding:"required"`
+		Message string `json:"message" binding:"required"`
+		Type    string `json:"type"`
 	}
-	return DB.Create(&notif).Error
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, err := uuid.Parse(input.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	notification := models.Notification{
+		UserID:  userID,
+		Title:   input.Title,
+		Message: input.Message,
+		Type:    input.Type,
+		Status:  "unread",
+	}
+
+	if err := config.DB.Create(&notification).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send notification"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message":      "Notification sent successfully",
+		"notification": notification,
+	})
 }
 
-// GetUserNotifications returns all notifications for a user
 func GetUserNotifications(c *gin.Context) {
-	userIDStr := c.Query("userId")
-	if userIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "userId is required"})
-		return
-	}
-	userID, err := uuid.Parse(userIDStr)
+	userID := c.Param("userId")
+	id, err := uuid.Parse(userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid userId"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
-	var notifs []models.Notification
-	if err := DB.Where("user_id = ?", userID).Order("created_at desc").Find(&notifs).Error; err != nil {
+
+	var notifications []models.Notification
+	if err := config.DB.Where("user_id = ?", id).Order("created_at desc").Find(&notifications).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch notifications"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"notifications": notifs})
+
+	c.JSON(http.StatusOK, gin.H{
+		"notifications": notifications,
+	})
 }
 
-// MarkNotificationRead marks a single notification as read
-func MarkNotificationRead(c *gin.Context) {
+func MarkNotificationAsRead(c *gin.Context) {
 	id := c.Param("id")
-	parsedID, err := uuid.Parse(id)
+	notificationID, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid notification ID"})
 		return
 	}
-	var notif models.Notification
-	if err := DB.First(&notif, "id = ?", parsedID).Error; err != nil {
+
+	var notification models.Notification
+	if err := config.DB.First(&notification, "id = ?", notificationID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
 		return
 	}
-	notif.Read = true
-	if err := DB.Save(&notif).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark as read"})
+
+	notification.Status = "read"
+	if err := config.DB.Save(&notification).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark notification as read"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Marked as read"})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Notification marked as read",
+	})
 }
 
-// MarkAllNotificationsRead marks all notifications for a user as read
-func MarkAllNotificationsRead(c *gin.Context) {
-	userIDStr := c.Query("userId")
-	if userIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "userId is required"})
-		return
-	}
-	userID, err := uuid.Parse(userIDStr)
+func DeleteNotification(c *gin.Context) {
+	id := c.Param("id")
+	notificationID, err := uuid.Parse(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid userId"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid notification ID"})
 		return
 	}
-	if err := DB.Model(&models.Notification{}).Where("user_id = ?", userID).Update("read", true).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark all as read"})
+
+	if err := config.DB.Delete(&models.Notification{}, "id = ?", notificationID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete notification"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "All notifications marked as read"})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Notification deleted successfully",
+	})
 }

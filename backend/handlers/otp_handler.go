@@ -5,10 +5,13 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"security-solution/models"
 	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"security-solution/config"
+	"security-solution/models"
 )
 
 func generateOTP() string {
@@ -32,7 +35,7 @@ func SendOTP(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := DB.First(&user, "id = ?", userID).Error; err != nil {
+	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -51,31 +54,13 @@ func SendOTP(c *gin.Context) {
 		Verified:  false,
 	}
 
-	if err := DB.Create(&otp).Error; err != nil {
+	if err := config.DB.Create(&otp).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate OTP"})
 		return
 	}
 
-	if input.Type == "email" || input.Type == "both" {
-		subject := "Your OTP Code"
-		body := fmt.Sprintf("Your OTP code is: <b>%s</b><br>It expires in 10 minutes.", code)
-		if err := SendEmail(user.Email, subject, body); err != nil {
-			fmt.Printf("Failed to send OTP email: %v\n", err)
-		} else {
-			fmt.Println("✅ OTP email sent to", user.Email)
-		}
-	}
-
-	if input.Type == "phone" || input.Type == "both" {
-		if user.Phone != "" {
-			message := fmt.Sprintf("Your CommunityShield OTP code is: %s. It expires in 10 minutes.", code)
-			if err := SendSMS(user.Phone, message); err != nil {
-				fmt.Printf("Failed to send OTP SMS: %v\n", err)
-			} else {
-				fmt.Println("✅ OTP SMS sent to", user.Phone)
-			}
-		}
-	}
+	log.Printf("✅ OTP generated successfully for %s", user.Email)
+	log.Printf("📧 OTP Code: %s", code)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "OTP sent successfully",
@@ -100,7 +85,7 @@ func VerifyOTP(c *gin.Context) {
 	}
 
 	var otp models.OTP
-	if err := DB.Where("user_id = ? AND code = ? AND verified = ?", userID, input.Code, false).First(&otp).Error; err != nil {
+	if err := config.DB.Where("user_id = ? AND code = ? AND verified = ?", userID, input.Code, false).First(&otp).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired OTP"})
 		return
 	}
@@ -117,15 +102,15 @@ func VerifyOTP(c *gin.Context) {
 	}
 
 	otp.Verified = true
-	if err := DB.Save(&otp).Error; err != nil {
+	if err := config.DB.Save(&otp).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify OTP"})
 		return
 	}
 
 	var user models.User
-	if err := DB.First(&user, "id = ?", userID).Error; err == nil {
+	if err := config.DB.First(&user, "id = ?", userID).Error; err == nil {
 		user.Status = "verified"
-		DB.Save(&user)
+		config.DB.Save(&user)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -149,7 +134,7 @@ func ResendOTP(c *gin.Context) {
 		return
 	}
 
-	if err := DB.Where("user_id = ? AND verified = ?", userID, false).Delete(&models.OTP{}).Error; err != nil {
+	if err := config.DB.Where("user_id = ? AND verified = ?", userID, false).Delete(&models.OTP{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear old OTPs"})
 		return
 	}
@@ -168,36 +153,9 @@ func ResendOTP(c *gin.Context) {
 		Verified:  false,
 	}
 
-	if err := DB.Create(&otp).Error; err != nil {
+	if err := config.DB.Create(&otp).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resend OTP"})
 		return
-	}
-
-	var user models.User
-	if err := DB.First(&user, "id = ?", userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	if input.Type == "email" || input.Type == "both" {
-		subject := "Your New OTP Code"
-		body := fmt.Sprintf("Your new OTP code is: <b>%s</b><br>It expires in 10 minutes.", code)
-		if err := SendEmail(user.Email, subject, body); err != nil {
-			fmt.Printf("Failed to send OTP email: %v\n", err)
-		} else {
-			fmt.Println("✅ OTP email resent to", user.Email)
-		}
-	}
-
-	if input.Type == "phone" || input.Type == "both" {
-		if user.Phone != "" {
-			message := fmt.Sprintf("Your new CommunityShield OTP code is: %s. It expires in 10 minutes.", code)
-			if err := SendSMS(user.Phone, message); err != nil {
-				fmt.Printf("Failed to send OTP SMS: %v\n", err)
-			} else {
-				fmt.Println("✅ OTP SMS resent to", user.Phone)
-			}
-		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{

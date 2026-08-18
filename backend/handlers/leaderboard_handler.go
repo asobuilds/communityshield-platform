@@ -2,114 +2,126 @@ package handlers
 
 import (
 	"net/http"
-	"security-solution/models"
-	"time"
+
 	"github.com/gin-gonic/gin"
+
+	"security-solution/config"
+	"security-solution/models"
 )
 
-// GetUnitLeaderboard returns units sorted by resolved cases, ratings, or response time
-func GetUnitLeaderboard(c *gin.Context) {
-	sortBy := c.DefaultQuery("sortBy", "cases")
-	period := c.DefaultQuery("period", "monthly")
-
-	var units []models.Unit
-	if err := DB.Where("status = ?", "active").Find(&units).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch units"})
-		return
+// GetLeaderboard returns the leaderboard for units
+func GetLeaderboard(c *gin.Context) {
+	// Get case counts by unit
+	var unitStats []struct {
+		UnitID    string
+		UnitName  string
+		CaseCount int64
+		ResolvedCount int64
 	}
 
-	type UnitStats struct {
-		UnitID        string  `json:"unitId"`
-		Name          string  `json:"name"`
-		Type          string  `json:"type"`
-		Motto         string  `json:"motto"`
-		ProfileImage  string  `json:"profileImage"`
-		ContactPerson string  `json:"contactPerson"`
-		ContactPhone  string  `json:"contactPhone"`
-		TotalCases    int64   `json:"totalCases"`
-		ResolvedCases int64   `json:"resolvedCases"`
-		AvgRating     float64 `json:"avgRating"`
-		RatingCount   int64   `json:"ratingCount"`
-		Score         float64 `json:"score"`
-	}
+	config.DB.Table("cases").
+		Select("security_units.id as unit_id, security_units.name as unit_name, count(cases.id) as case_count, sum(case when cases.status = 'resolved' then 1 else 0 end) as resolved_count").
+		Joins("left join security_units on security_units.id = cases.unit_id").
+		Group("security_units.id, security_units.name").
+		Order("case_count desc").
+		Limit(10).
+		Scan(&unitStats)
 
-	var stats []UnitStats
-
-	var startDate time.Time
-	switch period {
-	case "weekly":
-		startDate = time.Now().AddDate(0, 0, -7)
-	case "monthly":
-		startDate = time.Now().AddDate(0, -1, 0)
-	default:
-		startDate = time.Time{}
-	}
-
-	for _, u := range units {
-		var totalCases int64
-		query := DB.Model(&models.Case{}).Where("unit_id = ?", u.ID)
-		if !startDate.IsZero() {
-			query = query.Where("created_at >= ?", startDate)
+	// Calculate ratings
+	var leaderboard []gin.H
+	for _, stat := range unitStats {
+		resolutionRate := 0.0
+		if stat.CaseCount > 0 {
+			resolutionRate = float64(stat.ResolvedCount) / float64(stat.CaseCount) * 100
 		}
-		query.Count(&totalCases)
-
-		var resolvedCases int64
-		queryResolved := DB.Model(&models.Case{}).Where("unit_id = ? AND status = ?", u.ID, "resolved")
-		if !startDate.IsZero() {
-			queryResolved = queryResolved.Where("updated_at >= ?", startDate)
-		}
-		queryResolved.Count(&resolvedCases)
-
-		// 🔥 FIX: Use a struct for Scan
-		type RatingResult struct {
-			Avg   float64
-			Count int64
-		}
-		var result RatingResult
-		DB.Model(&models.Rating{}).Where("unit_id = ?", u.ID).
-			Select("COALESCE(AVG(rating), 0) as avg, COUNT(*) as count").
-			Scan(&result)
-
-		avgRating := result.Avg
-		ratingCount := result.Count
-
-		var score float64
-		switch sortBy {
-		case "rating":
-			score = avgRating * 2
-		case "response":
-			score = float64(resolvedCases)
-		default:
-			score = float64(resolvedCases)*0.6 + float64(totalCases)*0.4
-		}
-
-		stats = append(stats, UnitStats{
-			UnitID:        u.ID.String(),
-			Name:          u.Name,
-			Type:          u.Type,
-			Motto:         u.Motto,
-			ProfileImage:  u.ProfileImage,
-			ContactPerson: u.ContactPerson,
-			ContactPhone:  u.ContactPhone,
-			TotalCases:    totalCases,
-			ResolvedCases: resolvedCases,
-			AvgRating:     avgRating,
-			RatingCount:   ratingCount,
-			Score:         score,
+		leaderboard = append(leaderboard, gin.H{
+			"unitId":        stat.UnitID,
+			"unitName":      stat.UnitName,
+			"caseCount":     stat.CaseCount,
+			"resolvedCount": stat.ResolvedCount,
+			"resolutionRate": resolutionRate,
 		})
 	}
 
-	for i := 0; i < len(stats); i++ {
-		for j := i + 1; j < len(stats); j++ {
-			if stats[i].Score < stats[j].Score {
-				stats[i], stats[j] = stats[j], stats[i]
-			}
+	c.JSON(http.StatusOK, gin.H{
+		"leaderboard": leaderboard,
+	})
+}
+
+// GetOfficerLeaderboard returns the leaderboard for officers
+func GetOfficerLeaderboard(c *gin.Context) {
+	var officerStats []struct {
+		OfficerID   string
+		OfficerName string
+		CaseCount   int64
+		ResolvedCount int64
+	}
+
+	config.DB.Table("cases").
+		Select("officers.id as officer_id, officers.name as officer_name, count(cases.id) as case_count, sum(case when cases.status = 'resolved' then 1 else 0 end) as resolved_count").
+		Joins("left join officers on officers.id = cases.assigned_to").
+		Group("officers.id, officers.name").
+		Order("case_count desc").
+		Limit(10).
+		Scan(&officerStats)
+
+	var leaderboard []gin.H
+	for _, stat := range officerStats {
+		resolutionRate := 0.0
+		if stat.CaseCount > 0 {
+			resolutionRate = float64(stat.ResolvedCount) / float64(stat.CaseCount) * 100
 		}
+		leaderboard = append(leaderboard, gin.H{
+			"officerId":     stat.OfficerID,
+			"officerName":   stat.OfficerName,
+			"caseCount":     stat.CaseCount,
+			"resolvedCount": stat.ResolvedCount,
+			"resolutionRate": resolutionRate,
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"leaderboard": stats,
-		"sortBy":      sortBy,
-		"period":      period,
+		"leaderboard": leaderboard,
+	})
+}
+
+// GetUnitRanking returns ranking for a specific unit
+func GetUnitRanking(c *gin.Context) {
+	unitID := c.Param("unitId")
+
+	var caseCount int64
+	var resolvedCount int64
+
+	config.DB.Model(&models.Case{}).Where("unit_id = ?", unitID).Count(&caseCount)
+	config.DB.Model(&models.Case{}).Where("unit_id = ? AND status = ?", unitID, "resolved").Count(&resolvedCount)
+
+	resolutionRate := 0.0
+	if caseCount > 0 {
+		resolutionRate = float64(resolvedCount) / float64(caseCount) * 100
+	}
+
+	// Get rank
+	var rank int64
+	config.DB.Raw(`
+		SELECT COUNT(*) + 1 as rank 
+		FROM (
+			SELECT unit_id, COUNT(*) as case_count 
+			FROM cases 
+			GROUP BY unit_id 
+			HAVING COUNT(*) > (
+				SELECT COUNT(*) 
+				FROM cases 
+				WHERE unit_id = ? 
+				GROUP BY unit_id
+			)
+		) as ranked_units
+	`, unitID).Scan(&rank)
+
+	c.JSON(http.StatusOK, gin.H{
+		"unitId":        unitID,
+		"caseCount":     caseCount,
+		"resolvedCount": resolvedCount,
+		"resolutionRate": resolutionRate,
+		"rank":          rank,
 	})
 }

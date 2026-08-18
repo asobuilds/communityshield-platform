@@ -33,6 +33,9 @@ function Dashboard() {
                 <p className="text-blue-800 dark:text-blue-200">🔑 Admin access available</p>
                 <Button variant="primary" size="sm" className="mt-2" onClick={() => window.location.href = '/admin'}>
                   Go to Admin Dashboard
+                <Link to="/map">
+                  <button className="...">🗺️ View Map</button>
+                </Link>
                 </Button>
               </div>
             )}
