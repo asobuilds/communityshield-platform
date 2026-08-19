@@ -20,6 +20,11 @@ func NewAuthService() *AuthService {
 	return &AuthService{}
 }
 
+// GenerateJWT - Public method for super admin impersonation
+func (s *AuthService) GenerateJWT(user *models.User) (string, error) {
+	return s.generateJWT(user)
+}
+
 func (s *AuthService) Register(user *models.User) (*models.User, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {

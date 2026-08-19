@@ -19,6 +19,10 @@ func SetupRoutes(router *gin.Engine) {
 	// API v1 routes
 	api := router.Group("/api/v1")
 	{
+		// Public routes (no authentication required)
+		api.GET("/public/cases", handlers.GetPublicCases)
+		api.GET("/public/units", handlers.GetPublicUnits)
+
 		// Auth routes
 		authHandler := handlers.NewAuthHandler()
 		auth := api.Group("/auth")
@@ -41,19 +45,32 @@ func SetupRoutes(router *gin.Engine) {
 		units := api.Group("/units")
 		{
 			units.GET("/nearby", handlers.GetNearbyUnits)
+			units.GET("/by-location", handlers.GetUnitsByLocation)
 			units.GET("", handlers.GetAllUnits)
 			units.GET("/:id", handlers.GetUnitByID)
 			units.POST("", middleware.AuthMiddleware(), handlers.CreateUnit)
 			units.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateUnit)
 		}
 
+                // Push notification routes
+                notify := api.Group("/notifications")
+                {
+	                notify.POST("/register", middleware.AuthMiddleware(), handlers.RegisterDevice)
+	                notify.DELETE("/unregister", middleware.AuthMiddleware(), handlers.UnregisterDevice)
+	                notify.POST("/test", middleware.AuthMiddleware(), handlers.TestNotification)
+                }
+
 		// Case routes
 		cases := api.Group("/cases")
 		{
 			cases.GET("", handlers.GetAllCases)
 			cases.POST("", middleware.AuthMiddleware(), handlers.CreateCase)
-			cases.GET("/:id", handlers.GetCaseByID)
+			cases.GET("/:id", middleware.AuthMiddleware(), handlers.GetCaseByID)
 			cases.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateCaseStatus)
+			cases.POST("/:id/timeline", middleware.AuthMiddleware(), handlers.AddCaseTimeline)
+			cases.GET("/:id/timeline", middleware.AuthMiddleware(), handlers.GetCaseTimeline)
+			cases.POST("/:id/feedback", middleware.AuthMiddleware(), handlers.SubmitCaseFeedback)
+			cases.GET("/analytics", middleware.AuthMiddleware(), handlers.GetCaseAnalytics)
 		}
 
 		// Evidence routes
@@ -93,6 +110,7 @@ func SetupRoutes(router *gin.Engine) {
 			suspects.POST("/:id/sighting", middleware.AuthMiddleware(), handlers.ReportSighting)
 			suspects.GET("/:id/sightings", middleware.AuthMiddleware(), handlers.GetSuspectSightings)
 			suspects.GET("/:id/cases", middleware.AuthMiddleware(), handlers.GetSuspectCases)
+			suspects.POST("/:id/associations", middleware.AuthMiddleware(), handlers.CreateSuspectAssociation)
 		}
 
 		// Transfer routes
@@ -122,26 +140,15 @@ func SetupRoutes(router *gin.Engine) {
 		// AI routes
 		ai := api.Group("/ai")
 		{
+			ai.POST("/chatbot", middleware.AuthMiddleware(), handlers.AIChatbot)
+			ai.POST("/analyze-image", middleware.AuthMiddleware(), handlers.AIAnalyzeImage)
 			ai.POST("/analyze-location", middleware.AuthMiddleware(), handlers.AIAnalyzeLocation)
 			ai.POST("/map-insights", middleware.AuthMiddleware(), handlers.AIGetMapInsights)
 			ai.POST("/security-warning", middleware.AuthMiddleware(), handlers.AIGenerateSecurityWarning)
 			ai.POST("/analyze-news", middleware.AuthMiddleware(), handlers.AIAnalyzeNews)
 			ai.POST("/smart-tips", middleware.AuthMiddleware(), handlers.AIGetSmartTips)
 			ai.POST("/predict-hotspots", middleware.AuthMiddleware(), handlers.AIPredictHotspots)
-			ai.POST("/community-alert", middleware.AuthMiddleware(), handlers.AIGenerateCommunityAlert)
 		}
-
-                // Mobile API routes
-                mobile := api.Group("/mobile")
-                {
-	                mobile.GET("/config", middleware.AuthMiddleware(), handlers.MobileAppConfig)
-	                mobile.GET("/dashboard", middleware.AuthMiddleware(), handlers.MobileDashboard)
-	                mobile.GET("/notifications", middleware.AuthMiddleware(), handlers.MobileNotifications)
-	                mobile.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MobileMarkNotificationRead)
-	                mobile.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MobileMarkAllRead)
-	                mobile.GET("/sync", middleware.AuthMiddleware(), handlers.MobileSync)
- 	                mobile.POST("/crash-report", middleware.AuthMiddleware(), handlers.MobileCrashReport)
-                }
 
 		// Bank Account routes
 		bank := api.Group("/bank")
@@ -196,6 +203,17 @@ func SetupRoutes(router *gin.Engine) {
 			audit.GET("/notifications", middleware.AuthMiddleware(), handlers.GetNotificationLogs)
 		}
 
+		// Alert routes
+		alertRoutes := api.Group("/alerts")
+		{
+			alertRoutes.POST("", middleware.AuthMiddleware(), handlers.CreateCommunityAlert)
+			alertRoutes.GET("", middleware.AuthMiddleware(), handlers.GetCommunityAlerts)
+			alertRoutes.GET("/:id", middleware.AuthMiddleware(), handlers.GetAlertByID)
+			alertRoutes.POST("/:id/confirm", middleware.AuthMiddleware(), handlers.ConfirmAlert)
+			alertRoutes.POST("/subscribe", middleware.AuthMiddleware(), handlers.SubscribeToAlerts)
+			alertRoutes.GET("/subscriptions", middleware.AuthMiddleware(), handlers.GetAlertSubscriptions)
+		}
+
 		// Settings routes
 		settings := api.Group("/settings")
 		{
@@ -208,6 +226,71 @@ func SetupRoutes(router *gin.Engine) {
 			settings.GET("/exports", middleware.AuthMiddleware(), handlers.GetDataExports)
 			settings.GET("/onboarding", middleware.AuthMiddleware(), handlers.GetUserOnboarding)
 			settings.PUT("/onboarding", middleware.AuthMiddleware(), handlers.UpdateUserOnboarding)
+		}
+
+		// Mobile API routes
+		mobile := api.Group("/mobile")
+		{
+			mobile.GET("/config", middleware.AuthMiddleware(), handlers.MobileAppConfig)
+			mobile.GET("/dashboard", middleware.AuthMiddleware(), handlers.MobileDashboard)
+			mobile.GET("/notifications", middleware.AuthMiddleware(), handlers.MobileNotifications)
+			mobile.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MobileMarkNotificationRead)
+			mobile.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MobileMarkAllRead)
+			mobile.GET("/sync", middleware.AuthMiddleware(), handlers.MobileSync)
+			mobile.POST("/crash-report", middleware.AuthMiddleware(), handlers.MobileCrashReport)
+		}
+
+		// Video Analytics routes
+		video := api.Group("/video")
+		{
+			video.POST("/cameras", middleware.AuthMiddleware(), handlers.AddCamera)
+			video.GET("/units/:unitId/cameras", middleware.AuthMiddleware(), handlers.GetCameras)
+			video.POST("/alerts", middleware.AuthMiddleware(), handlers.GenerateVideoAlert)
+			video.GET("/alerts", middleware.AuthMiddleware(), handlers.GetVideoAlerts)
+			video.PUT("/alerts/:id/review", middleware.AuthMiddleware(), handlers.ReviewVideoAlert)
+			video.POST("/social/monitor", middleware.AuthMiddleware(), handlers.MonitorSocialMedia)
+			video.GET("/social/posts", middleware.AuthMiddleware(), handlers.GetSocialMediaPosts)
+		}
+
+		// Communication routes
+		commGroup := api.Group("/communication")
+		{
+			commGroup.POST("/rooms", middleware.AuthMiddleware(), handlers.CreateRoom)
+			commGroup.GET("/units/:unitId/rooms", middleware.AuthMiddleware(), handlers.GetRooms)
+			commGroup.POST("/messages", middleware.AuthMiddleware(), handlers.SendMessage)
+			commGroup.GET("/rooms/:roomId/messages", middleware.AuthMiddleware(), handlers.GetMessages)
+			commGroup.POST("/calls", middleware.AuthMiddleware(), handlers.InitiateCall)
+			commGroup.PUT("/calls/:id/end", middleware.AuthMiddleware(), handlers.EndCall)
+			commGroup.POST("/sync", middleware.AuthMiddleware(), handlers.SyncMessages)
+			commGroup.GET("/rooms/:roomId/sync-status", middleware.AuthMiddleware(), handlers.GetSyncStatus)
+		}
+
+		// Peacebuilding routes
+		peace := api.Group("/peacebuilding")
+		{
+			peace.POST("/committees", middleware.AuthMiddleware(), handlers.CreatePeaceCommittee)
+			peace.GET("/units/:unitId/committees", middleware.AuthMiddleware(), handlers.GetPeaceCommittees)
+			peace.POST("/committees/:id/members", middleware.AuthMiddleware(), handlers.AddCommitteeMember)
+			peace.POST("/conflicts", middleware.AuthMiddleware(), handlers.CreateConflictResolution)
+			peace.GET("/units/:unitId/conflicts", middleware.AuthMiddleware(), handlers.GetConflictResolutions)
+			peace.PUT("/conflicts/:id", middleware.AuthMiddleware(), handlers.UpdateConflictResolution)
+			peace.GET("/units/:unitId/peace-metrics", middleware.AuthMiddleware(), handlers.GetPeaceMetrics)
+			peace.GET("/units/:unitId/trust-scores", middleware.AuthMiddleware(), handlers.GetTrustScores)
+			peace.POST("/trust-scores", middleware.AuthMiddleware(), handlers.UpdateTrustScore)
+		}
+
+		// Super Admin routes
+		superAdmin := api.Group("/admin")
+		superAdmin.Use(middleware.AuthMiddleware(), handlers.SuperAdminMiddleware())
+		{
+			superAdmin.GET("/users", handlers.GetAllUsers)
+			superAdmin.GET("/users/:id", handlers.GetUserByID)
+			superAdmin.PUT("/users/:id/role", handlers.UpdateUserRole)
+			superAdmin.POST("/users/:id/suspend", handlers.SuspendUser)
+			superAdmin.POST("/users/:id/activate", handlers.ActivateUser)
+			superAdmin.POST("/users/:id/impersonate", handlers.ImpersonateUser)
+			superAdmin.POST("/stop-impersonate", handlers.StopImpersonation)
+			superAdmin.GET("/stats", handlers.GetSystemStats)
 		}
 	}
 

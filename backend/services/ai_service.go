@@ -48,6 +48,7 @@ func NewAIService() *AIService {
 	}
 }
 
+// Chat sends a chat message to OpenRouter
 func (s *AIService) Chat(messages []ChatMessage) (string, error) {
 	if s.apiKey == "" {
 		return "", fmt.Errorf("OPENROUTER_API_KEY not set")
@@ -99,6 +100,51 @@ func (s *AIService) Chat(messages []ChatMessage) (string, error) {
 	}
 
 	return chatResp.Choices[0].Message.Content, nil
+}
+
+// Chatbot - AI-powered assistant for citizens
+func (s *AIService) Chatbot(question, userRole string) (string, error) {
+	messages := []ChatMessage{
+		{
+			Role: "system",
+			Content: `You are CommunityShield AI, a helpful security assistant for Nigerian communities.
+Your role is to:
+1. Provide safety tips and security advice
+2. Help users report incidents
+3. Explain how the platform works
+4. Give general security information
+5. Be friendly and culturally aware
+
+If you don't know something, be honest and suggest they contact their local security unit.`,
+		},
+		{
+			Role: "user",
+			Content: fmt.Sprintf("User role: %s\nQuestion: %s", userRole, question),
+		},
+	}
+
+	return s.Chat(messages)
+}
+
+// AnalyzeImage - AI image analysis for crime scene photos
+func (s *AIService) AnalyzeImage(imageDescription string) (string, error) {
+	messages := []ChatMessage{
+		{
+			Role: "system",
+			Content: `You are a forensic image analyst for CommunityShield.
+Analyze the image description and provide:
+1. Key observations
+2. Potential evidence identification
+3. Safety implications
+4. Recommended actions`,
+		},
+		{
+			Role: "user",
+			Content: fmt.Sprintf("Image description: %s", imageDescription),
+		},
+	}
+
+	return s.Chat(messages)
 }
 
 // AnalyzeLocationRisk analyzes security risk for a specific location
@@ -203,34 +249,6 @@ Provide:
 2. Hotspots Identified
 3. Time Patterns
 4. Recommendations`, location, incidentsText),
-		},
-	}
-
-	return s.Chat(messages)
-}
-
-// GenerateCommunityAlert generates an alert for the community
-func (s *AIService) GenerateCommunityAlert(alertType, location, data string) (string, error) {
-	messages := []ChatMessage{
-		{
-			Role: "system",
-			Content: `You are a community alert system for CommunityShield.
-Generate clear, actionable alerts for community members.
-Alerts should be urgent, specific, and provide clear instructions.`,
-		},
-		{
-			Role: "user",
-			Content: fmt.Sprintf(`Generate a community alert:
-Type: %s
-Location: %s
-Data: %s
-
-Format:
-🚨 [ALERT TYPE]
-📍 Location
-📋 Details
-✅ Actions to Take
-📞 Contact Information`, alertType, location, data),
 		},
 	}
 

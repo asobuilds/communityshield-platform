@@ -3,7 +3,7 @@ FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
-# Copy go mod and sum files
+# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -11,18 +11,20 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
-# Run stage
+# Final stage
 FROM alpine:latest
 
-WORKDIR /app
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
 
 # Copy the binary from builder
 COPY --from=builder /app/main .
 
-# Copy .env file (optional)
-COPY .env .env || true
+# Copy .env file
+COPY .env.production .env
 
 # Expose port
 EXPOSE 8080

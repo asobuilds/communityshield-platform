@@ -4,18 +4,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"security-solution/config"
 	"security-solution/models"
 )
 
-// RegisterPushToken registers a push notification token
-func RegisterPushToken(c *gin.Context) {
+// RegisterDevice registers a device for push notifications
+func RegisterDevice(c *gin.Context) {
 	var input struct {
-		UserID string `json:"userId" binding:"required"`
-		Token  string `json:"token" binding:"required"`
-		Device string `json:"device"`
+		DeviceToken string `json:"deviceToken" binding:"required"`
+		DeviceType  string `json:"deviceType" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -23,45 +21,41 @@ func RegisterPushToken(c *gin.Context) {
 		return
 	}
 
-	userID, err := uuid.Parse(input.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
+	userObj := user.(*models.User)
 
-	// Check if token already exists
+	// Check if device exists
 	var existing models.PushToken
-	if err := config.DB.Where("user_id = ? AND token = ?", userID, input.Token).First(&existing).Error; err == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Token already registered",
-		})
+	if err := config.DB.Where("user_id = ? AND token = ?", userObj.ID, input.DeviceToken).First(&existing).Error; err == nil {
+		c.JSON(http.StatusOK, gin.H{"message": "Device already registered"})
 		return
 	}
 
 	pushToken := models.PushToken{
-		UserID: userID,
-		Token:  input.Token,
-		Device: input.Device,
+		UserID: userObj.ID,
+		Token:  input.DeviceToken,
+		Device: input.DeviceType,
 		Active: true,
 	}
 
 	if err := config.DB.Create(&pushToken).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register device"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Push token registered successfully",
+		"message": "Device registered successfully",
 	})
 }
 
-// SendPushNotification sends a push notification
-func SendPushNotification(c *gin.Context) {
+// UnregisterDevice unregisters a device
+func UnregisterDevice(c *gin.Context) {
 	var input struct {
-		UserID  string `json:"userId" binding:"required"`
-		Title   string `json:"title" binding:"required"`
-		Body    string `json:"body" binding:"required"`
-		Data    map[string]interface{} `json:"data"`
+		DeviceToken string `json:"deviceToken" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -69,76 +63,57 @@ func SendPushNotification(c *gin.Context) {
 		return
 	}
 
-	userID, err := uuid.Parse(input.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if err := config.DB.Where("user_id = ? AND token = ?", userObj.ID, input.DeviceToken).Delete(&models.PushToken{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unregister device"})
 		return
 	}
 
-	// Get user's push tokens
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Device unregistered",
+	})
+}
+
+// TestNotification sends test push notification
+func TestNotification(c *gin.Context) {
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
 	var tokens []models.PushToken
-	if err := config.DB.Where("user_id = ? AND active = ?", userID, true).Find(&tokens).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get push tokens"})
+	if err := config.DB.Where("user_id = ? AND active = ?", userObj.ID, true).Find(&tokens).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No push tokens found"})
 		return
 	}
 
 	if len(tokens) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No push tokens found for user"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "No devices registered"})
 		return
 	}
 
-	// Here you would integrate with a push notification service like Firebase Cloud Messaging
-	// For now, just return success
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Push notification sent successfully",
-		"tokens":  len(tokens),
-	})
-}
-
-// UnregisterPushToken unregisters a push token
-func UnregisterPushToken(c *gin.Context) {
-	var input struct {
-		UserID string `json:"userId" binding:"required"`
-		Token  string `json:"token" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	userID, err := uuid.Parse(input.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	if err := config.DB.Where("user_id = ? AND token = ?", userID, input.Token).Delete(&models.PushToken{}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unregister token"})
-		return
+	// Create notification record
+	for range tokens {
+		notification := models.Notification{
+			UserID:  userObj.ID,
+			Title:   "🔔 Test Notification",
+			Message: "Your device is connected to CommunityShield!",
+			Type:    "test",
+			Status:  "sent",
+		}
+		config.DB.Create(&notification)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Push token unregistered successfully",
-	})
-}
-
-// GetUserPushTokens gets all push tokens for a user
-func GetUserPushTokens(c *gin.Context) {
-	userID := c.Param("userId")
-	id, err := uuid.Parse(userID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	var tokens []models.PushToken
-	if err := config.DB.Where("user_id = ?", id).Find(&tokens).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch push tokens"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"tokens": tokens,
+		"message": "Test notifications sent",
+		"count":   len(tokens),
 	})
 }

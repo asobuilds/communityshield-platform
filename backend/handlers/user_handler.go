@@ -22,25 +22,6 @@ func GetUsers(c *gin.Context) {
 	})
 }
 
-func GetUserByID(c *gin.Context) {
-	id := c.Param("id")
-	userID, err := uuid.Parse(id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	var user models.User
-	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"user": user,
-	})
-}
-
 func UpdateUser(c *gin.Context) {
 	id := c.Param("id")
 	userID, err := uuid.Parse(id)

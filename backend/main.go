@@ -9,7 +9,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"security-solution/config"
-	"security-solution/middleware"  // ADD THIS LINE
+	"security-solution/middleware"
 	"security-solution/routes"
 )
 

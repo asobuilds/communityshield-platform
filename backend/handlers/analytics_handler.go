@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -39,35 +38,6 @@ func GetUnitAnalytics(c *gin.Context) {
 		"resolvedCases": resolvedCases,
 		"pendingCases":  pendingCases,
 		"monthlyStats":  monthlyStats,
-	})
-}
-
-// GetCaseAnalytics returns analytics for a specific case
-func GetCaseAnalytics(c *gin.Context) {
-	caseID := c.Param("id")
-
-	var caseObj models.Case
-	if err := config.DB.Preload("Evidence").Preload("Progress").First(&caseObj, "id = ?", caseID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
-		return
-	}
-
-	// Get evidence count
-	var evidenceCount int64
-	config.DB.Model(&models.Evidence{}).Where("case_id = ?", caseID).Count(&evidenceCount)
-
-	// Get progress count
-	var progressCount int64
-	config.DB.Model(&models.Progress{}).Where("case_id = ?", caseID).Count(&progressCount)
-
-	// Calculate time since creation
-	timeSince := time.Since(caseObj.CreatedAt).Hours() / 24 // in days
-
-	c.JSON(http.StatusOK, gin.H{
-		"case":          caseObj,
-		"evidenceCount": evidenceCount,
-		"progressCount": progressCount,
-		"daysOpen":      int(timeSince),
 	})
 }
 

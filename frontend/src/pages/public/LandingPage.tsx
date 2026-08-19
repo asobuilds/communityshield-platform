@@ -13,26 +13,52 @@ interface Incident {
   type: 'case' | 'sos' | 'unit';
 }
 
+const features = [
+  { id: 'case-reporting', icon: '📝', title: 'Report Cases', description: 'Report security incidents quickly to the nearest unit' },
+  { id: 'sos-alerts', icon: '🆘', title: 'SOS Alerts', description: 'One-touch emergency response system' },
+  { id: 'map-view', icon: '🗺️', title: 'Interactive Map', description: 'Real-time incident and unit mapping' },
+  { id: 'suspect-tracking', icon: '🕵️', title: 'Suspect Tracking', description: 'Multi-unit suspect coordination' },
+  { id: 'ai-intelligence', icon: '🤖', title: 'AI Intelligence', description: 'Predictive security insights and alerts' },
+  { id: 'peacebuilding', icon: '🕊️', title: 'Peacebuilding', description: 'Community mediation and trust building' },
+  { id: 'communication', icon: '📻', title: 'Communication', description: 'Walkie-talkie for security officers' },
+  { id: 'finance', icon: '💰', title: 'Finance', description: 'Complete financial management for units' }
+];
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number]>([6.5244, 3.3792]);
+  const [locationDetected, setLocationDetected] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    setIsLoggedIn(!!token);
+    const user = localStorage.getItem('user');
+    setIsLoggedIn(!!token && !!user);
     fetchIncidents();
 
-    // Get user location
+    // Get user location with better error handling
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+          setLocationDetected(true);
+          console.log('📍 Location detected:', pos.coords.latitude, pos.coords.longitude);
         },
-        () => console.log('Using default location')
+        (error) => {
+          console.log('📍 Using default location (Lagos)');
+          console.log('Location error:', error.message);
+          setLocationDetected(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
       );
+    } else {
+      console.log('📍 Geolocation not supported, using default location');
     }
   }, []);
 
@@ -40,8 +66,8 @@ export default function LandingPage() {
     setLoading(true);
     try {
       const [casesRes, unitsRes] = await Promise.all([
-        axios.get('/api/v1/cases').catch(() => ({ data: { cases: [] } })),
-        axios.get('/api/v1/units').catch(() => ({ data: { units: [] } }))
+        axios.get('/api/v1/public/cases'),
+        axios.get('/api/v1/public/units')
       ]);
 
       const cases = casesRes.data.cases || [];
@@ -81,12 +107,12 @@ export default function LandingPage() {
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2">
               <span className="text-2xl">🛡️</span>
               <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">
                 CommunityShield
               </h1>
-            </div>
+            </Link>
             <nav className="flex items-center gap-4">
               {isLoggedIn ? (
                 <>
@@ -138,12 +164,21 @@ export default function LandingPage() {
               Empowering communities in rural Nigeria with digital security solutions
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Link
-                to={isLoggedIn ? "/report" : "/register"}
-                className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
-              >
-                {isLoggedIn ? "Report Incident" : "Get Started Now"}
-              </Link>
+              {isLoggedIn ? (
+                <Link
+                  to="/home"
+                  className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
+                >
+                  Go to Dashboard
+                </Link>
+              ) : (
+                <Link
+                  to="/register"
+                  className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
+                >
+                  Get Started Now
+                </Link>
+              )}
               <Link
                 to="/map"
                 className="bg-transparent border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/10 transition"
@@ -155,34 +190,25 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* Features Section - CLICKABLE */}
       <section className="py-16 bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-center text-gray-800 dark:text-gray-200 mb-12">
             How CommunityShield Works
           </h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center p-6">
-              <div className="text-5xl mb-4">📱</div>
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">1. Report</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Report incidents with location, description, and evidence. Choose to report anonymously or publicly.
-              </p>
-            </div>
-            <div className="text-center p-6">
-              <div className="text-5xl mb-4">📍</div>
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">2. Track</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Track your case progress in real-time. See which security unit is handling your case and their updates.
-              </p>
-            </div>
-            <div className="text-center p-6">
-              <div className="text-5xl mb-4">🛡️</div>
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">3. Resolve</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Get timely response from verified security units. Receive updates and resolution notifications.
-              </p>
-            </div>
+          <div className="grid md:grid-cols-4 gap-6">
+            {features.map((feature) => (
+              <Link
+                key={feature.id}
+                to={`/features/${feature.id}`}
+                className="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg shadow hover:shadow-lg transition cursor-pointer text-center hover:scale-105 transform duration-200"
+              >
+                <div className="text-4xl mb-3">{feature.icon}</div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">{feature.title}</h3>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{feature.description}</p>
+                <p className="text-blue-600 text-sm mt-2 font-medium">Learn more →</p>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
@@ -228,6 +254,11 @@ export default function LandingPage() {
               }}
             />
           )}
+          {!locationDetected && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">
+              📍 Using default location (Lagos). Enable location for better results.
+            </p>
+          )}
         </div>
       </section>
 
@@ -265,12 +296,21 @@ export default function LandingPage() {
             Join CommunityShield today and be part of the digital security solution
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Link
-              to={isLoggedIn ? "/home" : "/register"}
-              className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
-            >
-              {isLoggedIn ? "Go to Dashboard" : "Get Started Now"}
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                to="/home"
+                className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <Link
+                to="/register"
+                className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition"
+              >
+                Get Started Now
+              </Link>
+            )}
             <Link
               to="/map"
               className="bg-transparent border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/10 transition"

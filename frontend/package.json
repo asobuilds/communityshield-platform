@@ -19,6 +19,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",
+    "leaflet-heatmap": "^1.0.0",
     "lucide-react": "^1.31.0",
     "react": "^19.2.8",
     "react-chartjs-2": "^5.3.1",

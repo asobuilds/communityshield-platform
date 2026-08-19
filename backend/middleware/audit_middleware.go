@@ -18,36 +18,42 @@ func AuditMiddleware() gin.HandlerFunc {
 		// Process request
 		c.Next()
 
-		// Log after request is processed
-		userID := uuid.Nil
-		userInterface, exists := c.Get("user")
-		if exists {
-			if user, ok := userInterface.(*models.User); ok {
-				userID = user.ID
+		// Skip logging for health and public endpoints
+		skipPaths := []string{"/health", "/api/v1/auth/login", "/api/v1/auth/register"}
+		for _, path := range skipPaths {
+			if c.Request.URL.Path == path {
+				return
 			}
+		}
+
+		// Only log authenticated requests
+		userInterface, exists := c.Get("user")
+		if !exists {
+			return
+		}
+
+		user, ok := userInterface.(*models.User)
+		if !ok {
+			return
 		}
 
 		// Determine unit ID
 		var unitID *uuid.UUID
-		if userInterface, exists := c.Get("user"); exists {
-			if user, ok := userInterface.(*models.User); ok {
-				if user.UnitID != nil {
-					unitID = user.UnitID
-				}
-			}
+		if user.UnitID != nil {
+			unitID = user.UnitID
 		}
 
 		// Create audit log
 		auditLog := models.AuditLog{
-			UserID:     &userID,
-			UnitID:     unitID,
-			Action:     c.Request.Method,
-			Resource:   c.Request.URL.Path,
-			Details:    c.Request.URL.RawQuery,
-			IPAddress:  c.ClientIP(),
-			UserAgent:  c.GetHeader("User-Agent"),
-			Status:     "success",
-			Severity:   "info",
+			UserID:    &user.ID,
+			UnitID:    unitID,
+			Action:    c.Request.Method,
+			Resource:  c.Request.URL.Path,
+			Details:   c.Request.URL.RawQuery,
+			IPAddress: c.ClientIP(),
+			UserAgent: c.GetHeader("User-Agent"),
+			Status:    "success",
+			Severity:  "info",
 		}
 
 		if len(c.Errors) > 0 {
@@ -62,9 +68,6 @@ func AuditMiddleware() gin.HandlerFunc {
 			auditLog.Severity = "warning"
 		}
 
-		// Only log if user is authenticated or for critical operations
-		if userID != uuid.Nil || c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "DELETE" {
-			config.DB.Create(&auditLog)
-		}
+		config.DB.Create(&auditLog)
 	}
 }

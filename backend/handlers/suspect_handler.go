@@ -13,37 +13,22 @@ import (
 
 // checkSuspectAccess checks if user has access to this suspect
 func checkSuspectAccess(user *models.User, suspect *models.Suspect) bool {
-	// Super admin has full access to everything
 	if user.Role == "super_admin" {
 		return true
 	}
-
-	// Unit admin can only access suspects in their own unit
-	if user.Role == "unit_admin" {
-		if user.UnitID == nil {
-			return false
-		}
-		// Can access suspects in their unit OR suspects transferred to them
+	if user.Role == "unit_admin" && user.UnitID != nil {
 		if suspect.UnitID != nil && *suspect.UnitID == *user.UnitID {
 			return true
 		}
-		// Also can access suspects that have a pending transfer to their unit
 		if suspect.TransferStatus == "pending" && suspect.TransferToUnit != nil && *suspect.TransferToUnit == *user.UnitID {
 			return true
 		}
 		return false
 	}
-
-	// Officer can only access suspects in their unit AND cases they're assigned to
-	if user.Role == "officer" {
-		if user.UnitID == nil {
-			return false
-		}
-		// Must be in same unit
+	if user.Role == "officer" && user.UnitID != nil {
 		if suspect.UnitID == nil || *suspect.UnitID != *user.UnitID {
 			return false
 		}
-		// Check if officer is assigned to any case with this suspect
 		var count int64
 		config.DB.Model(&models.SuspectCase{}).
 			Joins("JOIN cases ON cases.id = suspect_cases.case_id").
@@ -52,20 +37,17 @@ func checkSuspectAccess(user *models.User, suspect *models.Suspect) bool {
 		if count > 0 {
 			return true
 		}
-		// Unit admins in same unit can also view (officers can view all suspects in their unit if they have cases)
 		return false
 	}
-
-	// Citizens have NO access to suspects
 	return false
 }
 
-// checkAdminAccess checks if user is admin (super_admin or unit_admin)
+// checkAdminAccess checks if user is admin
 func checkAdminAccess(user *models.User) bool {
 	return user.Role == "super_admin" || user.Role == "unit_admin"
 }
 
-// CreateSuspect creates a new suspect (Admin only)
+// CreateSuspect - Enhanced with categories and risk score
 func CreateSuspect(c *gin.Context) {
 	var input struct {
 		FirstName   string `json:"firstName" binding:"required"`
@@ -81,7 +63,10 @@ func CreateSuspect(c *gin.Context) {
 		Description string `json:"description"`
 		DangerLevel string `json:"dangerLevel"`
 		Wanted      bool   `json:"wanted"`
+		Category    string `json:"category"`
+		SubCategory string `json:"subCategory"`
 		UnitID      string `json:"unitId"`
+		PhotoURL    string `json:"photoUrl"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -96,7 +81,6 @@ func CreateSuspect(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	// Only admins can create suspects
 	if !checkAdminAccess(userObj) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can create suspects"})
 		return
@@ -115,8 +99,27 @@ func CreateSuspect(c *gin.Context) {
 			unitID = &parsed
 		}
 	} else if userObj.UnitID != nil {
-		// Default to admin's unit if not specified
 		unitID = userObj.UnitID
+	}
+
+	if input.Category == "" {
+		input.Category = "general"
+	}
+	if input.DangerLevel == "" {
+		input.DangerLevel = "medium"
+	}
+
+	// Calculate risk score based on danger level
+	riskScore := 0.0
+	switch input.DangerLevel {
+	case "low":
+		riskScore = 20
+	case "medium":
+		riskScore = 50
+	case "high":
+		riskScore = 75
+	case "extreme":
+		riskScore = 95
 	}
 
 	suspect := models.Suspect{
@@ -134,12 +137,12 @@ func CreateSuspect(c *gin.Context) {
 		Status:      "active",
 		DangerLevel: input.DangerLevel,
 		Wanted:      input.Wanted,
+		Category:    input.Category,
+		SubCategory: input.SubCategory,
+		RiskScore:   riskScore,
+		PhotoURL:    input.PhotoURL,
 		CreatedBy:   userObj.ID,
 		UnitID:      unitID,
-	}
-
-	if suspect.DangerLevel == "" {
-		suspect.DangerLevel = "medium"
 	}
 
 	if err := config.DB.Create(&suspect).Error; err != nil {
@@ -148,8 +151,9 @@ func CreateSuspect(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Suspect created successfully",
-		"suspect": suspect,
+		"message":  "Suspect created successfully",
+		"suspect":  suspect,
+		"riskScore": riskScore,
 	})
 }
 
@@ -163,32 +167,20 @@ func GetAllSuspects(c *gin.Context) {
 	userObj := user.(*models.User)
 
 	var suspects []models.Suspect
-	query := config.DB.Preload("CreatedByUser").Preload("Unit").Preload("TransferToUnitObj")
+	query := config.DB.Preload("CreatedByUser").Preload("Unit").Preload("TransferToUnitObj").Preload("Associations")
 
-	// Role-based filtering
 	if userObj.Role == "super_admin" {
-		// Super admin sees ALL suspects across all units
 		query = query.Order("created_at desc")
 	} else if userObj.Role == "unit_admin" && userObj.UnitID != nil {
-		// Unit admin sees suspects in their unit AND suspects transferred to them
-		query = query.Where(
-			"unit_id = ? OR (transfer_status = 'pending' AND transfer_to_unit = ?)",
-			userObj.UnitID, userObj.UnitID,
-		).Order("created_at desc")
+		query = query.Where("unit_id = ? OR (transfer_status = 'pending' AND transfer_to_unit = ?)", userObj.UnitID, userObj.UnitID).Order("created_at desc")
 	} else if userObj.Role == "officer" && userObj.UnitID != nil {
-		// Officer sees suspects in their unit that are linked to cases assigned to them
 		var caseSuspectIDs []string
 		config.DB.Table("suspect_cases").
 			Joins("JOIN cases ON cases.id = suspect_cases.case_id").
 			Where("cases.assigned_to = ?", userObj.ID).
 			Pluck("suspect_cases.suspect_id", &caseSuspectIDs)
-
-		query = query.Where(
-			"unit_id = ? AND id IN (?)",
-			userObj.UnitID, caseSuspectIDs,
-		).Order("created_at desc")
+		query = query.Where("unit_id = ? OR id IN (?)", userObj.UnitID, caseSuspectIDs).Order("created_at desc")
 	} else {
-		// Citizens and others have NO access
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view suspects"})
 		return
 	}
@@ -220,12 +212,11 @@ func GetSuspectByID(c *gin.Context) {
 	userObj := user.(*models.User)
 
 	var suspect models.Suspect
-	if err := config.DB.Preload("CreatedByUser").Preload("Unit").Preload("TransferToUnitObj").First(&suspect, "id = ?", suspectID).Error; err != nil {
+	if err := config.DB.Preload("CreatedByUser").Preload("Unit").Preload("TransferToUnitObj").Preload("Associations").First(&suspect, "id = ?", suspectID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Suspect not found"})
 		return
 	}
 
-	// Check access
 	if !checkSuspectAccess(userObj, &suspect) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view this suspect"})
 		return
@@ -236,7 +227,7 @@ func GetSuspectByID(c *gin.Context) {
 	})
 }
 
-// UpdateSuspect updates a suspect (with access check)
+// UpdateSuspect updates a suspect
 func UpdateSuspect(c *gin.Context) {
 	id := c.Param("id")
 	suspectID, err := uuid.Parse(id)
@@ -252,7 +243,6 @@ func UpdateSuspect(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	// Only admins can update suspects
 	if !checkAdminAccess(userObj) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can update suspects"})
 		return
@@ -272,6 +262,9 @@ func UpdateSuspect(c *gin.Context) {
 		Status      string `json:"status"`
 		DangerLevel string `json:"dangerLevel"`
 		Wanted      *bool  `json:"wanted"`
+		Category    string `json:"category"`
+		SubCategory string `json:"subCategory"`
+		PhotoURL    string `json:"photoUrl"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -285,7 +278,6 @@ func UpdateSuspect(c *gin.Context) {
 		return
 	}
 
-	// Check if admin has access to this suspect
 	if !checkSuspectAccess(userObj, &suspect) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update this suspect"})
 		return
@@ -326,9 +318,29 @@ func UpdateSuspect(c *gin.Context) {
 	}
 	if input.DangerLevel != "" {
 		suspect.DangerLevel = input.DangerLevel
+		// Update risk score based on new danger level
+		switch input.DangerLevel {
+		case "low":
+			suspect.RiskScore = 20
+		case "medium":
+			suspect.RiskScore = 50
+		case "high":
+			suspect.RiskScore = 75
+		case "extreme":
+			suspect.RiskScore = 95
+		}
 	}
 	if input.Wanted != nil {
 		suspect.Wanted = *input.Wanted
+	}
+	if input.Category != "" {
+		suspect.Category = input.Category
+	}
+	if input.SubCategory != "" {
+		suspect.SubCategory = input.SubCategory
+	}
+	if input.PhotoURL != "" {
+		suspect.PhotoURL = input.PhotoURL
 	}
 
 	if err := config.DB.Save(&suspect).Error; err != nil {
@@ -337,8 +349,8 @@ func UpdateSuspect(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Suspect updated successfully",
-		"suspect": suspect,
+		"message":  "Suspect updated successfully",
+		"suspect":  suspect,
 	})
 }
 
@@ -358,7 +370,6 @@ func DeleteSuspect(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	// Only super admin can delete
 	if userObj.Role != "super_admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only super admin can delete suspects"})
 		return
@@ -374,7 +385,7 @@ func DeleteSuspect(c *gin.Context) {
 	})
 }
 
-// ReportSighting reports a suspect sighting (officers and admins only)
+// ReportSighting reports a suspect sighting
 func ReportSighting(c *gin.Context) {
 	var input struct {
 		SuspectID   string  `json:"suspectId" binding:"required"`
@@ -403,13 +414,11 @@ func ReportSighting(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	// Only officers and admins can report sightings
 	if userObj.Role == "citizen" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Citizens cannot report suspect sightings"})
 		return
 	}
 
-	// Verify suspect exists and user has access
 	var suspect models.Suspect
 	if err := config.DB.First(&suspect, "id = ?", suspectID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Suspect not found"})
@@ -421,7 +430,6 @@ func ReportSighting(c *gin.Context) {
 		return
 	}
 
-	// Determine unit ID
 	var unitID uuid.UUID
 	if input.UnitID != "" {
 		parsed, err := uuid.Parse(input.UnitID)
@@ -448,7 +456,6 @@ func ReportSighting(c *gin.Context) {
 		return
 	}
 
-	// Mark suspect as active
 	suspect.Status = "active"
 	config.DB.Save(&suspect)
 
@@ -458,7 +465,7 @@ func ReportSighting(c *gin.Context) {
 	})
 }
 
-// GetSuspectSightings gets all sightings for a suspect (with access check)
+// GetSuspectSightings gets all sightings for a suspect
 func GetSuspectSightings(c *gin.Context) {
 	suspectID := c.Param("id")
 	id, err := uuid.Parse(suspectID)
@@ -496,7 +503,7 @@ func GetSuspectSightings(c *gin.Context) {
 	})
 }
 
-// GetSuspectCases gets all cases for a suspect (with access check)
+// GetSuspectCases gets all cases for a suspect
 func GetSuspectCases(c *gin.Context) {
 	suspectID := c.Param("id")
 	id, err := uuid.Parse(suspectID)
@@ -531,5 +538,79 @@ func GetSuspectCases(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"suspectCases": suspectCases,
+	})
+}
+
+// CreateSuspectAssociation links a suspect to a case or another suspect
+func CreateSuspectAssociation(c *gin.Context) {
+	suspectID := c.Param("id")
+	id, err := uuid.Parse(suspectID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid suspect ID"})
+		return
+	}
+
+	var input struct {
+		TargetID        string `json:"targetId" binding:"required"`
+		TargetType      string `json:"targetType" binding:"required"` // case, suspect
+		AssociationType string `json:"associationType"`
+		Notes           string `json:"notes"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if !checkAdminAccess(userObj) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can create suspect associations"})
+		return
+	}
+
+	var suspect models.Suspect
+	if err := config.DB.First(&suspect, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Suspect not found"})
+		return
+	}
+
+	if !checkSuspectAccess(userObj, &suspect) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to associate this suspect"})
+		return
+	}
+
+	targetID, err := uuid.Parse(input.TargetID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target ID"})
+		return
+	}
+
+	if input.AssociationType == "" {
+		input.AssociationType = "known"
+	}
+
+	association := models.SuspectAssociation{
+		SuspectID:       id,
+		TargetID:        targetID,
+		TargetType:      input.TargetType,
+		AssociationType: input.AssociationType,
+		Notes:           input.Notes,
+		CreatedBy:       userObj.ID,
+	}
+
+	if err := config.DB.Create(&association).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create association"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message":     "Association created successfully",
+		"association": association,
 	})
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -24,6 +25,7 @@ func CreateTransaction(c *gin.Context) {
 		ReceiptURL      string  `json:"receiptUrl"`
 		Notes           string  `json:"notes"`
 		TransactionDate string  `json:"transactionDate"`
+		DonorName       string  `json:"donorName"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -75,6 +77,10 @@ func CreateTransaction(c *gin.Context) {
 		}
 	}
 
+	if input.Category == "" {
+		input.Category = "operational"
+	}
+
 	transaction := models.Transaction{
 		UnitID:            unitID,
 		Type:              input.Type,
@@ -91,29 +97,12 @@ func CreateTransaction(c *gin.Context) {
 		Notes:             input.Notes,
 	}
 
-	if transaction.Category == "" {
-		transaction.Category = "operational"
-	}
-
 	if err := config.DB.Create(&transaction).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create transaction"})
 		return
 	}
 
-	if requiredApprovals == 1 {
-		approval := models.TransactionApproval{
-			TransactionID: transaction.ID,
-			ApproverID:    userObj.ID,
-			UnitID:        unitID,
-			Status:        "approved",
-			Comment:       "Auto-approved by super admin",
-		}
-		config.DB.Create(&approval)
-		transaction.ApprovalCount = 1
-		transaction.Status = "approved"
-		transaction.ApprovedBy = &userObj.ID
-		config.DB.Save(&transaction)
-	}
+	go checkBudgetAlert(unitID, input.Category, input.Amount)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":           "Transaction created successfully",
@@ -401,12 +390,28 @@ func GetTransactionSummary(c *gin.Context) {
 		Group("category").
 		Scan(&categoryBreakdown)
 
+	var monthlyTrends []struct {
+		Month   string
+		Income  float64
+		Expense float64
+	}
+	config.DB.Model(&models.Transaction{}).
+		Select("to_char(transaction_date, 'YYYY-MM') as month, "+
+			"SUM(CASE WHEN type IN ('donation','gift','tax') THEN amount ELSE 0 END) as income, "+
+			"SUM(CASE WHEN type IN ('expense','salary','maintenance') THEN amount ELSE 0 END) as expense").
+		Where("unit_id = ? AND status = ?", id, "approved").
+		Group("month").
+		Order("month desc").
+		Limit(6).
+		Scan(&monthlyTrends)
+
 	c.JSON(http.StatusOK, gin.H{
 		"totalIncome":       totalIncome,
 		"totalExpenses":     totalExpenses,
 		"balance":           balance,
 		"pendingCount":      pendingCount,
 		"categoryBreakdown": categoryBreakdown,
+		"monthlyTrends":     monthlyTrends,
 	})
 }
 
@@ -579,16 +584,16 @@ func GenerateFinancialReport(c *gin.Context) {
 	balance := totalIncome - totalExpenses
 
 	report := models.FinancialReport{
-		UnitID:        unitID,
-		Title:         input.Title,
-		Type:          input.Type,
-		PeriodStart:   periodStart,
-		PeriodEnd:     periodEnd,
-		TotalIncome:   totalIncome,
+		UnitID:       unitID,
+		Title:        input.Title,
+		Type:         input.Type,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+		TotalIncome:  totalIncome,
 		TotalExpenses: totalExpenses,
-		Balance:       balance,
-		GeneratedBy:   userObj.ID,
-		Status:        "generated",
+		Balance:      balance,
+		GeneratedBy:  userObj.ID,
+		Status:       "generated",
 	}
 
 	if err := config.DB.Create(&report).Error; err != nil {
@@ -634,4 +639,30 @@ func GetFinancialReports(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"reports": reports,
 	})
+}
+
+// Helper: Check budget alert
+func checkBudgetAlert(unitID uuid.UUID, category string, amount float64) {
+	var budget models.Budget
+	if err := config.DB.Where("unit_id = ? AND category = ? AND status = ?", unitID, category, "active").First(&budget).Error; err != nil {
+		return
+	}
+
+	percentageUsed := (budget.Spent + amount) / budget.Amount * 100
+	if percentageUsed >= 80 {
+		var admins []models.User
+		config.DB.Where("unit_id = ? AND role IN (?)", unitID, []string{"unit_admin", "super_admin"}).Find(&admins)
+
+		for _, admin := range admins {
+			notification := models.Notification{
+				UserID:  admin.ID,
+				Title:   "⚠️ Budget Alert",
+				Message: fmt.Sprintf("Budget for %s is at %.0f%% used. Current: %.2f, Budget: %.2f",
+					category, percentageUsed, budget.Spent+amount, budget.Amount),
+				Type:   "budget_alert",
+				Status: "unread",
+			}
+			config.DB.Create(&notification)
+		}
+	}
 }

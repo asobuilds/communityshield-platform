@@ -12,11 +12,13 @@ import (
 	"security-solution/models"
 )
 
-// GetNearbyUnits returns units near a location
+// GetNearbyUnits returns units near a location with operational radius
 func GetNearbyUnits(c *gin.Context) {
 	latStr := c.Query("lat")
 	lngStr := c.Query("lng")
 	radiusStr := c.Query("radius")
+	stateStr := c.Query("state")
+	cityStr := c.Query("city")
 
 	if latStr == "" || lngStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Latitude and longitude required"})
@@ -35,21 +37,33 @@ func GetNearbyUnits(c *gin.Context) {
 		return
 	}
 
-	radius := 20.0 // Default 20km
+	radius := 20.0
 	if radiusStr != "" {
 		radius, _ = parseFloat(radiusStr)
 	}
 
 	var units []models.SecurityUnit
-	if err := config.DB.Where("status = ?", "active").Find(&units).Error; err != nil {
+	query := config.DB.Where("status = ?", "active")
+
+	// Filter by state if provided
+	if stateStr != "" {
+		query = query.Where("state = ? OR state ILIKE ?", stateStr, "%"+stateStr+"%")
+	}
+
+	// Filter by city if provided
+	if cityStr != "" {
+		query = query.Where("city = ? OR city ILIKE ?", cityStr, "%"+cityStr+"%")
+	}
+
+	if err := query.Find(&units).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch units"})
 		return
 	}
 
-	// Calculate distance for each unit
 	type UnitWithDistance struct {
 		models.SecurityUnit
 		Distance float64 `json:"distance"`
+		IsInRange bool   `json:"isInRange"`
 	}
 
 	var result []UnitWithDistance
@@ -58,10 +72,16 @@ func GetNearbyUnits(c *gin.Context) {
 			continue
 		}
 		distance := haversine(lat, lng, unit.Latitude, unit.Longitude)
-		if distance <= radius {
+		
+		// Check if within operational radius
+		isInRange := distance <= unit.OperationalRadius
+		
+		// Also include if within the requested search radius
+		if distance <= radius || isInRange {
 			result = append(result, UnitWithDistance{
 				SecurityUnit: unit,
 				Distance:     distance,
+				IsInRange:    isInRange,
 			})
 		}
 	}
@@ -71,6 +91,63 @@ func GetNearbyUnits(c *gin.Context) {
 	})
 }
 
+// GetNearbyUnitsByLocation returns units matching state/city
+func GetNearbyUnitsByLocation(c *gin.Context) {
+	state := c.Query("state")
+	lga := c.Query("lga")
+	city := c.Query("city")
+	latStr := c.Query("lat")
+	lngStr := c.Query("lng")
+
+	var units []models.SecurityUnit
+	query := config.DB.Where("status = ?", "active")
+
+	if state != "" {
+		query = query.Where("state ILIKE ?", "%"+state+"%")
+	}
+	if lga != "" {
+		query = query.Where("lga ILIKE ?", "%"+lga+"%")
+	}
+	if city != "" {
+		query = query.Where("city ILIKE ?", "%"+city+"%")
+	}
+
+	if err := query.Find(&units).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch units"})
+		return
+	}
+
+	// Calculate distances if lat/lng provided
+	type UnitWithDistance struct {
+		models.SecurityUnit
+		Distance float64 `json:"distance,omitempty"`
+	}
+
+	var result []UnitWithDistance
+	if latStr != "" && lngStr != "" {
+		lat, _ := parseFloat(latStr)
+		lng, _ := parseFloat(lngStr)
+		for _, unit := range units {
+			if unit.Latitude != 0 && unit.Longitude != 0 {
+				distance := haversine(lat, lng, unit.Latitude, unit.Longitude)
+				result = append(result, UnitWithDistance{
+					SecurityUnit: unit,
+					Distance:     distance,
+				})
+			} else {
+				result = append(result, UnitWithDistance{SecurityUnit: unit})
+			}
+		}
+	} else {
+		for _, unit := range units {
+			result = append(result, UnitWithDistance{SecurityUnit: unit})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"units": result,
+	})
+}
 // GetAllUnits returns all units
 func GetAllUnits(c *gin.Context) {
 	var units []models.SecurityUnit
@@ -104,50 +181,7 @@ func GetUnitByID(c *gin.Context) {
 	})
 }
 
-// CreateUnit creates a new unit (admin only)
-func CreateUnit(c *gin.Context) {
-	var input struct {
-		Name             string  `json:"name" binding:"required"`
-		Type             string  `json:"type" binding:"required"`
-		Latitude         float64 `json:"latitude"`
-		Longitude        float64 `json:"longitude"`
-		CoverageArea     string  `json:"coverageArea"`
-		ContactPerson    string  `json:"contactPerson"`
-		ContactPhone     string  `json:"contactPhone"`
-		ContactEmail     string  `json:"contactEmail"`
-		RegistrationNumber string `json:"registrationNumber"`
-	}
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	unit := models.SecurityUnit{
-		Name:             input.Name,
-		Type:             input.Type,
-		Latitude:         input.Latitude,
-		Longitude:        input.Longitude,
-		CoverageArea:     input.CoverageArea,
-		ContactPerson:    input.ContactPerson,
-		ContactPhone:     input.ContactPhone,
-		ContactEmail:     input.ContactEmail,
-		RegistrationNumber: input.RegistrationNumber,
-		Status:           "active",
-	}
-
-	if err := config.DB.Create(&unit).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create unit"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "Unit created successfully",
-		"unit":    unit,
-	})
-}
-
-// UpdateUnit updates a unit (admin only)
+// UpdateUnit updates a unit
 func UpdateUnit(c *gin.Context) {
 	id := c.Param("id")
 	unitID, err := uuid.Parse(id)
@@ -157,19 +191,35 @@ func UpdateUnit(c *gin.Context) {
 	}
 
 	var input struct {
-		Name          string  `json:"name"`
-		Type          string  `json:"type"`
-		Latitude      float64 `json:"latitude"`
-		Longitude     float64 `json:"longitude"`
-		CoverageArea  string  `json:"coverageArea"`
-		ContactPerson string  `json:"contactPerson"`
-		ContactPhone  string  `json:"contactPhone"`
-		ContactEmail  string  `json:"contactEmail"`
-		Status        string  `json:"status"`
+		Name              string  `json:"name"`
+		Type              string  `json:"type"`
+		Latitude          float64 `json:"latitude"`
+		Longitude         float64 `json:"longitude"`
+		OperationalRadius float64 `json:"operationalRadius"`
+		State             string  `json:"state"`
+		LGA               string  `json:"lga"`
+		City              string  `json:"city"`
+		CoverageArea      string  `json:"coverageArea"`
+		ContactPerson     string  `json:"contactPerson"`
+		ContactPhone      string  `json:"contactPhone"`
+		ContactEmail      string  `json:"contactEmail"`
+		Status            string  `json:"status"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can update units"})
 		return
 	}
 
@@ -190,6 +240,18 @@ func UpdateUnit(c *gin.Context) {
 	}
 	if input.Longitude != 0 {
 		unit.Longitude = input.Longitude
+	}
+	if input.OperationalRadius != 0 {
+		unit.OperationalRadius = input.OperationalRadius
+	}
+	if input.State != "" {
+		unit.State = input.State
+	}
+	if input.LGA != "" {
+		unit.LGA = input.LGA
+	}
+	if input.City != "" {
+		unit.City = input.City
 	}
 	if input.CoverageArea != "" {
 		unit.CoverageArea = input.CoverageArea
@@ -215,6 +277,35 @@ func UpdateUnit(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Unit updated successfully",
 		"unit":    unit,
+	})
+}
+
+// GetUnitsByLocation returns units by state/LGA/city
+func GetUnitsByLocation(c *gin.Context) {
+	state := c.Query("state")
+	lga := c.Query("lga")
+	city := c.Query("city")
+
+	var units []models.SecurityUnit
+	query := config.DB.Where("status = ?", "active")
+
+	if state != "" {
+		query = query.Where("state ILIKE ?", "%"+state+"%")
+	}
+	if lga != "" {
+		query = query.Where("lga ILIKE ?", "%"+lga+"%")
+	}
+	if city != "" {
+		query = query.Where("city ILIKE ?", "%"+city+"%")
+	}
+
+	if err := query.Find(&units).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch units"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"units": units,
 	})
 }
 

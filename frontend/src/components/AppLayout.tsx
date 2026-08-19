@@ -51,15 +51,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
     navItems.push({ path: '/suspects', label: '🕵️ Suspects', icon: '🕵️' });
   }
 
-  // Admin only items
-  if (user?.role === 'unit_admin' || user?.role === 'super_admin') {
-    navItems.push({ path: '/admin', label: '⚙️ Admin', icon: '⚙️' });
-    navItems.push({ path: '/transfers', label: '🔄 Transfers', icon: '🔄' });
+  // Super Admin only items
+  if (user?.role === 'super_admin') {
+    navItems.push({ path: '/super-admin', label: '🛡️ Admin', icon: '🛡️' });
   }
 
-  // Officer only items
-  if (user?.role === 'officer') {
-    navItems.push({ path: '/walkie-talkie', label: '📻 Walkie', icon: '📻' });
+  // Admin only items
+  if (user?.role === 'unit_admin' || user?.role === 'super_admin') {
+    navItems.push({ path: '/admin', label: '⚙️ Manage', icon: '⚙️' });
   }
 
   return (
@@ -69,7 +68,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <Link to="/home" className="flex items-center gap-2">
+              {/* Logo - Goes to Landing Page */}
+              <Link to="/" className="flex items-center gap-2">
                 <span className="text-2xl">🛡️</span>
                 <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
                   CommunityShield
@@ -136,7 +136,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Back Button */}
-        {location.pathname !== '/home' && (
+        {location.pathname !== '/home' && location.pathname !== '/' && (
           <button
             onClick={() => navigate(-1)}
             className="mb-4 inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition"

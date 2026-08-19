@@ -1,72 +1,50 @@
 services:
+  # Backend Service
   - type: web
     name: communityshield-backend
     runtime: go
-    plan: free
-    buildCommand: cd backend && go build -o main .
-    startCommand: cd backend && ./main
+    buildCommand: go build -o main .
+    startCommand: ./main
     envVars:
-      - key: DB_HOST
-        fromDatabase:
-          name: communityshield-db
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: communityshield-db
-          property: port
-      - key: DB_USER
-        fromDatabase:
-          name: communityshield-db
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: communityshield-db
-          property: password
-      - key: DB_NAME
-        fromDatabase:
-          name: communityshield-db
-          property: database
       - key: PORT
         value: 8080
       - key: GIN_MODE
         value: release
+      - key: DATABASE_URL
+        fromDatabase:
+          name: communityshield-db
+          property: connectionString
       - key: JWT_SECRET
-        sync: false
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: 587
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASSWORD
-        sync: false
-      - key: SMTP_FROM
-        sync: false
-      - key: AT_USERNAME
-        sync: false
-      - key: AT_API_KEY
-        sync: false
-      - key: AT_SHORTCODE
-        sync: false
+        generateValue: true
       - key: OPENROUTER_API_KEY
         sync: false
-      - key: VAPID_PUBLIC_KEY
-        sync: false
-      - key: VAPID_PRIVATE_KEY
-        sync: false
-      - key: VAPID_SUBJECT
-        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://communityshield-frontend-app.onrender.com
+    healthCheckPath: /health
+    numInstances: 1
+    plan: free
 
+  # Frontend Service
   - type: web
     name: communityshield-frontend
     runtime: static
-    plan: starter
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/dist
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://communityshield-backend.onrender.com/api/v1
+        value: https://communityshield-backend.onrender.com
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
 
-databases:
-  - name: communityshield-db
+  # PostgreSQL Database
+  - type: postgresql
+    name: communityshield-db
     plan: free
+    databaseName: postgres
+    user: postgres

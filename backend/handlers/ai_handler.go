@@ -12,6 +12,72 @@ import (
 	"security-solution/services"
 )
 
+// AIChatbot - AI-powered assistant for citizens
+func AIChatbot(c *gin.Context) {
+	var input struct {
+		Question string `json:"question" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	aiService := services.NewAIService()
+	response, err := aiService.Chatbot(input.Question, userObj.Role)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI chatbot failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"question": input.Question,
+		"response": response,
+	})
+}
+
+// AIAnalyzeImage - AI image analysis for crime scene photos
+func AIAnalyzeImage(c *gin.Context) {
+	var input struct {
+		Description string `json:"description" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if userObj.Role == "citizen" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only officers and admins can analyze images"})
+		return
+	}
+
+	aiService := services.NewAIService()
+	analysis, err := aiService.AnalyzeImage(input.Description)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI image analysis failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"analysis": analysis,
+	})
+}
+
 // AIAnalyzeLocation analyzes security risk for a location
 func AIAnalyzeLocation(c *gin.Context) {
 	var input struct {
@@ -333,61 +399,6 @@ func AIPredictHotspots(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"prediction":  prediction,
 		"caseCount":   len(cases),
-		"generatedAt": time.Now(),
-	})
-}
-
-// AIGenerateCommunityAlert generates community alerts
-func AIGenerateCommunityAlert(c *gin.Context) {
-	var input struct {
-		AlertType string `json:"alertType" binding:"required"`
-		Location  string `json:"location" binding:"required"`
-		Data      string `json:"data" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	user, exists := c.Get("user")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-	userObj := user.(*models.User)
-
-	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can generate community alerts"})
-		return
-	}
-
-	aiService := services.NewAIService()
-	alertContent, err := aiService.GenerateCommunityAlert(input.AlertType, input.Location, input.Data)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate alert: " + err.Error()})
-		return
-	}
-
-	alertObj := models.Alert{
-		Title:     input.AlertType + " Alert - " + input.Location,
-		Content:   alertContent,
-		Type:      input.AlertType,
-		Location:  input.Location,
-		Severity:  "high",
-		Status:    "active",
-		CreatedBy: userObj.ID,
-	}
-
-	if err := config.DB.Create(&alertObj).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save alert"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"alert":       alertContent,
-		"alertId":     alertObj.ID,
-		"location":    input.Location,
 		"generatedAt": time.Now(),
 	})
 }

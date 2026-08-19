@@ -21,11 +21,14 @@ func ConnectDatabase() {
 	log.Println("📊 Connecting to database...")
 
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+	DB, err = gorm.Open(postgres.New(postgres.Config{
+		DSN: dsn,
+	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 		NowFunc: func() time.Time {
 			return time.Now().UTC()
 		},
+		PrepareStmt: false, // Disable prepared statements to fix Supabase issue
 	})
 
 	if err != nil {

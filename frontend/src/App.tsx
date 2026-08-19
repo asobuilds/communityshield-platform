@@ -15,6 +15,9 @@ import RegisterUnit from './pages/auth/RegisterUnit';
 // Landing Page (public)
 import LandingPage from './pages/public/LandingPage';
 
+// Feature Detail
+import FeatureDetail from './pages/public/features/FeatureDetail';
+
 // Home (was Dashboard)
 import Home from './pages/home/Home';
 import Profile from './pages/profile/Profile';
@@ -30,6 +33,7 @@ import SOSPage from './pages/sos/SOSPage';
 import SOSHistory from './pages/sos/SOSHistory';
 
 // Admin
+import SuperAdmin from './pages/admin/SuperAdmin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import Units from './pages/admin/Units';
 import Analytics from './pages/admin/Analytics';
@@ -124,6 +128,7 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/register-unit" element={<RegisterUnit />} />
+          <Route path="/features/:featureId" element={<FeatureDetail />} />
 
           {/* PROTECTED ROUTES */}
           <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
@@ -164,6 +169,9 @@ function App() {
           
           {/* Walkie-Talkie */}
           <Route path="/walkie-talkie" element={<ProtectedRoute><WalkieTalkiePage /></ProtectedRoute>} />
+          
+          {/* Super Admin */}
+          <Route path="/super-admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
           
           {/* Other */}
           <Route path="/units" element={<ProtectedRoute><FindUnits /></ProtectedRoute>} />

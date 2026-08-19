@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import WalkieTalkie from '../../components/walkie-talkie/WalkieTalkie';
+import WalkieTalkie from '../../components/communication/WalkieTalkie';
 
 export default function WalkieTalkiePage() {
   const [user, setUser] = useState<any>(null);
@@ -11,8 +11,6 @@ export default function WalkieTalkiePage() {
     if (userStr) {
       const userData = JSON.parse(userStr);
       setUser(userData);
-      // In a real app, you'd fetch the user's unit from the backend
-      // For now, use a default or fetch from localStorage
       setUserUnitId(userData.unitId || '');
     }
   }, []);

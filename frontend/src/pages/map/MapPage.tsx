@@ -11,7 +11,9 @@ interface Incident {
   latitude: number;
   longitude: number;
   status: string;
+  priority: string;
   type: 'case' | 'sos' | 'unit';
+  createdAt: string;
 }
 
 export default function MapPage() {
@@ -20,7 +22,9 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<[number, number]>([6.5244, 3.3792]);
   const [showRadius, setShowRadius] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'cases' | 'units'>('all');
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'cases' | 'sos' | 'units'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'investigating' | 'resolved'>('all');
 
   useEffect(() => {
     fetchIncidents();
@@ -54,18 +58,22 @@ export default function MapPage() {
         description: c.description,
         latitude: c.latitude || 6.5244,
         longitude: c.longitude || 3.3792,
-        status: c.status,
-        type: 'case' as const
+        status: c.status || 'pending',
+        priority: c.priority || 'medium',
+        type: 'case' as const,
+        createdAt: c.createdAt
       }));
 
       const mappedUnits = units.map((u: any) => ({
         id: u.id,
         title: u.name,
-        description: `Contact: ${u.contactPerson || 'N/A'}`,
+        description: `📍 ${u.city || u.state || 'Nigeria'} | Contact: ${u.contactPerson || 'N/A'}`,
         latitude: u.latitude || 6.5244,
         longitude: u.longitude || 3.3792,
         status: 'active',
-        type: 'unit' as const
+        priority: 'low',
+        type: 'unit' as const,
+        createdAt: u.createdAt
       }));
 
       setIncidents([...mappedCases, ...mappedUnits]);
@@ -81,10 +89,14 @@ export default function MapPage() {
   };
 
   const filteredIncidents = incidents.filter(incident => {
-   if (filter === 'all') return true;
-   if (filter === 'cases') return incident.type === 'case';
-   if (filter === 'units') return incident.type === 'unit';
-   return true;
+    if (filter === 'all') return true;
+    if (filter === 'cases') return incident.type === 'case';
+    if (filter === 'sos') return incident.type === 'sos';
+    if (filter === 'units') return incident.type === 'unit';
+    return true;
+  }).filter(incident => {
+    if (statusFilter === 'all') return true;
+    return incident.status === statusFilter;
   });
 
   return (
@@ -130,6 +142,16 @@ export default function MapPage() {
           📋 Cases
         </button>
         <button
+          onClick={() => setFilter('sos')}
+          className={`px-3 py-1 rounded-full text-sm transition ${
+            filter === 'sos' 
+              ? 'bg-red-600 text-white' 
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          🆘 SOS
+        </button>
+        <button
           onClick={() => setFilter('units')}
           className={`px-3 py-1 rounded-full text-sm transition ${
             filter === 'units' 
@@ -139,6 +161,50 @@ export default function MapPage() {
         >
           🏢 Units
         </button>
+
+        <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
+
+        <button
+          onClick={() => setStatusFilter('all')}
+          className={`px-3 py-1 rounded-full text-sm transition ${
+            statusFilter === 'all' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          All Status
+        </button>
+        <button
+          onClick={() => setStatusFilter('pending')}
+          className={`px-3 py-1 rounded-full text-sm transition ${
+            statusFilter === 'pending' 
+              ? 'bg-yellow-600 text-white' 
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          ⏳ Pending
+        </button>
+        <button
+          onClick={() => setStatusFilter('investigating')}
+          className={`px-3 py-1 rounded-full text-sm transition ${
+            statusFilter === 'investigating' 
+              ? 'bg-orange-600 text-white' 
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          🔍 Investigating
+        </button>
+        <button
+          onClick={() => setStatusFilter('resolved')}
+          className={`px-3 py-1 rounded-full text-sm transition ${
+            statusFilter === 'resolved' 
+              ? 'bg-green-600 text-white' 
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          ✅ Resolved
+        </button>
+
         <button
           onClick={() => setShowRadius(!showRadius)}
           className={`px-3 py-1 rounded-full text-sm transition ${
@@ -148,6 +214,16 @@ export default function MapPage() {
           }`}
         >
           {showRadius ? '📍 Radius On' : '📍 Radius Off'}
+        </button>
+        <button
+          onClick={() => setShowHeatmap(!showHeatmap)}
+          className={`px-3 py-1 rounded-full text-sm transition ${
+            showHeatmap 
+              ? 'bg-red-600 text-white' 
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+          }`}
+        >
+          {showHeatmap ? '🔥 Heatmap On' : '🔥 Heatmap Off'}
         </button>
         <button
           onClick={fetchIncidents}
@@ -169,6 +245,9 @@ export default function MapPage() {
           zoom={12}
           onMarkerClick={handleMarkerClick}
           showRadius={showRadius}
+          showHeatmap={showHeatmap}
+          filterType={filter}
+          filterStatus={statusFilter}
         />
       )}
 
@@ -179,16 +258,24 @@ export default function MapPage() {
           <span className="text-sm text-gray-700 dark:text-gray-300">Case</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">Security Unit</span>
+          <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
+          <span className="text-sm text-gray-700 dark:text-gray-300">Investigating</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-green-500 rounded-full"></div>
           <span className="text-sm text-gray-700 dark:text-gray-300">Resolved</span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+          <span className="text-sm text-gray-700 dark:text-gray-300">Security Unit</span>
+        </div>
+        <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
           <span className="text-sm text-gray-700 dark:text-gray-300">Pending</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-red-700 rounded-full"></div>
+          <span className="text-sm text-gray-700 dark:text-gray-300">SOS Alert</span>
         </div>
       </div>
     </div>
