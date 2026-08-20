@@ -24,8 +24,7 @@ export default function FinanceDashboard() {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      // For demo, use a default unit ID or get from user
-      const unitId = '13c545a1-dc45-4f61-9d07-4483ce629bb4'; // Replace with actual unit ID
+      const unitId = '13c545a1-dc45-4f61-9d07-4483ce629bb4';
       
       const [summaryRes, transactionsRes, budgetsRes] = await Promise.all([
         axios.get(`/api/v1/finance/units/${unitId}/summary`, {
