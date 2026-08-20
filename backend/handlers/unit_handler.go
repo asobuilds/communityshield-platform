@@ -12,7 +12,7 @@ import (
 	"security-solution/models"
 )
 
-// GetNearbyUnits returns units near a location with operational radius
+// GetNearbyUnits returns units near a location
 func GetNearbyUnits(c *gin.Context) {
 	latStr := c.Query("lat")
 	lngStr := c.Query("lng")
@@ -45,12 +45,10 @@ func GetNearbyUnits(c *gin.Context) {
 	var units []models.SecurityUnit
 	query := config.DB.Where("status = ?", "active")
 
-	// Filter by state if provided
 	if stateStr != "" {
 		query = query.Where("state = ? OR state ILIKE ?", stateStr, "%"+stateStr+"%")
 	}
 
-	// Filter by city if provided
 	if cityStr != "" {
 		query = query.Where("city = ? OR city ILIKE ?", cityStr, "%"+cityStr+"%")
 	}
@@ -62,8 +60,8 @@ func GetNearbyUnits(c *gin.Context) {
 
 	type UnitWithDistance struct {
 		models.SecurityUnit
-		Distance float64 `json:"distance"`
-		IsInRange bool   `json:"isInRange"`
+		Distance  float64 `json:"distance"`
+		IsInRange bool    `json:"isInRange"`
 	}
 
 	var result []UnitWithDistance
@@ -72,11 +70,8 @@ func GetNearbyUnits(c *gin.Context) {
 			continue
 		}
 		distance := haversine(lat, lng, unit.Latitude, unit.Longitude)
-		
-		// Check if within operational radius
 		isInRange := distance <= unit.OperationalRadius
-		
-		// Also include if within the requested search radius
+
 		if distance <= radius || isInRange {
 			result = append(result, UnitWithDistance{
 				SecurityUnit: unit,
@@ -91,13 +86,11 @@ func GetNearbyUnits(c *gin.Context) {
 	})
 }
 
-// GetNearbyUnitsByLocation returns units matching state/city
-func GetNearbyUnitsByLocation(c *gin.Context) {
+// GetUnitsByLocation returns units by state/city
+func GetUnitsByLocation(c *gin.Context) {
 	state := c.Query("state")
 	lga := c.Query("lga")
 	city := c.Query("city")
-	latStr := c.Query("lat")
-	lngStr := c.Query("lng")
 
 	var units []models.SecurityUnit
 	query := config.DB.Where("status = ?", "active")
@@ -117,37 +110,11 @@ func GetNearbyUnitsByLocation(c *gin.Context) {
 		return
 	}
 
-	// Calculate distances if lat/lng provided
-	type UnitWithDistance struct {
-		models.SecurityUnit
-		Distance float64 `json:"distance,omitempty"`
-	}
-
-	var result []UnitWithDistance
-	if latStr != "" && lngStr != "" {
-		lat, _ := parseFloat(latStr)
-		lng, _ := parseFloat(lngStr)
-		for _, unit := range units {
-			if unit.Latitude != 0 && unit.Longitude != 0 {
-				distance := haversine(lat, lng, unit.Latitude, unit.Longitude)
-				result = append(result, UnitWithDistance{
-					SecurityUnit: unit,
-					Distance:     distance,
-				})
-			} else {
-				result = append(result, UnitWithDistance{SecurityUnit: unit})
-			}
-		}
-	} else {
-		for _, unit := range units {
-			result = append(result, UnitWithDistance{SecurityUnit: unit})
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"units": result,
+		"units": units,
 	})
 }
+
 // GetAllUnits returns all units
 func GetAllUnits(c *gin.Context) {
 	var units []models.SecurityUnit
@@ -178,6 +145,74 @@ func GetUnitByID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"unit": unit,
+	})
+}
+
+// CreateUnit creates a new unit
+func CreateUnit(c *gin.Context) {
+	var input struct {
+		Name               string  `json:"name" binding:"required"`
+		Type               string  `json:"type" binding:"required"`
+		Latitude           float64 `json:"latitude"`
+		Longitude          float64 `json:"longitude"`
+		OperationalRadius  float64 `json:"operationalRadius"`
+		State              string  `json:"state"`
+		LGA                string  `json:"lga"`
+		City               string  `json:"city"`
+		CoverageArea       string  `json:"coverageArea"`
+		ContactPerson      string  `json:"contactPerson"`
+		ContactPhone       string  `json:"contactPhone"`
+		ContactEmail       string  `json:"contactEmail"`
+		RegistrationNumber string  `json:"registrationNumber"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can create units"})
+		return
+	}
+
+	if input.OperationalRadius == 0 {
+		input.OperationalRadius = 10
+	}
+
+	unit := models.SecurityUnit{
+		Name:               input.Name,
+		Type:               input.Type,
+		Latitude:           input.Latitude,
+		Longitude:          input.Longitude,
+		OperationalRadius:  input.OperationalRadius,
+		State:              input.State,
+		LGA:                input.LGA,
+		City:               input.City,
+		CoverageArea:       input.CoverageArea,
+		ContactPerson:      input.ContactPerson,
+		ContactPhone:       input.ContactPhone,
+		ContactEmail:       input.ContactEmail,
+		RegistrationNumber: input.RegistrationNumber,
+		Status:             "active",
+		IsVerified:         false,
+	}
+
+	if err := config.DB.Create(&unit).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create unit"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Unit created successfully",
+		"unit":    unit,
 	})
 }
 
@@ -280,35 +315,6 @@ func UpdateUnit(c *gin.Context) {
 	})
 }
 
-// GetUnitsByLocation returns units by state/LGA/city
-func GetUnitsByLocation(c *gin.Context) {
-	state := c.Query("state")
-	lga := c.Query("lga")
-	city := c.Query("city")
-
-	var units []models.SecurityUnit
-	query := config.DB.Where("status = ?", "active")
-
-	if state != "" {
-		query = query.Where("state ILIKE ?", "%"+state+"%")
-	}
-	if lga != "" {
-		query = query.Where("lga ILIKE ?", "%"+lga+"%")
-	}
-	if city != "" {
-		query = query.Where("city ILIKE ?", "%"+city+"%")
-	}
-
-	if err := query.Find(&units).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch units"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"units": units,
-	})
-}
-
 // Helper functions
 func parseFloat(s string) (float64, error) {
 	var f float64
@@ -316,8 +322,9 @@ func parseFloat(s string) (float64, error) {
 	return f, err
 }
 
+// haversine - kept only here, removed from case_handler.go
 func haversine(lat1, lon1, lat2, lon2 float64) float64 {
-	const R = 6371 // Earth radius in km
+	const R = 6371
 	lat1Rad := lat1 * math.Pi / 180
 	lat2Rad := lat2 * math.Pi / 180
 	deltaLat := (lat2 - lat1) * math.Pi / 180

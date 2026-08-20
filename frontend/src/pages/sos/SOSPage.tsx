@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { useLanguage } from '../../context/LanguageContext';
+import { BackButton } from '../../components/common/BackButton';
 
 interface Unit {
   id: string;
@@ -11,6 +13,7 @@ interface Unit {
 
 export default function SOSPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(true);
@@ -85,12 +88,11 @@ export default function SOSPage() {
       const response = await axios.post('/api/v1/sos/send', payload);
       toast.success('🚨 SOS alert sent successfully!');
 
-      // Navigate to SOS history
       setTimeout(() => {
         navigate('/sos-history');
       }, 2000);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to send SOS');
+      toast.error(error.response?.data?.error || t('errors.sos_failed'));
     } finally {
       setLoading(false);
       setCountdown(0);
@@ -104,11 +106,17 @@ export default function SOSPage() {
           <div className="text-center mb-6">
             <div className="text-6xl mb-4">🚨</div>
             <h1 className="text-3xl font-bold text-red-600 dark:text-red-400">
-              Emergency SOS
+              {t('sos.title')}
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Send an emergency alert to nearby security units
+              {t('sos.description')}
             </p>
+          </div>
+          <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+            <div className="max-w-2xl mx-auto">
+              <BackButton />
+              {/* rest of content */}
+            </div>
           </div>
 
           {/* Location Status */}
@@ -118,7 +126,7 @@ export default function SOSPage() {
                 📍 Location:
               </span>
               {locationLoading ? (
-                <span className="text-sm text-gray-500">Detecting...</span>
+                <span className="text-sm text-gray-500">{t('common.loading')}</span>
               ) : location ? (
                 <span className="text-sm text-green-600">
                   ✅ {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
@@ -130,7 +138,7 @@ export default function SOSPage() {
                 onClick={getLocation}
                 className="text-sm text-blue-600 hover:underline"
               >
-                Refresh
+                {t('common.refresh') || 'Refresh'}
               </button>
             </div>
           </div>
@@ -138,28 +146,28 @@ export default function SOSPage() {
           {/* Description */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Emergency Description *
+              {t('sos.description')} *
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
               className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-              placeholder="Describe the emergency situation..."
+              placeholder={t('sos.description')}
             />
           </div>
 
           {/* Unit Selection */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Select Specific Unit (Optional)
+              {t('sos.selectUnit') || 'Select Specific Unit (Optional)'}
             </label>
             <select
               value={selectedUnit}
               onChange={(e) => setSelectedUnit(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 dark:text-white"
             >
-              <option value="">All Nearby Units</option>
+              <option value="">{t('sos.allUnits') || 'All Nearby Units'}</option>
               {units.map((unit) => (
                 <option key={unit.id} value={unit.id}>
                   {unit.name} {unit.distance ? `(${unit.distance.toFixed(1)}km)` : ''}
@@ -184,13 +192,13 @@ export default function SOSPage() {
             {loading ? (
               countdown > 0 ? `Sending in ${countdown}...` : 'Sending...'
             ) : (
-              '🚨 Send SOS Alert'
+              `🚨 ${t('sos.send')}`
             )}
           </button>
 
           <div className="mt-4 text-center">
             <Link to="/home" className="text-gray-600 dark:text-gray-400 hover:underline">
-              ← Back to Home
+              ← {t('common.back')}
             </Link>
           </div>
         </div>

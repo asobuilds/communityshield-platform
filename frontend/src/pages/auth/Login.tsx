@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -27,10 +29,10 @@ export default function Login() {
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
       
-      toast.success('Login successful!');
-      navigate('/profile'); // Redirect to profile page
+      toast.success(t('success.login'));
+      navigate('/profile');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Login failed');
+      toast.error(error.response?.data?.error || t('errors.invalid_credentials'));
     } finally {
       setLoading(false);
     }
@@ -41,12 +43,12 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            Sign in to your account
+            {t('auth.login_title')}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Or{' '}
+            {t('auth.no_account')}{' '}
             <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">
-              create a new account
+              {t('auth.sign_up')}
             </Link>
           </p>
         </div>
@@ -57,7 +59,7 @@ export default function Login() {
                 type="email"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white dark:bg-gray-800 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
+                placeholder={t('auth.email')}
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               />
@@ -67,7 +69,7 @@ export default function Login() {
                 type="password"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white dark:bg-gray-800 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
+                placeholder={t('auth.password')}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               />
@@ -84,12 +86,12 @@ export default function Login() {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
               />
               <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                Remember me
+                {t('auth.remember_me')}
               </label>
             </div>
             <div className="text-sm">
               <Link to="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
-                Forgot your password?
+                {t('auth.forgot_password')}
               </Link>
             </div>
           </div>
@@ -100,7 +102,7 @@ export default function Login() {
               disabled={loading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? t('auth.signing_in') : t('auth.sign_in')}
             </button>
           </div>
         </form>

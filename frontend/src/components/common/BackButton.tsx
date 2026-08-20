@@ -1,27 +1,16 @@
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../../context/LanguageContext';
 
-interface BackButtonProps {
-  to?: string;  // optional custom path
-  label?: string;
-}
-
-function BackButton({ to, label = '← Back' }: BackButtonProps) {
+export function BackButton() {
   const navigate = useNavigate();
-  const handleClick = () => {
-    if (to) {
-      navigate(to);
-    } else {
-      navigate(-1); // go back one page in history
-    }
-  };
+  const { t } = useLanguage();
+
   return (
     <button
-      onClick={handleClick}
-      className="text-blue-600 hover:underline text-sm mb-4 inline-block"
+      onClick={() => navigate(-1)}
+      className="mb-4 inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
     >
-      {label}
+      ← {t('common.back')}
     </button>
   );
 }
-
-export default BackButton;

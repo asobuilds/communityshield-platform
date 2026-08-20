@@ -4,21 +4,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"security-solution/config"
 	"security-solution/models"
 )
 
-// AuditMiddleware logs all requests
 func AuditMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startTime := time.Now()
 
-		// Process request
 		c.Next()
 
-		// Skip logging for health and public endpoints
 		skipPaths := []string{"/health", "/api/v1/auth/login", "/api/v1/auth/register"}
 		for _, path := range skipPaths {
 			if c.Request.URL.Path == path {
@@ -26,7 +22,6 @@ func AuditMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		// Only log authenticated requests
 		userInterface, exists := c.Get("user")
 		if !exists {
 			return
@@ -37,35 +32,23 @@ func AuditMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Determine unit ID
-		var unitID *uuid.UUID
-		if user.UnitID != nil {
-			unitID = user.UnitID
-		}
-
-		// Create audit log
 		auditLog := models.AuditLog{
-			UserID:    &user.ID,
-			UnitID:    unitID,
-			Action:    c.Request.Method,
-			Resource:  c.Request.URL.Path,
-			Details:   c.Request.URL.RawQuery,
-			IPAddress: c.ClientIP(),
-			UserAgent: c.GetHeader("User-Agent"),
-			Status:    "success",
-			Severity:  "info",
+			UserID:     user.ID,
+			Action:     c.Request.Method,
+			EntityType: c.Request.URL.Path,
+			EntityID:   c.Request.URL.RawQuery,
+			IPAddress:  c.ClientIP(),
+			UserAgent:  c.GetHeader("User-Agent"),
+			Timestamp:  time.Now(),
 		}
 
 		if len(c.Errors) > 0 {
-			auditLog.Status = "failure"
-			auditLog.Severity = "error"
-			auditLog.Details = c.Errors.String()
+			auditLog.OldValue = c.Errors.String()
 		}
 
-		// Calculate response time
 		responseTime := time.Since(startTime)
 		if responseTime > 5*time.Second {
-			auditLog.Severity = "warning"
+			auditLog.OldValue = "slow_request"
 		}
 
 		config.DB.Create(&auditLog)

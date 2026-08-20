@@ -265,6 +265,13 @@ func SetupRoutes(router *gin.Engine) {
 			commGroup.GET("/rooms/:roomId/sync-status", middleware.AuthMiddleware(), handlers.GetSyncStatus)
 		}
 
+                // SMS routes
+                sms := api.Group("/sms")
+                {
+	               sms.POST("/incoming", handlers.HandleIncomingSMS)
+	               sms.POST("/ussd", handlers.HandleUSSD)
+                }
+
 		// Peacebuilding routes
 		peace := api.Group("/peacebuilding")
 		{

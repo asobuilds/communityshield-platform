@@ -21,18 +21,37 @@ func ConnectDatabase() {
 	log.Println("📊 Connecting to database...")
 
 	var err error
+	// Disable prepared statements completely
 	DB, err = gorm.Open(postgres.New(postgres.Config{
 		DSN: dsn,
+		PreferSimpleProtocol: true, // This forces simple protocol, no prepared statements
 	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 		NowFunc: func() time.Time {
 			return time.Now().UTC()
 		},
-		PrepareStmt: false, // Disable prepared statements to fix Supabase issue
+		PrepareStmt: false,
+		SkipDefaultTransaction: true, // Skip default transaction
 	})
 
 	if err != nil {
 		log.Fatal("❌ Failed to connect to database:", err)
+	}
+
+	// Configure connection pool
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Fatal("❌ Failed to get database instance:", err)
+	}
+
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+
+	// Test connection
+	if err := sqlDB.Ping(); err != nil {
+		log.Fatal("❌ Database ping failed:", err)
 	}
 
 	log.Println("✅ Database connected successfully")

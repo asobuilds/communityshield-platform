@@ -21,6 +21,20 @@ type Case struct {
 	Priority      string         `gorm:"default:medium" json:"priority"`
 	TransferDetails string       `json:"transferDetails,omitempty"`
 	IsPublic      bool           `gorm:"default:true" json:"isPublic"`
+	
+	// NEW FIELDS FOR AUTOMATION
+	TrackingID    string         `gorm:"unique;not null" json:"trackingId"`
+	PriorityLevel string         `gorm:"default:P3" json:"priorityLevel"`
+	GISLatitude   float64        `json:"gisLatitude"`
+	GISLongitude  float64        `json:"gisLongitude"`
+	AssignedAt    *time.Time     `json:"assignedAt,omitempty"`
+	DispatchedAt  *time.Time     `json:"dispatchedAt,omitempty"`
+	ArrivedAt     *time.Time     `json:"arrivedAt,omitempty"`
+	ClosedAt      *time.Time     `json:"closedAt,omitempty"`
+	ClosedBy      *uuid.UUID     `gorm:"type:uuid" json:"closedBy,omitempty"`
+	ApprovedBy    *uuid.UUID     `gorm:"type:uuid" json:"approvedBy,omitempty"`
+	FinalReport   string         `gorm:"type:text" json:"finalReport"`
+	
 	CreatedAt     time.Time      `json:"createdAt"`
 	UpdatedAt     time.Time      `json:"updatedAt"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`

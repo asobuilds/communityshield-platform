@@ -100,7 +100,6 @@ func MobileNotifications(c *gin.Context) {
 		return
 	}
 
-	// Count unread
 	var unreadCount int64
 	config.DB.Model(&models.Notification{}).Where("user_id = ? AND status = ?", userObj.ID, "unread").Count(&unreadCount)
 
@@ -183,23 +182,21 @@ func MobileSync(c *gin.Context) {
 
 	query.Limit(50).Find(&cases)
 
-	// Get units if admin
 	var units []models.SecurityUnit
 	if userObj.Role == "unit_admin" || userObj.Role == "super_admin" {
 		config.DB.Where("status = ?", "active").Find(&units)
 	}
 
-	// Get SOS alerts
 	var sosAlerts []models.SOSAlert
 	if userObj.Role != "citizen" {
 		config.DB.Where("user_id = ? OR unit_id = ?", userObj.ID, userObj.UnitID).Order("created_at desc").Limit(20).Find(&sosAlerts)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"cases":      cases,
-		"units":      units,
-		"sosAlerts":  sosAlerts,
-		"syncTime":   time.Now().Format(time.RFC3339),
+		"cases":     cases,
+		"units":     units,
+		"sosAlerts": sosAlerts,
+		"syncTime":  time.Now().Format(time.RFC3339),
 		"user": gin.H{
 			"id":        userObj.ID,
 			"firstName": userObj.FirstName,
@@ -213,10 +210,10 @@ func MobileSync(c *gin.Context) {
 // MobileCrashReport submits crash report
 func MobileCrashReport(c *gin.Context) {
 	var input struct {
-		Message   string `json:"message" binding:"required"`
-		Stack     string `json:"stack"`
-		Device    string `json:"device"`
-		OS        string `json:"os"`
+		Message    string `json:"message" binding:"required"`
+		Stack      string `json:"stack"`
+		Device     string `json:"device"`
+		OS         string `json:"os"`
 		AppVersion string `json:"appVersion"`
 	}
 
@@ -232,13 +229,17 @@ func MobileCrashReport(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	// Log crash
+	// Log crash using correct AuditLog fields
 	auditLog := models.AuditLog{
-		UserID:   &userObj.ID,
-		Action:   "mobile_crash",
-		Resource: "mobile_app",
-		Details:  "Message: " + input.Message + "\nDevice: " + input.Device + "\nOS: " + input.OS + "\nVersion: " + input.AppVersion + "\nStack: " + input.Stack,
-		Severity: "error",
+		UserID:     userObj.ID,
+		Action:     "mobile_crash",
+		EntityType: "mobile_app",
+		EntityID:   "crash_report",
+		OldValue:   "Message: " + input.Message + " | Stack: " + input.Stack,
+		NewValue:   "Device: " + input.Device + " | OS: " + input.OS + " | Version: " + input.AppVersion,
+		IPAddress:  c.ClientIP(),
+		UserAgent:  c.GetHeader("User-Agent"),
+		Timestamp:  time.Now(),
 	}
 	config.DB.Create(&auditLog)
 

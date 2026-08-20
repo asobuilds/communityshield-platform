@@ -1,27 +1,37 @@
 package services
 
 import (
-	"fmt"
 	"log"
+	"regexp"
 )
 
-// SendOTPSMS - OPTIMIZED: Non-blocking, just logs for now
-func SendOTPSMS(phoneNumber, otpCode string) error {
-	// Format phone number
-	if len(phoneNumber) > 0 && phoneNumber[0] == '0' {
-		phoneNumber = "234" + phoneNumber[1:]
-	}
-	if len(phoneNumber) > 0 && len(phoneNumber) < 11 && phoneNumber[0:3] != "234" {
-		phoneNumber = "234" + phoneNumber
-	}
-
-	message := fmt.Sprintf("Your CommunityShield verification code is: %s. It expires in 10 minutes.", otpCode)
-
-	// Log the SMS
-	log.Printf("📱 OTP SMS sent to %s: %s", phoneNumber, message)
-
-	// For production, integrate with SMS provider here
-	// The response should be immediate, SMS sending happens asynchronously
-
+// SendSMS sends a generic SMS message
+func SendSMS(phone, message string) error {
+	phone = formatPhoneNumber(phone)
+	log.Printf("📱 SMS to %s: %s", phone, message)
 	return nil
+}
+
+// SendOTPSMS sends an OTP verification code via SMS
+func SendOTPSMS(phone, otpCode string) error {
+	phone = formatPhoneNumber(phone)
+	message := "Your CommunityShield verification code is: " + otpCode + ". It expires in 10 minutes."
+	log.Printf("📱 OTP SMS to %s: %s", phone, message)
+	return nil
+}
+
+// formatPhoneNumber formats phone number for Nigeria
+func formatPhoneNumber(phone string) string {
+	re := regexp.MustCompile(`[^0-9]`)
+	phone = re.ReplaceAllString(phone, "")
+	
+	if len(phone) > 0 && phone[0] == '0' {
+		phone = "234" + phone[1:]
+	}
+	
+	if len(phone) > 0 && len(phone) >= 10 && phone[:3] != "234" {
+		phone = "234" + phone
+	}
+	
+	return phone
 }

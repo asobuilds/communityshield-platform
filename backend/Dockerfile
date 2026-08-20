@@ -23,7 +23,7 @@ WORKDIR /root/
 # Copy the binary from builder
 COPY --from=builder /app/main .
 
-# Copy .env file
+# Copy .env.production
 COPY .env.production .env
 
 # Expose port

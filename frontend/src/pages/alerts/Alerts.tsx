@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { BackButton } from '../../components/common/BackButton';
 
 interface Alert {
   id: string;
@@ -73,6 +74,12 @@ export default function Alerts() {
           >
             🔄 Refresh
           </button>
+        </div>
+        <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+          <div className="max-w-4xl mx-auto">
+            <BackButton />
+            {/* rest of content */}
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">

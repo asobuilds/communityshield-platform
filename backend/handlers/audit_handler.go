@@ -65,19 +65,15 @@ func GetActivityLogs(c *gin.Context) {
 	var activities []models.ActivityLog
 	query := config.DB.Preload("User").Order("created_at desc")
 
-	// Role-based filtering
 	if userObj.Role == "citizen" {
 		query = query.Where("user_id = ?", userObj.ID)
 	} else if userObj.Role == "officer" && userObj.UnitID != nil {
-		// Officers see activities from their unit
 		query = query.Joins("JOIN users ON users.id = activity_logs.user_id").
 			Where("users.unit_id = ?", userObj.UnitID)
 	} else if userObj.Role == "unit_admin" && userObj.UnitID != nil {
-		// Admins see activities from their unit
 		query = query.Joins("JOIN users ON users.id = activity_logs.user_id").
 			Where("users.unit_id = ?", userObj.UnitID)
 	}
-	// Super admin sees all
 
 	if err := query.Limit(100).Find(&activities).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
@@ -104,11 +100,11 @@ func GetAuditLogs(c *gin.Context) {
 	}
 
 	var logs []models.AuditLog
-	query := config.DB.Preload("User").Preload("Unit").Order("created_at desc")
+	query := config.DB.Preload("User").Order("created_at desc")
 
-	// Filter by unit for unit admins
 	if userObj.Role == "unit_admin" && userObj.UnitID != nil {
-		query = query.Where("unit_id = ? OR unit_id IS NULL", userObj.UnitID)
+		query = query.Joins("JOIN users ON users.id = audit_logs.user_id").
+			Where("users.unit_id = ?", userObj.UnitID)
 	}
 
 	if err := query.Limit(200).Find(&logs).Error; err != nil {
@@ -124,10 +120,11 @@ func GetAuditLogs(c *gin.Context) {
 // CreateAuditLog creates an audit log entry
 func CreateAuditLog(c *gin.Context) {
 	var input struct {
-		Action   string `json:"action" binding:"required"`
-		Resource string `json:"resource" binding:"required"`
-		Details  string `json:"details"`
-		Severity string `json:"severity"`
+		Action     string `json:"action" binding:"required"`
+		EntityType string `json:"entityType" binding:"required"`
+		EntityID   string `json:"entityId" binding:"required"`
+		OldValue   string `json:"oldValue"`
+		NewValue   string `json:"newValue"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -143,19 +140,15 @@ func CreateAuditLog(c *gin.Context) {
 	userObj := user.(*models.User)
 
 	auditLog := models.AuditLog{
-		UserID:     &userObj.ID,
-		UnitID:     userObj.UnitID,
+		UserID:     userObj.ID,
 		Action:     input.Action,
-		Resource:   input.Resource,
-		Details:    input.Details,
+		EntityType: input.EntityType,
+		EntityID:   input.EntityID,
+		OldValue:   input.OldValue,
+		NewValue:   input.NewValue,
 		IPAddress:  c.ClientIP(),
 		UserAgent:  c.GetHeader("User-Agent"),
-		Status:     "success",
-		Severity:   input.Severity,
-	}
-
-	if auditLog.Severity == "" {
-		auditLog.Severity = "info"
+		Timestamp:  time.Now(),
 	}
 
 	if err := config.DB.Create(&auditLog).Error; err != nil {
@@ -184,9 +177,7 @@ func GetSystemHealth(c *gin.Context) {
 	}
 
 	var health models.SystemHealth
-	// Get latest health record
 	if err := config.DB.Order("created_at desc").First(&health).Error; err != nil {
-		// Create default if none exists
 		health = models.SystemHealth{
 			CPUUsage:       0,
 			MemoryUsage:    0,
@@ -201,23 +192,14 @@ func GetSystemHealth(c *gin.Context) {
 		}
 	}
 
-	// Get active users count
 	var activeCount int64
 	config.DB.Model(&models.User{}).Where("status = ?", "active").Count(&activeCount)
 
-	// Get total requests (from audit logs)
 	var totalRequests int64
 	config.DB.Model(&models.AuditLog{}).Count(&totalRequests)
 
-	// Get response time (average from last 100 logs)
-	var avgResponse float64
-	config.DB.Model(&models.AuditLog{}).
-		Select("COALESCE(AVG(CAST(details as float)), 0)").
-		Scan(&avgResponse)
-
 	health.ActiveUsers = int(activeCount)
 	health.TotalRequests = int(totalRequests)
-	health.ResponseTime = avgResponse
 	health.LastCheck = time.Now()
 
 	c.JSON(http.StatusOK, gin.H{
@@ -225,7 +207,7 @@ func GetSystemHealth(c *gin.Context) {
 	})
 }
 
-// UpdateSystemHealth updates system health metrics (system only)
+// UpdateSystemHealth updates system health metrics
 func UpdateSystemHealth(c *gin.Context) {
 	var input struct {
 		CPUUsage       float64 `json:"cpuUsage"`

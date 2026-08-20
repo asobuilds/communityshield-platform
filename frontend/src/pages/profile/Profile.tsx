@@ -2,19 +2,21 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { useLanguage } from '../../context/LanguageContext';
+import { BackButton } from '../../components/common/BackButton';
 
-function Profile() {
+export default function Profile() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [receiveEmail, setReceiveEmail] = useState(true);
-
+  const [saving, setSaving] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    email: '',
     phone: '',
+    role: '',
   });
 
   useEffect(() => {
@@ -22,274 +24,164 @@ function Profile() {
   }, []);
 
   const fetchProfile = async () => {
+    setLoading(true);
     try {
-      const userStr = localStorage.getItem('user');
-      if (!userStr) {
-        toast.error('Please login');
+      const token = localStorage.getItem('token');
+      if (!token) {
         navigate('/login');
         return;
       }
-      const userData = JSON.parse(userStr);
-      const response = await axios.get(`/api/v1/users/${userData.id}`);
-      setUser(response.data.user);
-      setReceiveEmail(response.data.user.receiveEmail !== undefined ? response.data.user.receiveEmail : true);
+      const response = await axios.get('/api/v1/auth/profile', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const userData = response.data.user;
+      setUser(userData);
       setFormData({
-        firstName: response.data.user.firstName || '',
-        lastName: response.data.user.lastName || '',
-        phone: response.data.user.phone || '',
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
+        email: userData.email || '',
+        phone: userData.phone || '',
+        role: userData.role || '',
       });
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to load profile');
+    } catch (error) {
+      toast.error(t('errors.generic'));
+      navigate('/login');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
-    setUploading(true);
-    const formData = new FormData();
-    formData.append('profilePicture', file);
-    formData.append('userId', user.id);
-    try {
-      const response = await axios.put('/api/v1/users/profile-picture', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setUser({ ...user, profileImage: response.data.profileImage });
-      // Update localStorage
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const storedUser = JSON.parse(userStr);
-        storedUser.profileImage = response.data.profileImage;
-        localStorage.setItem('user', JSON.stringify(storedUser));
-      }
-      toast.success('Profile picture updated!');
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
     try {
-      await axios.put('/api/v1/users/profile', {
-        userId: user.id,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
+      const token = localStorage.getItem('token');
+      await axios.put('/api/v1/auth/profile', formData, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('Profile updated!');
-      setEditing(false);
-      fetchProfile(); // refresh
+      toast.success(t('success.profile_updated'));
+      fetchProfile();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update');
+      toast.error(error.response?.data?.error || t('errors.generic'));
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailToggle = async () => {
-    try {
-      const newValue = !receiveEmail;
-      await axios.put('/api/v1/users/profile', {
-        userId: user.id,
-        receiveEmail: newValue,
-      });
-      setReceiveEmail(newValue);
-      toast.success(`Email notifications ${newValue ? 'enabled' : 'disabled'}`);
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update preference');
+      setSaving(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-500">Loading profile...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-red-500">User not found</p>
+      <div className="flex justify-center items-center min-h-[400px]">
+        <p className="text-gray-500">{t('common.loading')}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-8">
-      <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">My Profile</h1>
-          <button
-            onClick={() => navigate(-1)}
-            className="text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            ← Back
-          </button>
-        </div>
+    <div className="max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">
+        {t('profile.title')}
+      </h1>
 
-        {/* Profile Picture */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="relative">
-            {user.profileImage ? (
-              <img
-                src={`http://localhost:8080${user.profileImage}`}
-                alt="Profile"
-                className="w-32 h-32 rounded-full object-cover border-4 border-blue-500"
-              />
-            ) : (
-              <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-4xl text-gray-500 dark:text-gray-400 border-4 border-blue-500">
-                {user.firstName?.[0]}{user.lastName?.[0]}
-              </div>
-            )}
-            <label
-              htmlFor="profilePicture"
-              className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700"
-            >
-              📷
-            </label>
-            <input
-              id="profilePicture"
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-              disabled={uploading}
-            />
-          </div>
-          {uploading && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Uploading...</p>}
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Click the camera icon to change picture</p>
-        </div>
-
-        {/* Profile Info */}
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">Email</label>
-            <p className="text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700 p-2 rounded">{user.email}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">Role</label>
-            <p className="text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700 p-2 rounded capitalize">{user.role}</p>
-          </div>
-
-          {editing ? (
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">First Name</label>
-                <input
-                  type="text"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">Last Name</label>
-                <input
-                  type="text"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">Phone</label>
-                <input
-                  type="text"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {loading ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(false);
-                    setFormData({
-                      firstName: user.firstName || '',
-                      lastName: user.lastName || '',
-                      phone: user.phone || '',
-                    });
-                  }}
-                  className="bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">First Name</label>
-                <p className="text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700 p-2 rounded">{user.firstName}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">Last Name</label>
-                <p className="text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700 p-2 rounded">{user.lastName}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">Phone</label>
-                <p className="text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700 p-2 rounded">{user.phone || 'Not provided'}</p>
-              </div>
-              <button
-                onClick={() => setEditing(true)}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-              >
-                Edit Profile
-              </button>
-            </div>
-          )}
-
-          {/* Email Subscription Toggle */}
-          <div className="mt-4 pt-4 border-t dark:border-gray-700">
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="receiveEmail"
-                checked={receiveEmail}
-                onChange={handleEmailToggle}
-                className="w-5 h-5 accent-blue-600"
-              />
-              <label htmlFor="receiveEmail" className="text-gray-700 dark:text-gray-300">
-                Receive email notifications for case updates and alerts
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('auth.first_name')}
               </label>
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                required
+              />
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {receiveEmail ? 'You will receive email notifications.' : 'Email notifications are disabled.'}
-            </p>
+            <div className="max-w-2xl mx-auto">
+              <BackButton />
+              <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">
+                {t('profile.title')}
+              </h1>
+              {/* rest of content */}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('auth.last_name')}
+              </label>
+              <input
+                type="text"
+                value={formData.lastName}
+                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('auth.email')}
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('auth.phone')}
+              </label>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('auth.role')}
+              </label>
+              <input
+                type="text"
+                value={formData.role}
+                disabled
+                className="w-full px-3 py-2 border rounded-lg bg-gray-100 dark:bg-gray-600 text-gray-500 cursor-not-allowed"
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="mt-6 pt-4 border-t dark:border-gray-700">
-          <a href="/dashboard" className="text-blue-600 dark:text-blue-400 hover:underline">← Back to Dashboard</a>
+          <div className="mt-6 flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {saving ? t('common.loading') : t('profile.update')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/home')}
+              className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition"
+            >
+              {t('common.cancel')}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">
+            {t('profile.security')}
+          </h3>
+          <button
+            onClick={() => navigate('/change-password')}
+            className="text-blue-600 hover:underline"
+          >
+            {t('profile.changePassword')}
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
-export default Profile;

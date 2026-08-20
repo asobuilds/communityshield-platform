@@ -55,7 +55,7 @@ func (s *AIService) Chat(messages []ChatMessage) (string, error) {
 	}
 
 	request := ChatRequest{
-		Model:    "deepseek/deepseek-chat-v3-0324:free",
+		Model:    "openrouter/auto",
 		Messages: messages,
 		Stream:   false,
 	}

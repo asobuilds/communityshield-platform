@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import BackButton from '../../components/common/BackButton';
+import { BackButton } from '../../components/common/BackButton';
 
 function FinanceDashboard() {
   const [summary, setSummary] = useState({

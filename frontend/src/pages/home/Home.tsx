@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import IncidentMap from '../../components/map/IncidentMap';
+import { useLanguage } from '../../context/LanguageContext';
+import { BackButton } from '../../components/common/BackButton';
 
 interface Incident {
   id: string;
@@ -15,6 +17,7 @@ interface Incident {
 }
 
 export default function Home() {
+  const { t } = useLanguage();
   const [user, setUser] = useState<any>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,13 +66,19 @@ export default function Home() {
     }
   };
 
+  const isAdmin = user?.role === 'unit_admin' || user?.role === 'super_admin';
+  const isOfficer = user?.role === 'officer';
+  const canViewSuspects = isAdmin || isOfficer;
+
   return (
     <div>
+      <BackButton />
+      
       {/* Welcome Section */}
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-            👋 Welcome back, {user?.firstName || 'User'}!
+            {t('home.welcome')}, {user?.firstName || 'User'}!
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Here's what's happening in your community
@@ -132,7 +141,7 @@ export default function Home() {
         </div>
         {loading ? (
           <div className="flex justify-center items-center h-[300px]">
-            <p className="text-gray-500 dark:text-gray-400">Loading map...</p>
+            <p className="text-gray-500 dark:text-gray-400">Loading...</p>
           </div>
         ) : (
           <IncidentMap
@@ -176,12 +185,31 @@ export default function Home() {
             <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">Alerts</p>
           </div>
         </Link>
+        
+        {canViewSuspects && (
+          <Link to="/suspects">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow text-center hover:shadow-md transition cursor-pointer">
+              <div className="text-3xl">🕵️</div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">Suspects</p>
+            </div>
+          </Link>
+        )}
+        
         <Link to="/profile">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow text-center hover:shadow-md transition cursor-pointer">
             <div className="text-3xl">👤</div>
             <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">Profile</p>
           </div>
         </Link>
+        
+        {isAdmin && (
+          <Link to="/admin">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow text-center hover:shadow-md transition cursor-pointer">
+              <div className="text-3xl">⚙️</div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">Admin</p>
+            </div>
+          </Link>
+        )}
       </div>
     </div>
   );

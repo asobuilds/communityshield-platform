@@ -19,7 +19,7 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        value: https://communityshield-frontend-app.onrender.com
+        value: https://communityshield-frontend.onrender.com
     healthCheckPath: /health
     numInstances: 1
     plan: free
@@ -46,5 +46,5 @@ services:
   - type: postgresql
     name: communityshield-db
     plan: free
-    databaseName: postgres
-    user: postgres
+    databaseName: communityshield
+    user: communityshield

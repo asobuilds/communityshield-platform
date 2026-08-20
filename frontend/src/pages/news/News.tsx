@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { BackButton } from '../../components/common/BackButton';
 
 interface NewsItem {
   id: string;
@@ -109,6 +110,12 @@ export default function News() {
           >
             🔄 Refresh
           </button>
+        </div>
+        <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+          <div className="max-w-6xl mx-auto">
+            <BackButton />
+            {/* rest of content */}
+          </div>
         </div>
 
         {/* Alerts Section */}

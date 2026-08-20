@@ -59,3 +59,31 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			c.Abort()
+			return
+		}
+
+		roleStr, ok := role.(string)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Invalid role"})
+			c.Abort()
+			return
+		}
+
+		for _, allowed := range allowedRoles {
+			if roleStr == allowed {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+		c.Abort()
+	}
+}

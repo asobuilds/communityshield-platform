@@ -1,51 +1,26 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
 )
 
-// GetAllCases - Get all cases with optional filtering
-func GetAllCases(c *gin.Context) {
-	user, exists := c.Get("user")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-	userObj := user.(*models.User)
-
-	var cases []models.Case
-	query := config.DB.Preload("Evidence").Preload("Progress").Order("created_at desc")
-
-	// Filter based on role
-	if userObj.Role == "citizen" {
-		// Citizens see only their own cases
-		query = query.Where("reported_by = ?", userObj.ID)
-	} else if userObj.Role == "officer" && userObj.UnitID != nil {
-		// Officers see cases in their unit
-		query = query.Where("unit_id = ?", userObj.UnitID)
-	} else if userObj.Role == "unit_admin" && userObj.UnitID != nil {
-		// Unit admins see cases in their unit
-		query = query.Where("unit_id = ?", userObj.UnitID)
-	}
-	// Super admin sees all cases
-
-	if err := query.Find(&cases).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch cases"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"cases": cases,
-	})
+// Generate tracking ID
+func generateTrackingID() string {
+	return fmt.Sprintf("CS-%s-%d", time.Now().Format("20060102"), time.Now().UnixNano()%10000)
 }
 
-// CreateCase - Enhanced with automatic timeline and notifications
+
+// CreateCase - Enhanced with automation
 func CreateCase(c *gin.Context) {
 	var input struct {
 		UnitID      string  `json:"unitId"`
@@ -55,7 +30,7 @@ func CreateCase(c *gin.Context) {
 		Longitude   float64 `json:"longitude"`
 		Location    string  `json:"location"`
 		Priority    string  `json:"priority"`
-		TemplateID  string  `json:"templateId"`
+		IsSOS       bool    `json:"isSOS"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -70,26 +45,39 @@ func CreateCase(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	priority := input.Priority
-	if priority == "" {
-		priority = "medium"
+	// Generate tracking ID
+	trackingID := generateTrackingID()
+
+	// Determine priority level
+	priorityLevel := "P3" // Default
+	if input.IsSOS {
+		priorityLevel = "P1" // Critical
+	} else if input.Priority == "high" {
+		priorityLevel = "P2" // High
 	}
 
+	// Create case
 	caseObj := models.Case{
-		Title:       input.Title,
-		Description: input.Description,
-		Latitude:    input.Latitude,
-		Longitude:   input.Longitude,
-		Location:    input.Location,
-		Status:      "pending",
-		Priority:    priority,
-		IsPublic:    true,
-		ReportedBy:  userObj.ID,
+		TrackingID:    trackingID,
+		Title:         input.Title,
+		Description:   input.Description,
+		Latitude:      input.Latitude,
+		Longitude:     input.Longitude,
+		GISLatitude:   input.Latitude,
+		GISLongitude:  input.Longitude,
+		Location:      input.Location,
+		Status:        "pending",
+		Priority:      input.Priority,
+		PriorityLevel: priorityLevel,
+		IsPublic:      true,
+		ReportedBy:    userObj.ID,
 	}
 
 	if input.UnitID != "" {
-		unitID, _ := uuid.Parse(input.UnitID)
-		caseObj.UnitID = unitID
+		unitID, err := uuid.Parse(input.UnitID)
+		if err == nil {
+			caseObj.UnitID = unitID
+		}
 	}
 
 	if err := config.DB.Create(&caseObj).Error; err != nil {
@@ -97,31 +85,130 @@ func CreateCase(c *gin.Context) {
 		return
 	}
 
-	// Create timeline entry
-	timeline := models.CaseTimeline{
-		CaseID:      caseObj.ID,
-		UserID:      userObj.ID,
-		Action:      "created",
-		Description: "Case reported by citizen",
-		Status:      "pending",
-	}
-	config.DB.Create(&timeline)
+	// Log audit trail
+	auditService := services.NewAuditService()
+	go auditService.LogAction(
+		userObj.ID,
+		"CREATE",
+		"CASE",
+		caseObj.ID.String(),
+		nil,
+		caseObj,
+		c.ClientIP(),
+		c.GetHeader("User-Agent"),
+	)
 
-	// Send notification to citizen (async)
-	go notifyCitizen(userObj.ID, "Case Reported", "Your case has been received. We'll update you shortly.")
-
-	// Send notification to unit admins (async)
-	if caseObj.UnitID != uuid.Nil {
-		go notifyUnitAdmins(caseObj.UnitID, "New Case Assigned", "A new case has been assigned to your unit.")
+	// If P1 (SOS), trigger immediate dispatch
+	if priorityLevel == "P1" {
+		go triggerImmediateDispatch(caseObj)
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Case reported successfully",
-		"case":    caseObj,
+		"message":       "Case reported successfully",
+		"case":          caseObj,
+		"trackingId":    trackingID,
+		"priorityLevel": priorityLevel,
 	})
 }
 
-// GetCaseByID - Enhanced with timeline and feedback
+// Helper: Trigger immediate dispatch for P1 cases
+func triggerImmediateDispatch(caseObj models.Case) {
+	// Get all active units
+	var units []models.SecurityUnit
+	config.DB.Where("status = ?", "active").Find(&units)
+
+	// Find nearest unit
+	var nearestUnit models.SecurityUnit
+	var minDistance float64 = -1
+
+	for _, unit := range units {
+		if unit.Latitude != 0 && unit.Longitude != 0 {
+			distance := haversine(caseObj.Latitude, caseObj.Longitude, unit.Latitude, unit.Longitude)
+			if minDistance == -1 || distance < minDistance {
+				minDistance = distance
+				nearestUnit = unit
+			}
+		}
+	}
+
+	if nearestUnit.ID != uuid.Nil {
+		// Assign to nearest unit
+		caseObj.UnitID = nearestUnit.ID
+		now := time.Now()
+		caseObj.AssignedAt = &now
+		caseObj.Status = "assigned"
+		config.DB.Save(&caseObj)
+
+		// Notify unit officers
+		notifyUnitOfficers(nearestUnit.ID, caseObj)
+
+		log.Printf("🚨 P1 Case %s dispatched to unit %s (distance: %.2f km)", caseObj.TrackingID, nearestUnit.Name, minDistance)
+	}
+}
+
+// Notify unit officers about dispatch
+func notifyUnitOfficers(unitID uuid.UUID, caseObj models.Case) {
+	var officers []models.Officer
+	config.DB.Where("unit_id = ?", unitID).Find(&officers)
+
+	for _, officer := range officers {
+		notification := models.Notification{
+			UserID:  officer.ID,
+			Title:   "🚨 P1 Emergency Case Assigned",
+			Message: fmt.Sprintf("Case %s: %s assigned to your unit. Immediate response required!", caseObj.TrackingID, caseObj.Title),
+			Type:    "dispatch",
+			Status:  "unread",
+		}
+		config.DB.Create(&notification)
+	}
+
+	// Also notify unit admins
+	var admins []models.User
+	config.DB.Where("unit_id = ? AND role IN (?)", unitID, []string{"unit_admin", "super_admin"}).Find(&admins)
+
+	for _, admin := range admins {
+		notification := models.Notification{
+			UserID:  admin.ID,
+			Title:   "🚨 P1 Emergency Case Assigned",
+			Message: fmt.Sprintf("Case %s: %s assigned to your unit. Immediate response required!", caseObj.TrackingID, caseObj.Title),
+			Type:    "dispatch",
+			Status:  "unread",
+		}
+		config.DB.Create(&notification)
+	}
+}
+
+// GetAllCases gets all cases
+func GetAllCases(c *gin.Context) {
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	var cases []models.Case
+	query := config.DB.Preload("Evidence").Preload("Progress").Order("created_at desc")
+
+	if userObj.Role == "citizen" {
+		query = query.Where("reported_by = ?", userObj.ID)
+	} else if userObj.Role == "officer" && userObj.UnitID != nil {
+		query = query.Where("unit_id = ?", userObj.UnitID)
+	} else if userObj.Role == "unit_admin" && userObj.UnitID != nil {
+		query = query.Where("unit_id = ?", userObj.UnitID)
+	}
+
+	if err := query.Find(&cases).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch cases"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"cases": cases,
+	})
+}
+
+// GetCaseByID gets a specific case
 func GetCaseByID(c *gin.Context) {
 	id := c.Param("id")
 	caseID, err := uuid.Parse(id)
@@ -143,28 +230,25 @@ func GetCaseByID(c *gin.Context) {
 		return
 	}
 
-	// Check permissions
 	if userObj.Role == "citizen" && caseObj.ReportedBy != userObj.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view this case"})
 		return
 	}
 
-	// Get timeline
 	var timeline []models.CaseTimeline
 	config.DB.Where("case_id = ?", caseID).Order("created_at asc").Find(&timeline)
 
-	// Get feedback
 	var feedback []models.CaseFeedback
 	config.DB.Where("case_id = ?", caseID).Find(&feedback)
 
 	c.JSON(http.StatusOK, gin.H{
-		"case":      caseObj,
-		"timeline":  timeline,
-		"feedback":  feedback,
+		"case":     caseObj,
+		"timeline": timeline,
+		"feedback": feedback,
 	})
 }
 
-// UpdateCaseStatus - Enhanced with timeline and notifications
+// UpdateCaseStatus updates case status
 func UpdateCaseStatus(c *gin.Context) {
 	id := c.Param("id")
 	caseID, err := uuid.Parse(id)
@@ -190,7 +274,6 @@ func UpdateCaseStatus(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	// Only officers and admins can update status
 	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" && userObj.Role != "officer" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update case status"})
 		return
@@ -202,35 +285,64 @@ func UpdateCaseStatus(c *gin.Context) {
 		return
 	}
 
-	oldStatus := caseObj.Status
 	caseObj.Status = input.Status
 	if err := config.DB.Save(&caseObj).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update case"})
 		return
 	}
 
-	// Create timeline entry
-	desc := input.Description
-	if desc == "" {
-		desc = "Status updated from " + oldStatus + " to " + input.Status
-	}
 	timeline := models.CaseTimeline{
 		CaseID:      caseID,
 		UserID:      userObj.ID,
 		Action:      "status_update",
-		Description: desc,
+		Description: input.Description,
 		Status:      input.Status,
 	}
 	config.DB.Create(&timeline)
 
-	// Notify citizen
-	if caseObj.ReportedBy != uuid.Nil {
-		go notifyCitizen(caseObj.ReportedBy, "Case Status Updated", "Your case has been updated to: "+input.Status)
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Case status updated successfully",
 		"case":    caseObj,
+	})
+}
+
+// GetCaseAuditTrail - Get full audit trail for a case
+func GetCaseAuditTrail(c *gin.Context) {
+	caseID := c.Param("id")
+	id, err := uuid.Parse(caseID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid case ID"})
+		return
+	}
+
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj := user.(*models.User)
+
+	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
+		var caseObj models.Case
+		if err := config.DB.First(&caseObj, "id = ?", id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
+			return
+		}
+		if caseObj.ReportedBy != userObj.ID && (userObj.UnitID == nil || caseObj.UnitID != *userObj.UnitID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return
+		}
+	}
+
+	auditService := services.NewAuditService()
+	logs, err := auditService.GetAuditTrail("CASE", id.String())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get audit trail"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"auditTrail": logs,
 	})
 }
 
@@ -260,7 +372,6 @@ func AddCaseTimeline(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	// Only officers and admins can add timeline entries
 	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" && userObj.Role != "officer" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to add timeline entries"})
 		return
@@ -280,11 +391,6 @@ func AddCaseTimeline(c *gin.Context) {
 		Status:      caseObj.Status,
 	}
 	config.DB.Create(&timeline)
-
-	// Notify citizen
-	if caseObj.ReportedBy != uuid.Nil {
-		go notifyCitizen(caseObj.ReportedBy, "Case Progress Updated", input.Description)
-	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":  "Timeline entry added",
@@ -412,33 +518,4 @@ func GetCaseAnalytics(c *gin.Context) {
 		"pendingCases":   pendingCases,
 		"resolutionRate": float64(resolvedCases) / float64(totalCases) * 100,
 	})
-}
-
-// Helper: Notify citizen
-func notifyCitizen(userID uuid.UUID, title, message string) {
-	notification := models.Notification{
-		UserID:  userID,
-		Title:   title,
-		Message: message,
-		Type:    "case_update",
-		Status:  "unread",
-	}
-	config.DB.Create(&notification)
-}
-
-// Helper: Notify unit admins
-func notifyUnitAdmins(unitID uuid.UUID, title, message string) {
-	var admins []models.User
-	config.DB.Where("unit_id = ? AND role IN (?)", unitID, []string{"unit_admin", "super_admin"}).Find(&admins)
-
-	for _, admin := range admins {
-		notification := models.Notification{
-			UserID:  admin.ID,
-			Title:   title,
-			Message: message,
-			Type:    "case_assignment",
-			Status:  "unread",
-		}
-		config.DB.Create(&notification)
-	}
 }

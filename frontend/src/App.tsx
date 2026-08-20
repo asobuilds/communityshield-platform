@@ -2,6 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
+import { lazyLoad } from './components/common/LazyLoad';
+import { OfflineStatus } from './components/common/OfflineStatus';
 import './index.css';
 
 // Auth Pages
@@ -12,64 +14,38 @@ import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import RegisterUnit from './pages/auth/RegisterUnit';
 
-// Landing Page (public)
+// Landing Page
 import LandingPage from './pages/public/LandingPage';
-
-// Feature Detail
 import FeatureDetail from './pages/public/features/FeatureDetail';
 
-// Home (was Dashboard)
-import Home from './pages/home/Home';
-import Profile from './pages/profile/Profile';
-import ReportCase from './pages/cases/ReportCase';
-import MyCases from './pages/cases/MyCases';
-import CaseDetail from './pages/cases/CaseDetail';
-
-// Map
-import MapPage from './pages/map/MapPage';
-
-// SOS
-import SOSPage from './pages/sos/SOSPage';
-import SOSHistory from './pages/sos/SOSHistory';
-
-// Admin
-import SuperAdmin from './pages/admin/SuperAdmin';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import Units from './pages/admin/Units';
-import Analytics from './pages/admin/Analytics';
-
-// Officer
-import OfficerDashboard from './pages/officer/OfficerDashboard';
-
-// Finance
-import FinanceDashboard from './pages/finance/FinanceDashboard';
-import AddTransaction from './pages/finance/AddTransaction';
-import Ledger from './pages/finance/Ledger';
-
-// AI
-import AISummary from './pages/ai/AISummary';
-import AIMonitor from './pages/ai/AIMonitor';
-
-// News
-import News from './pages/news/News';
-
-// Alerts
-import Alerts from './pages/alerts/Alerts';
-
-// Suspects
-import SuspectsList from './pages/suspects/SuspectsList';
-import SuspectDetail from './pages/suspects/SuspectDetail';
-import CreateSuspect from './pages/suspects/CreateSuspect';
-
-// Transfers
-import TransfersList from './pages/transfers/TransfersList';
-
-// Walkie-Talkie
-import WalkieTalkiePage from './pages/walkie-talkie/WalkieTalkiePage';
-
-// Other
-import FindUnits from './pages/units/FindUnits';
-import Leaderboard from './pages/leaderboard/Leaderboard';
+// Lazy load heavy components
+const Home = lazyLoad(() => import('./pages/home/Home'));
+const Profile = lazyLoad(() => import('./pages/profile/Profile'));
+const ReportCase = lazyLoad(() => import('./pages/cases/ReportCase'));
+const MyCases = lazyLoad(() => import('./pages/cases/MyCases'));
+const CaseDetail = lazyLoad(() => import('./pages/cases/CaseDetail'));
+const MapPage = lazyLoad(() => import('./pages/map/MapPage'));
+const SOSPage = lazyLoad(() => import('./pages/sos/SOSPage'));
+const SOSHistory = lazyLoad(() => import('./pages/sos/SOSHistory'));
+const SuperAdmin = lazyLoad(() => import('./pages/admin/SuperAdmin'));
+const AdminDashboard = lazyLoad(() => import('./pages/admin/AdminDashboard'));
+const Units = lazyLoad(() => import('./pages/admin/Units'));
+const Analytics = lazyLoad(() => import('./pages/admin/Analytics'));
+const OfficerDashboard = lazyLoad(() => import('./pages/officer/OfficerDashboard'));
+const FinanceDashboard = lazyLoad(() => import('./pages/finance/FinanceDashboard'));
+const AddTransaction = lazyLoad(() => import('./pages/finance/AddTransaction'));
+const Ledger = lazyLoad(() => import('./pages/finance/Ledger'));
+const AISummary = lazyLoad(() => import('./pages/ai/AISummary'));
+const AIMonitor = lazyLoad(() => import('./pages/ai/AIMonitor'));
+const News = lazyLoad(() => import('./pages/news/News'));
+const Alerts = lazyLoad(() => import('./pages/alerts/Alerts'));
+const SuspectsList = lazyLoad(() => import('./pages/suspects/SuspectsList'));
+const SuspectDetail = lazyLoad(() => import('./pages/suspects/SuspectDetail'));
+const CreateSuspect = lazyLoad(() => import('./pages/suspects/CreateSuspect'));
+const TransfersList = lazyLoad(() => import('./pages/transfers/TransfersList'));
+const WalkieTalkiePage = lazyLoad(() => import('./pages/walkie-talkie/WalkieTalkiePage'));
+const FindUnits = lazyLoad(() => import('./pages/units/FindUnits'));
+const Leaderboard = lazyLoad(() => import('./pages/leaderboard/Leaderboard'));
 
 import AppLayout from './components/AppLayout';
 import SafetyExit from './components/SafetyExit';
@@ -118,6 +94,7 @@ function App() {
       <Router>
         <Toaster position="top-right" />
         <SafetyExit />
+        <OfflineStatus />
         <Routes>
           {/* PUBLIC ROUTES */}
           <Route path="/" element={<LandingPage />} />
@@ -137,55 +114,40 @@ function App() {
           <Route path="/my-cases" element={<ProtectedRoute><MyCases /></ProtectedRoute>} />
           <Route path="/case/:id" element={<ProtectedRoute><CaseDetail /></ProtectedRoute>} />
           
-          {/* Map */}
           <Route path="/map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
           
-          {/* SOS */}
           <Route path="/sos" element={<ProtectedRoute><SOSPage /></ProtectedRoute>} />
           <Route path="/sos-history" element={<ProtectedRoute><SOSHistory /></ProtectedRoute>} />
           
-          {/* Finance */}
           <Route path="/finance" element={<ProtectedRoute><FinanceDashboard /></ProtectedRoute>} />
           <Route path="/add-transaction" element={<ProtectedRoute><AddTransaction /></ProtectedRoute>} />
           <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
           
-          {/* AI */}
           <Route path="/ai" element={<ProtectedRoute><AISummary /></ProtectedRoute>} />
           <Route path="/ai/monitor" element={<ProtectedRoute><AIMonitor /></ProtectedRoute>} />
           
-          {/* News */}
           <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
-          
-          {/* Alerts */}
           <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
           
-          {/* Suspects */}
           <Route path="/suspects" element={<ProtectedRoute><SuspectsList /></ProtectedRoute>} />
           <Route path="/suspects/:id" element={<ProtectedRoute><SuspectDetail /></ProtectedRoute>} />
           <Route path="/suspects/create" element={<ProtectedRoute><CreateSuspect /></ProtectedRoute>} />
           
-          {/* Transfers */}
           <Route path="/transfers" element={<ProtectedRoute><TransfersList /></ProtectedRoute>} />
           
-          {/* Walkie-Talkie */}
           <Route path="/walkie-talkie" element={<ProtectedRoute><WalkieTalkiePage /></ProtectedRoute>} />
           
-          {/* Super Admin */}
           <Route path="/super-admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
           
-          {/* Other */}
           <Route path="/units" element={<ProtectedRoute><FindUnits /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
 
-          {/* Admin */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/admin/units" element={<AdminRoute><Units /></AdminRoute>} />
           <Route path="/admin/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
 
-          {/* Officer */}
           <Route path="/officer" element={<OfficerRoute><OfficerDashboard /></OfficerRoute>} />
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Router>

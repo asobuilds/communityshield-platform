@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import IncidentMap from '../../components/map/IncidentMap';
+import { useLanguage } from '../../context/LanguageContext';
+import { BackButton } from '../../components/common/BackButton';
 
 interface Incident {
   id: string;
@@ -18,6 +20,7 @@ interface Incident {
 
 export default function MapPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<[number, number]>([6.5244, 3.3792]);
@@ -78,7 +81,7 @@ export default function MapPage() {
 
       setIncidents([...mappedCases, ...mappedUnits]);
     } catch (error) {
-      toast.error('Failed to load incidents');
+      toast.error(t('errors.generic'));
     } finally {
       setLoading(false);
     }
@@ -103,17 +106,21 @@ export default function MapPage() {
     <div>
       <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-          🗺️ Incident Map
+          🗺️ {t('map.title')}
         </h1>
+        <div>
+          <BackButton />
+          {/* rest of content */}
+        </div>
         <div className="flex flex-wrap gap-2">
           <Link to="/report">
             <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
-              + Report Case
+              + {t('home.quickActions.reportCase')}
             </button>
           </Link>
           <Link to="/sos">
             <button className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm">
-              🆘 SOS
+              🆘 {t('home.quickActions.sos')}
             </button>
           </Link>
         </div>
@@ -129,7 +136,7 @@ export default function MapPage() {
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          All
+          {t('map.all')}
         </button>
         <button
           onClick={() => setFilter('cases')}
@@ -139,7 +146,7 @@ export default function MapPage() {
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          📋 Cases
+          📋 {t('map.cases')}
         </button>
         <button
           onClick={() => setFilter('sos')}
@@ -149,7 +156,7 @@ export default function MapPage() {
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          🆘 SOS
+          🆘 {t('map.sos')}
         </button>
         <button
           onClick={() => setFilter('units')}
@@ -159,7 +166,7 @@ export default function MapPage() {
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          🏢 Units
+          🏢 {t('map.units')}
         </button>
 
         <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
@@ -172,7 +179,7 @@ export default function MapPage() {
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          All Status
+          {t('map.all')}
         </button>
         <button
           onClick={() => setStatusFilter('pending')}
@@ -182,7 +189,7 @@ export default function MapPage() {
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          ⏳ Pending
+          ⏳ {t('cases.pending')}
         </button>
         <button
           onClick={() => setStatusFilter('investigating')}
@@ -192,7 +199,7 @@ export default function MapPage() {
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          🔍 Investigating
+          🔍 {t('cases.investigating')}
         </button>
         <button
           onClick={() => setStatusFilter('resolved')}
@@ -202,7 +209,7 @@ export default function MapPage() {
               : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          ✅ Resolved
+          ✅ {t('cases.resolved')}
         </button>
 
         <button
@@ -229,14 +236,14 @@ export default function MapPage() {
           onClick={fetchIncidents}
           className="px-3 py-1 rounded-full text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
         >
-          🔄 Refresh
+          🔄 {t('map.refresh')}
         </button>
       </div>
 
       {/* Map */}
       {loading ? (
         <div className="flex justify-center items-center h-[500px] bg-white dark:bg-gray-800 rounded-lg">
-          <p className="text-gray-500 dark:text-gray-400">Loading map...</p>
+          <p className="text-gray-500 dark:text-gray-400">{t('map.loading')}</p>
         </div>
       ) : (
         <IncidentMap
@@ -255,27 +262,27 @@ export default function MapPage() {
       <div className="mt-4 flex flex-wrap gap-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">Case</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{t('map.cases')}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">Investigating</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{t('cases.investigating')}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">Resolved</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{t('cases.resolved')}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">Security Unit</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{t('map.units')}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">Pending</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{t('cases.pending')}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-red-700 rounded-full"></div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">SOS Alert</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{t('map.sos')}</span>
         </div>
       </div>
     </div>

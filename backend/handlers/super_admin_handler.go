@@ -9,7 +9,7 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
-        "security-solution/services"
+	"security-solution/services"
 )
 
 // SuperAdminMiddleware - Checks if user is super admin
@@ -22,7 +22,7 @@ func SuperAdminMiddleware() gin.HandlerFunc {
 			return
 		}
 		userObj := user.(*models.User)
-		
+
 		if userObj.Role != "super_admin" && !userObj.IsSuperAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Super admin access required"})
 			c.Abort()
@@ -39,24 +39,23 @@ func GetAllUsers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
 		return
 	}
-	
-	// Hide sensitive data
+
 	var response []map[string]interface{}
 	for _, user := range users {
 		response = append(response, map[string]interface{}{
-			"id":           user.ID,
-			"email":        user.Email,
-			"phone":        user.Phone,
-			"firstName":    user.FirstName,
-			"lastName":     user.LastName,
-			"role":         user.Role,
-			"status":       user.Status,
-			"createdAt":    user.CreatedAt,
-			"lastLogin":    user.LastLogin,
-			"unitId":       user.UnitID,
+			"id":         user.ID,
+			"email":      user.Email,
+			"phone":      user.Phone,
+			"firstName":  user.FirstName,
+			"lastName":   user.LastName,
+			"role":       user.Role,
+			"status":     user.Status,
+			"createdAt":  user.CreatedAt,
+			"lastLogin":  user.LastLogin,
+			"unitId":     user.UnitID,
 		})
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"users": response,
 		"total": len(users),
@@ -71,20 +70,19 @@ func GetUserByID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
-	
+
 	var user models.User
 	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-	
-	// Get user statistics
+
 	var caseCount int64
 	config.DB.Model(&models.Case{}).Where("reported_by = ?", userID).Count(&caseCount)
-	
+
 	var sosCount int64
 	config.DB.Model(&models.SOSAlert{}).Where("user_id = ?", userID).Count(&sosCount)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"user": user,
 		"stats": gin.H{
@@ -102,42 +100,44 @@ func ImpersonateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
-	
+
 	superAdmin, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
 	superAdminObj := superAdmin.(*models.User)
-	
+
 	var targetUser models.User
 	if err := config.DB.First(&targetUser, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-	
-	// Log impersonation
+
+	// Log impersonation with correct AuditLog fields
 	auditLog := models.AuditLog{
-		UserID:   &superAdminObj.ID,
-		Action:   "impersonate",
-		Resource: "user",
-		Details:  "Super admin impersonating user: " + targetUser.Email,
-		Severity: "warning",
+		UserID:     superAdminObj.ID,
+		Action:     "impersonate",
+		EntityType: "user",
+		EntityID:   targetUser.ID.String(),
+		OldValue:   targetUser.Email,
+		NewValue:   "impersonated",
+		IPAddress:  c.ClientIP(),
+		UserAgent:  c.GetHeader("User-Agent"),
+		Timestamp:  time.Now(),
 	}
 	config.DB.Create(&auditLog)
-	
-	// Generate token for target user
+
 	authService := services.NewAuthService()
 	token, err := authService.GenerateJWT(&targetUser)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
-	
-	// Store impersonation state
+
 	superAdminObj.Impersonating = &targetUser.ID
 	config.DB.Save(superAdminObj)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":        "Impersonating user",
 		"token":          token,
@@ -155,22 +155,21 @@ func StopImpersonation(c *gin.Context) {
 		return
 	}
 	userObj := user.(*models.User)
-	
+
 	if userObj.Impersonating == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Not impersonating any user"})
 		return
 	}
-	
-	// Get original super admin
+
 	var superAdmin models.User
 	if err := config.DB.First(&superAdmin, "id = ?", userObj.ID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Super admin not found"})
 		return
 	}
-	
+
 	superAdmin.Impersonating = nil
 	config.DB.Save(&superAdmin)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Stopped impersonating",
 		"user":    superAdmin,
@@ -185,35 +184,39 @@ func UpdateUserRole(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
-	
+
 	var input struct {
 		Role string `json:"role" binding:"required"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	var user models.User
 	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-	
+
 	user.Role = input.Role
 	config.DB.Save(&user)
-	
-	// Log the change
+
+	// Log the change with correct AuditLog fields
 	auditLog := models.AuditLog{
-		UserID:   &user.ID,
-		Action:   "role_change",
-		Resource: "user",
-		Details:  "User role changed to: " + input.Role,
-		Severity: "info",
+		UserID:     user.ID,
+		Action:     "role_change",
+		EntityType: "user",
+		EntityID:   user.ID.String(),
+		OldValue:   user.Role,
+		NewValue:   input.Role,
+		IPAddress:  c.ClientIP(),
+		UserAgent:  c.GetHeader("User-Agent"),
+		Timestamp:  time.Now(),
 	}
 	config.DB.Create(&auditLog)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "User role updated",
 		"user":    user,
@@ -228,16 +231,16 @@ func SuspendUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
-	
+
 	var user models.User
 	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-	
+
 	user.Status = "suspended"
 	config.DB.Save(&user)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "User suspended",
 		"user":    user,
@@ -252,16 +255,16 @@ func ActivateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
-	
+
 	var user models.User
 	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-	
+
 	user.Status = "active"
 	config.DB.Save(&user)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "User activated",
 		"user":    user,
@@ -276,24 +279,22 @@ func GetSystemStats(c *gin.Context) {
 	var totalOfficers int64
 	var totalSOS int64
 	var totalSuspects int64
-	
+
 	config.DB.Model(&models.User{}).Count(&totalUsers)
 	config.DB.Model(&models.Case{}).Count(&totalCases)
 	config.DB.Model(&models.SecurityUnit{}).Count(&totalUnits)
 	config.DB.Model(&models.Officer{}).Count(&totalOfficers)
 	config.DB.Model(&models.SOSAlert{}).Count(&totalSOS)
 	config.DB.Model(&models.Suspect{}).Count(&totalSuspects)
-	
-	// Get daily active users (last 24 hours)
+
 	var dailyActive int64
 	config.DB.Model(&models.User{}).Where("last_login > ?", time.Now().Add(-24*time.Hour)).Count(&dailyActive)
-	
-	// Get cases by status
+
 	var pendingCases int64
 	var resolvedCases int64
 	config.DB.Model(&models.Case{}).Where("status = ?", "pending").Count(&pendingCases)
 	config.DB.Model(&models.Case{}).Where("status = ?", "resolved").Count(&resolvedCases)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"totalUsers":     totalUsers,
 		"totalCases":     totalCases,

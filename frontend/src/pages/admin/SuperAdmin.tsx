@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { BackButton } from '../../components/common/BackButton';
+
 
 interface User {
   id: string;
@@ -158,6 +160,12 @@ export default function SuperAdmin() {
           >
             🔄 Refresh
           </button>
+        </div>
+        <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+          <div className="max-w-7xl mx-auto">
+            <BackButton />
+            {/* rest of content */}
+          </div>
         </div>
 
         {stats && (
