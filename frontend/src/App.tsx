@@ -1,11 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { useEffect } from 'react';
-import { ThemeProvider } from './context/ThemeContext';
-import { LanguageProvider } from './context/LanguageContext';
-import { OfflineProvider } from './context/OfflineContext';
-import { lazyLoad } from './components/common/LazyLoad';
-import { OfflineStatus } from './components/common/OfflineStatus';
 import './index.css';
 
 // Auth Pages
@@ -20,42 +14,55 @@ import RegisterUnit from './pages/auth/RegisterUnit';
 import LandingPage from './pages/public/LandingPage';
 import FeatureDetail from './pages/public/features/FeatureDetail';
 
-// Lazy load heavy components
-const Home = lazyLoad(() => import('./pages/home/Home'));
-const Profile = lazyLoad(() => import('./pages/profile/Profile'));
-const ReportCase = lazyLoad(() => import('./pages/cases/ReportCase'));
-const MyCases = lazyLoad(() => import('./pages/cases/MyCases'));
-const CaseDetail = lazyLoad(() => import('./pages/cases/CaseDetail'));
-const MapPage = lazyLoad(() => import('./pages/map/MapPage'));
-const SOSPage = lazyLoad(() => import('./pages/sos/SOSPage'));
-const SOSHistory = lazyLoad(() => import('./pages/sos/SOSHistory'));
-const SuperAdmin = lazyLoad(() => import('./pages/admin/SuperAdmin'));
-const AdminDashboard = lazyLoad(() => import('./pages/admin/AdminDashboard'));
-const Units = lazyLoad(() => import('./pages/admin/Units'));
-const Analytics = lazyLoad(() => import('./pages/admin/Analytics'));
-const OfficerDashboard = lazyLoad(() => import('./pages/officer/OfficerDashboard'));
-const FinanceDashboard = lazyLoad(() => import('./pages/finance/FinanceDashboard'));
-const AddTransaction = lazyLoad(() => import('./pages/finance/AddTransaction'));
-const Ledger = lazyLoad(() => import('./pages/finance/Ledger'));
-const AISummary = lazyLoad(() => import('./pages/ai/AISummary'));
-const AIMonitor = lazyLoad(() => import('./pages/ai/AIMonitor'));
-const News = lazyLoad(() => import('./pages/news/News'));
-const Alerts = lazyLoad(() => import('./pages/alerts/Alerts'));
-const SuspectsList = lazyLoad(() => import('./pages/suspects/SuspectsList'));
-const SuspectDetail = lazyLoad(() => import('./pages/suspects/SuspectDetail'));
-const CreateSuspect = lazyLoad(() => import('./pages/suspects/CreateSuspect'));
-const TransfersList = lazyLoad(() => import('./pages/transfers/TransfersList'));
-const WalkieTalkiePage = lazyLoad(() => import('./pages/walkie-talkie/WalkieTalkiePage'));
-const FindUnits = lazyLoad(() => import('./pages/units/FindUnits'));
-const Leaderboard = lazyLoad(() => import('./pages/leaderboard/Leaderboard'));
+// Dashboard & Features
+import Home from './pages/home/Home';
+import Profile from './pages/profile/Profile';
+import MapPage from './pages/map/MapPage';
+import ReportCase from './pages/cases/ReportCase';
+import MyCases from './pages/cases/MyCases';
+import CaseDetail from './pages/cases/CaseDetail';
+import SOSPage from './pages/sos/SOSPage';
+import SOSHistory from './pages/sos/SOSHistory';
+import News from './pages/news/News';
+import Alerts from './pages/alerts/Alerts';
 
-import AppLayout from './components/AppLayout';
-import SafetyExit from './components/SafetyExit';
+// Admin
+import SuperAdmin from './pages/admin/SuperAdmin';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import Units from './pages/admin/Units';
+import Analytics from './pages/admin/Analytics';
+
+// Officer
+import OfficerDashboard from './pages/officer/OfficerDashboard';
+
+// Finance
+import FinanceDashboard from './pages/finance/FinanceDashboard';
+import AddTransaction from './pages/finance/AddTransaction';
+import Ledger from './pages/finance/Ledger';
+
+// AI
+import AISummary from './pages/ai/AISummary';
+import AIMonitor from './pages/ai/AIMonitor';
+
+// Suspects
+import SuspectsList from './pages/suspects/SuspectsList';
+import SuspectDetail from './pages/suspects/SuspectDetail';
+import CreateSuspect from './pages/suspects/CreateSuspect';
+
+// Transfers
+import TransfersList from './pages/transfers/TransfersList';
+
+// Walkie-Talkie
+import WalkieTalkiePage from './pages/walkie-talkie/WalkieTalkiePage';
+
+// Other
+import FindUnits from './pages/units/FindUnits';
+import Leaderboard from './pages/leaderboard/Leaderboard';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const user = localStorage.getItem('user');
   if (!user) return <Navigate to="/login" />;
-  return <AppLayout>{children}</AppLayout>;
+  return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -67,7 +74,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     userRole = userData?.role || 'citizen';
   } catch (e) {}
   if (userRole !== 'unit_admin') return <Navigate to="/home" />;
-  return <AppLayout>{children}</AppLayout>;
+  return <>{children}</>;
 }
 
 function OfficerRoute({ children }: { children: React.ReactNode }) {
@@ -79,85 +86,57 @@ function OfficerRoute({ children }: { children: React.ReactNode }) {
     userRole = userData?.role || 'citizen';
   } catch (e) {}
   if (userRole !== 'officer') return <Navigate to="/home" />;
-  return <AppLayout>{children}</AppLayout>;
+  return <>{children}</>;
 }
 
 function App() {
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().then(permission => {
-        console.log('Notification permission:', permission);
-      });
-    }
-  }, []);
-
   return (
-    <ThemeProvider>
-      <LanguageProvider>
-        <OfflineProvider>
-          <Router>
-            <Toaster position="top-right" />
-            <SafetyExit />
-            <OfflineStatus />
-            <Routes>
-              {/* PUBLIC ROUTES */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/verify-otp" element={<VerifyOTP />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/alerts" element={<Alerts />} />
-              <Route path="/register-unit" element={<RegisterUnit />} />
-              <Route path="/features/:featureId" element={<FeatureDetail />} />
+    <Router>
+      <Toaster position="top-right" />
+      <Routes>
+        {/* PUBLIC ROUTES */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/verify-otp" element={<VerifyOTP />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/alerts" element={<Alerts />} />
+        <Route path="/register-unit" element={<RegisterUnit />} />
+        <Route path="/features/:featureId" element={<FeatureDetail />} />
 
-              {/* PROTECTED ROUTES */}
-              <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/report" element={<ProtectedRoute><ReportCase /></ProtectedRoute>} />
-              <Route path="/my-cases" element={<ProtectedRoute><MyCases /></ProtectedRoute>} />
-              <Route path="/case/:id" element={<ProtectedRoute><CaseDetail /></ProtectedRoute>} />
-              
-              <Route path="/map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
-              
-              <Route path="/sos" element={<ProtectedRoute><SOSPage /></ProtectedRoute>} />
-              <Route path="/sos-history" element={<ProtectedRoute><SOSHistory /></ProtectedRoute>} />
-              
-              <Route path="/finance" element={<ProtectedRoute><FinanceDashboard /></ProtectedRoute>} />
-              <Route path="/add-transaction" element={<ProtectedRoute><AddTransaction /></ProtectedRoute>} />
-              <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
-              
-              <Route path="/ai" element={<ProtectedRoute><AISummary /></ProtectedRoute>} />
-              <Route path="/ai/monitor" element={<ProtectedRoute><AIMonitor /></ProtectedRoute>} />
-              
-              <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
-              <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
-              
-              <Route path="/suspects" element={<ProtectedRoute><SuspectsList /></ProtectedRoute>} />
-              <Route path="/suspects/:id" element={<ProtectedRoute><SuspectDetail /></ProtectedRoute>} />
-              <Route path="/suspects/create" element={<ProtectedRoute><CreateSuspect /></ProtectedRoute>} />
-              
-              <Route path="/transfers" element={<ProtectedRoute><TransfersList /></ProtectedRoute>} />
-              
-              <Route path="/walkie-talkie" element={<ProtectedRoute><WalkieTalkiePage /></ProtectedRoute>} />
-              
-              <Route path="/super-admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
-              
-              <Route path="/units" element={<ProtectedRoute><FindUnits /></ProtectedRoute>} />
-              <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+        {/* PROTECTED ROUTES */}
+        <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+        <Route path="/report" element={<ProtectedRoute><ReportCase /></ProtectedRoute>} />
+        <Route path="/my-cases" element={<ProtectedRoute><MyCases /></ProtectedRoute>} />
+        <Route path="/case/:id" element={<ProtectedRoute><CaseDetail /></ProtectedRoute>} />
+        <Route path="/sos" element={<ProtectedRoute><SOSPage /></ProtectedRoute>} />
+        <Route path="/sos-history" element={<ProtectedRoute><SOSHistory /></ProtectedRoute>} />
+        <Route path="/finance" element={<ProtectedRoute><FinanceDashboard /></ProtectedRoute>} />
+        <Route path="/add-transaction" element={<ProtectedRoute><AddTransaction /></ProtectedRoute>} />
+        <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
+        <Route path="/ai" element={<ProtectedRoute><AISummary /></ProtectedRoute>} />
+        <Route path="/ai/monitor" element={<ProtectedRoute><AIMonitor /></ProtectedRoute>} />
+        <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
+        <Route path="/suspects" element={<ProtectedRoute><SuspectsList /></ProtectedRoute>} />
+        <Route path="/suspects/:id" element={<ProtectedRoute><SuspectDetail /></ProtectedRoute>} />
+        <Route path="/suspects/create" element={<ProtectedRoute><CreateSuspect /></ProtectedRoute>} />
+        <Route path="/transfers" element={<ProtectedRoute><TransfersList /></ProtectedRoute>} />
+        <Route path="/walkie-talkie" element={<ProtectedRoute><WalkieTalkiePage /></ProtectedRoute>} />
+        <Route path="/super-admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
+        <Route path="/units" element={<ProtectedRoute><FindUnits /></ProtectedRoute>} />
+        <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+        <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/units" element={<AdminRoute><Units /></AdminRoute>} />
+        <Route path="/admin/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
+        <Route path="/officer" element={<OfficerRoute><OfficerDashboard /></OfficerRoute>} />
 
-              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-              <Route path="/admin/units" element={<AdminRoute><Units /></AdminRoute>} />
-              <Route path="/admin/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
-
-              <Route path="/officer" element={<OfficerRoute><OfficerDashboard /></OfficerRoute>} />
-
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Router>
-        </OfflineProvider>
-      </LanguageProvider>
-    </ThemeProvider>
+        {/* FALLBACK */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </Router>
   );
 }
 
