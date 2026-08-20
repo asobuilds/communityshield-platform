@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet/dist/leaflet.css';
 
 // Fix default marker icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
