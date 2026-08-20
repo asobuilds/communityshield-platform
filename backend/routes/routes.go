@@ -63,7 +63,7 @@ func SetupRoutes(router *gin.Engine) {
 		// Case routes
 		cases := api.Group("/cases")
 		{
-			cases.GET("", handlers.GetAllCases)
+			cases.GET("", middleware.AuthMiddleware(), handlers.GetAllCases)
 			cases.POST("", middleware.AuthMiddleware(), handlers.CreateCase)
 			cases.GET("/:id", middleware.AuthMiddleware(), handlers.GetCaseByID)
 			cases.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateCaseStatus)
