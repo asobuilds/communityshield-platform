@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react';
 import './index.css';
 
 // Auth Pages
@@ -59,10 +60,14 @@ import WalkieTalkiePage from './pages/walkie-talkie/WalkieTalkiePage';
 import FindUnits from './pages/units/FindUnits';
 import Leaderboard from './pages/leaderboard/Leaderboard';
 
+// Layout
+import AppLayout from './components/AppLayout';
+import SafetyExit from './components/SafetyExit';
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const user = localStorage.getItem('user');
   if (!user) return <Navigate to="/login" />;
-  return <>{children}</>;
+  return <AppLayout>{children}</AppLayout>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -74,7 +79,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     userRole = userData?.role || 'citizen';
   } catch (e) {}
   if (userRole !== 'unit_admin') return <Navigate to="/home" />;
-  return <>{children}</>;
+  return <AppLayout>{children}</AppLayout>;
 }
 
 function OfficerRoute({ children }: { children: React.ReactNode }) {
@@ -86,13 +91,22 @@ function OfficerRoute({ children }: { children: React.ReactNode }) {
     userRole = userData?.role || 'citizen';
   } catch (e) {}
   if (userRole !== 'officer') return <Navigate to="/home" />;
-  return <>{children}</>;
+  return <AppLayout>{children}</AppLayout>;
 }
 
 function App() {
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        console.log('Notification permission:', permission);
+      });
+    }
+  }, []);
+
   return (
     <Router>
       <Toaster position="top-right" />
+      <SafetyExit />
       <Routes>
         {/* PUBLIC ROUTES */}
         <Route path="/" element={<LandingPage />} />
