@@ -175,7 +175,6 @@ export default function IncidentMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* User location */}
         {userLocation && (
           <>
             <Marker position={userLocation} icon={unitIcon}>
@@ -196,7 +195,6 @@ export default function IncidentMap({
           </>
         )}
 
-        {/* Incident markers */}
         {filteredIncidents.map((incident) => (
           <Marker
             key={incident.id}
@@ -289,16 +287,12 @@ export default function IncidentMap({
         </div>
       </div>
 
-      {/* Heatmap toggle */}
-      {showHeatmap && (
-        <div className="absolute top-4 right-4 z-[1000]">
-          <button className="bg-white dark:bg-gray-800 px-3 py-1 rounded-lg shadow text-xs font-medium">
-            🔥 Heatmap
-          </button>
-        </div>
-      )}
+      <div className="absolute top-4 right-4 z-[1000]">
+        <button className="bg-white dark:bg-gray-800 px-3 py-1 rounded-lg shadow text-xs font-medium">
+          🔥 Heatmap
+        </button>
+      </div>
 
-      {/* Refresh button */}
       <div className="absolute top-4 left-4 z-[1000]">
         <button 
           onClick={() => window.location.reload()}
@@ -308,7 +302,6 @@ export default function IncidentMap({
         </button>
       </div>
 
-      {/* Incident count */}
       <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-1 z-[1000] text-xs text-gray-600 dark:text-gray-400">
         {filteredIncidents.length} incidents displayed
       </div>
