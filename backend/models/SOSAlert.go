@@ -1,9 +1,9 @@
 package models
 
 import (
-	"time"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"time"
 )
 
 type SOSAlert struct {
@@ -14,13 +14,13 @@ type SOSAlert struct {
 	Longitude   float64        `json:"longitude"`
 	Description string         `json:"description"`
 	Status      string         `gorm:"default:pending" json:"status"` // pending, dispatched, resolved, cancelled
-	Priority    string         `gorm:"default:high" json:"priority"`   // high, medium, low
+	Priority    string         `gorm:"default:high" json:"priority"`  // high, medium, low
 	CreatedAt   time.Time      `json:"createdAt"`
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
-	User User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Unit *SecurityUnit  `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
+	User User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Unit *SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
 }
 
 func (SOSAlert) TableName() string {

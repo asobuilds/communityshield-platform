@@ -19,7 +19,6 @@ func generateTrackingID() string {
 	return fmt.Sprintf("CS-%s-%d", time.Now().Format("20060102"), time.Now().UnixNano()%10000)
 }
 
-
 // CreateCase - Enhanced with automation
 func CreateCase(c *gin.Context) {
 	var input struct {

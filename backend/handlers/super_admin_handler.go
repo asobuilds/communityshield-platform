@@ -17,17 +17,30 @@ func SuperAdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, exists := c.Get("user")
 		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "User not authenticated",
+			})
 			c.Abort()
 			return
 		}
-		userObj := user.(*models.User)
+
+		userObj, ok := user.(*models.User)
+		if !ok || userObj == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid authenticated user",
+			})
+			c.Abort()
+			return
+		}
 
 		if userObj.Role != "super_admin" && !userObj.IsSuperAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Super admin access required"})
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "Super admin access required",
+			})
 			c.Abort()
 			return
 		}
+
 		c.Next()
 	}
 }
@@ -43,16 +56,16 @@ func GetAllUsers(c *gin.Context) {
 	var response []map[string]interface{}
 	for _, user := range users {
 		response = append(response, map[string]interface{}{
-			"id":         user.ID,
-			"email":      user.Email,
-			"phone":      user.Phone,
-			"firstName":  user.FirstName,
-			"lastName":   user.LastName,
-			"role":       user.Role,
-			"status":     user.Status,
-			"createdAt":  user.CreatedAt,
-			"lastLogin":  user.LastLogin,
-			"unitId":     user.UnitID,
+			"id":        user.ID,
+			"email":     user.Email,
+			"phone":     user.Phone,
+			"firstName": user.FirstName,
+			"lastName":  user.LastName,
+			"role":      user.Role,
+			"status":    user.Status,
+			"createdAt": user.CreatedAt,
+			"lastLogin": user.LastLogin,
+			"unitId":    user.UnitID,
 		})
 	}
 
@@ -139,11 +152,11 @@ func ImpersonateUser(c *gin.Context) {
 	config.DB.Save(superAdminObj)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":        "Impersonating user",
-		"token":          token,
-		"user":           targetUser,
-		"impersonating":  true,
-		"originalUser":   superAdminObj.ID,
+		"message":       "Impersonating user",
+		"token":         token,
+		"user":          targetUser,
+		"impersonating": true,
+		"originalUser":  superAdminObj.ID,
 	})
 }
 
@@ -296,14 +309,14 @@ func GetSystemStats(c *gin.Context) {
 	config.DB.Model(&models.Case{}).Where("status = ?", "resolved").Count(&resolvedCases)
 
 	c.JSON(http.StatusOK, gin.H{
-		"totalUsers":     totalUsers,
-		"totalCases":     totalCases,
-		"totalUnits":     totalUnits,
-		"totalOfficers":  totalOfficers,
-		"totalSOS":       totalSOS,
-		"totalSuspects":  totalSuspects,
-		"dailyActive":    dailyActive,
-		"pendingCases":   pendingCases,
-		"resolvedCases":  resolvedCases,
+		"totalUsers":    totalUsers,
+		"totalCases":    totalCases,
+		"totalUnits":    totalUnits,
+		"totalOfficers": totalOfficers,
+		"totalSOS":      totalSOS,
+		"totalSuspects": totalSuspects,
+		"dailyActive":   dailyActive,
+		"pendingCases":  pendingCases,
+		"resolvedCases": resolvedCases,
 	})
 }

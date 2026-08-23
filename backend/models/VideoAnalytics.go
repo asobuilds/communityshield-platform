@@ -1,30 +1,30 @@
 package models
 
 import (
-	"time"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"time"
 )
 
 // Camera represents a security camera
 type Camera struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UnitID      uuid.UUID      `gorm:"type:uuid;not null" json:"unitId"`
-	Name        string         `gorm:"not null" json:"name"`
-	Location    string         `json:"location"`
-	Latitude    float64        `json:"latitude"`
-	Longitude   float64        `json:"longitude"`
-	RTSPURL     string         `json:"rtspUrl"` // Camera stream URL
-	Status      string         `gorm:"default:active" json:"status"`
-	IsActive    bool           `gorm:"default:true" json:"isActive"`
-	LastPing    *time.Time     `json:"lastPing"`
-	CreatedBy   uuid.UUID      `gorm:"type:uuid;not null" json:"createdBy"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	UnitID    uuid.UUID      `gorm:"type:uuid;not null" json:"unitId"`
+	Name      string         `gorm:"not null" json:"name"`
+	Location  string         `json:"location"`
+	Latitude  float64        `json:"latitude"`
+	Longitude float64        `json:"longitude"`
+	RTSPURL   string         `json:"rtspUrl"` // Camera stream URL
+	Status    string         `gorm:"default:active" json:"status"`
+	IsActive  bool           `gorm:"default:true" json:"isActive"`
+	LastPing  *time.Time     `json:"lastPing"`
+	CreatedBy uuid.UUID      `gorm:"type:uuid;not null" json:"createdBy"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Unit   SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
-	Creator User        `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	Unit    SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
+	Creator User         `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
 }
 
 func (Camera) TableName() string {
@@ -49,9 +49,9 @@ type VideoAlert struct {
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Camera   Camera `gorm:"foreignKey:CameraID" json:"camera,omitempty"`
+	Camera   Camera       `gorm:"foreignKey:CameraID" json:"camera,omitempty"`
 	Unit     SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
-	Reviewer User        `gorm:"foreignKey:ReviewedBy" json:"reviewer,omitempty"`
+	Reviewer User         `gorm:"foreignKey:ReviewedBy" json:"reviewer,omitempty"`
 }
 
 func (VideoAlert) TableName() string {

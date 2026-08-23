@@ -1,9 +1,9 @@
 package models
 
 import (
-	"time"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"time"
 )
 
 type CaseTransfer struct {
@@ -18,10 +18,10 @@ type CaseTransfer struct {
 	UpdatedAt     time.Time      `json:"updatedAt"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Case       Case `gorm:"foreignKey:CaseID" json:"case,omitempty"`
-	FromUnit   SecurityUnit `gorm:"foreignKey:FromUnitID" json:"fromUnit,omitempty"`
-	ToUnit     SecurityUnit `gorm:"foreignKey:ToUnitID" json:"toUnit,omitempty"`
-	TransferredByUser User `gorm:"foreignKey:TransferredBy" json:"transferredByUser,omitempty"`
+	Case              Case         `gorm:"foreignKey:CaseID" json:"case,omitempty"`
+	FromUnit          SecurityUnit `gorm:"foreignKey:FromUnitID" json:"fromUnit,omitempty"`
+	ToUnit            SecurityUnit `gorm:"foreignKey:ToUnitID" json:"toUnit,omitempty"`
+	TransferredByUser User         `gorm:"foreignKey:TransferredBy" json:"transferredByUser,omitempty"`
 }
 
 func (CaseTransfer) TableName() string {

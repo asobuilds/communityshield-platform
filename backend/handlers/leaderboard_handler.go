@@ -13,9 +13,9 @@ import (
 func GetLeaderboard(c *gin.Context) {
 	// Get case counts by unit
 	var unitStats []struct {
-		UnitID    string
-		UnitName  string
-		CaseCount int64
+		UnitID        string
+		UnitName      string
+		CaseCount     int64
 		ResolvedCount int64
 	}
 
@@ -35,10 +35,10 @@ func GetLeaderboard(c *gin.Context) {
 			resolutionRate = float64(stat.ResolvedCount) / float64(stat.CaseCount) * 100
 		}
 		leaderboard = append(leaderboard, gin.H{
-			"unitId":        stat.UnitID,
-			"unitName":      stat.UnitName,
-			"caseCount":     stat.CaseCount,
-			"resolvedCount": stat.ResolvedCount,
+			"unitId":         stat.UnitID,
+			"unitName":       stat.UnitName,
+			"caseCount":      stat.CaseCount,
+			"resolvedCount":  stat.ResolvedCount,
 			"resolutionRate": resolutionRate,
 		})
 	}
@@ -51,9 +51,9 @@ func GetLeaderboard(c *gin.Context) {
 // GetOfficerLeaderboard returns the leaderboard for officers
 func GetOfficerLeaderboard(c *gin.Context) {
 	var officerStats []struct {
-		OfficerID   string
-		OfficerName string
-		CaseCount   int64
+		OfficerID     string
+		OfficerName   string
+		CaseCount     int64
 		ResolvedCount int64
 	}
 
@@ -72,10 +72,10 @@ func GetOfficerLeaderboard(c *gin.Context) {
 			resolutionRate = float64(stat.ResolvedCount) / float64(stat.CaseCount) * 100
 		}
 		leaderboard = append(leaderboard, gin.H{
-			"officerId":     stat.OfficerID,
-			"officerName":   stat.OfficerName,
-			"caseCount":     stat.CaseCount,
-			"resolvedCount": stat.ResolvedCount,
+			"officerId":      stat.OfficerID,
+			"officerName":    stat.OfficerName,
+			"caseCount":      stat.CaseCount,
+			"resolvedCount":  stat.ResolvedCount,
 			"resolutionRate": resolutionRate,
 		})
 	}
@@ -118,10 +118,10 @@ func GetUnitRanking(c *gin.Context) {
 	`, unitID).Scan(&rank)
 
 	c.JSON(http.StatusOK, gin.H{
-		"unitId":        unitID,
-		"caseCount":     caseCount,
-		"resolvedCount": resolvedCount,
+		"unitId":         unitID,
+		"caseCount":      caseCount,
+		"resolvedCount":  resolvedCount,
 		"resolutionRate": resolutionRate,
-		"rank":          rank,
+		"rank":           rank,
 	})
 }

@@ -1,9 +1,9 @@
 package models
 
 import (
-	"time"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"time"
 )
 
 // PeaceCommittee represents a community peace committee
@@ -19,9 +19,9 @@ type PeaceCommittee struct {
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Unit     SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
-	Creator  User         `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
-	Members  []CommitteeMember `gorm:"foreignKey:CommitteeID" json:"members,omitempty"`
+	Unit    SecurityUnit      `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
+	Creator User              `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	Members []CommitteeMember `gorm:"foreignKey:CommitteeID" json:"members,omitempty"`
 }
 
 func (PeaceCommittee) TableName() string {
@@ -66,10 +66,10 @@ type ConflictResolution struct {
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Case      Case           `gorm:"foreignKey:CaseID" json:"case,omitempty"`
-	Unit      SecurityUnit   `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
-	Mediator  User           `gorm:"foreignKey:MediatorID" json:"mediator,omitempty"`
-	Creator   User           `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	Case     Case         `gorm:"foreignKey:CaseID" json:"case,omitempty"`
+	Unit     SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
+	Mediator User         `gorm:"foreignKey:MediatorID" json:"mediator,omitempty"`
+	Creator  User         `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
 }
 
 func (ConflictResolution) TableName() string {
@@ -100,17 +100,17 @@ func (CommunityTrustScore) TableName() string {
 
 // PeaceMetric tracks peace metrics for communities
 type PeaceMetric struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UnitID      uuid.UUID      `gorm:"type:uuid;not null" json:"unitId"`
-	Month       string         `gorm:"not null" json:"month"` // YYYY-MM
-	PeaceLevel  float64        `gorm:"default:0" json:"peaceLevel"` // 0-100
-	ConflictCount int          `gorm:"default:0" json:"conflictCount"`
-	ResolvedCount int          `gorm:"default:0" json:"resolvedCount"`
-	TrustScore  float64        `gorm:"default:0" json:"trustScore"`
-	CommunityEngagement float64 `gorm:"default:0" json:"communityEngagement"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                  uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	UnitID              uuid.UUID      `gorm:"type:uuid;not null" json:"unitId"`
+	Month               string         `gorm:"not null" json:"month"`       // YYYY-MM
+	PeaceLevel          float64        `gorm:"default:0" json:"peaceLevel"` // 0-100
+	ConflictCount       int            `gorm:"default:0" json:"conflictCount"`
+	ResolvedCount       int            `gorm:"default:0" json:"resolvedCount"`
+	TrustScore          float64        `gorm:"default:0" json:"trustScore"`
+	CommunityEngagement float64        `gorm:"default:0" json:"communityEngagement"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
+	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Unit SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
 }

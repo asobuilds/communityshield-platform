@@ -1,9 +1,9 @@
 package models
 
 import (
-	"time"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"time"
 )
 
 // ForumPost represents a community forum post
@@ -24,9 +24,9 @@ type ForumPost struct {
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Author  User           `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Unit    *SecurityUnit  `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
-	Replies []ForumReply   `gorm:"foreignKey:PostID" json:"replies,omitempty"`
+	Author  User          `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Unit    *SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
+	Replies []ForumReply  `gorm:"foreignKey:PostID" json:"replies,omitempty"`
 }
 
 func (ForumPost) TableName() string {
@@ -35,15 +35,15 @@ func (ForumPost) TableName() string {
 
 // ForumReply represents a reply to a forum post
 type ForumReply struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	PostID      uuid.UUID      `gorm:"type:uuid;not null" json:"postId"`
-	Content     string         `gorm:"type:text;not null" json:"content"`
-	AuthorID    uuid.UUID      `gorm:"type:uuid;not null" json:"authorId"`
-	IsSolution  bool           `gorm:"default:false" json:"isSolution"`
-	Status      string         `gorm:"default:published" json:"status"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID         uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	PostID     uuid.UUID      `gorm:"type:uuid;not null" json:"postId"`
+	Content    string         `gorm:"type:text;not null" json:"content"`
+	AuthorID   uuid.UUID      `gorm:"type:uuid;not null" json:"authorId"`
+	IsSolution bool           `gorm:"default:false" json:"isSolution"`
+	Status     string         `gorm:"default:published" json:"status"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Post   ForumPost `gorm:"foreignKey:PostID" json:"post,omitempty"`
 	Author User      `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
@@ -69,8 +69,8 @@ type CommunityAnnouncement struct {
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Author User           `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Unit   *SecurityUnit  `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
+	Author User          `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Unit   *SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
 }
 
 func (CommunityAnnouncement) TableName() string {
@@ -79,26 +79,26 @@ func (CommunityAnnouncement) TableName() string {
 
 // CommunityEvent represents community events
 type CommunityEvent struct {
-	ID           uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UnitID       *uuid.UUID     `gorm:"type:uuid" json:"unitId,omitempty"`
-	Title        string         `gorm:"not null" json:"title"`
-	Description  string         `gorm:"type:text;not null" json:"description"`
-	Location     string         `json:"location"`
-	Latitude     float64        `json:"latitude"`
-	Longitude    float64        `json:"longitude"`
-	EventDate    time.Time      `json:"eventDate"`
-	EndDate      *time.Time     `json:"endDate"`
-	Type         string         `gorm:"default:meeting" json:"type"`
-	Status       string         `gorm:"default:upcoming" json:"status"`
-	MaxAttendees int            `gorm:"default:0" json:"maxAttendees"`
-	AttendeeCount int           `gorm:"default:0" json:"attendeeCount"`
-	AuthorID     uuid.UUID      `gorm:"type:uuid;not null" json:"authorId"`
-	CreatedAt    time.Time      `json:"createdAt"`
-	UpdatedAt    time.Time      `json:"updatedAt"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+	ID            uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	UnitID        *uuid.UUID     `gorm:"type:uuid" json:"unitId,omitempty"`
+	Title         string         `gorm:"not null" json:"title"`
+	Description   string         `gorm:"type:text;not null" json:"description"`
+	Location      string         `json:"location"`
+	Latitude      float64        `json:"latitude"`
+	Longitude     float64        `json:"longitude"`
+	EventDate     time.Time      `json:"eventDate"`
+	EndDate       *time.Time     `json:"endDate"`
+	Type          string         `gorm:"default:meeting" json:"type"`
+	Status        string         `gorm:"default:upcoming" json:"status"`
+	MaxAttendees  int            `gorm:"default:0" json:"maxAttendees"`
+	AttendeeCount int            `gorm:"default:0" json:"attendeeCount"`
+	AuthorID      uuid.UUID      `gorm:"type:uuid;not null" json:"authorId"`
+	CreatedAt     time.Time      `json:"createdAt"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Author User           `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Unit   *SecurityUnit  `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
+	Author User          `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Unit   *SecurityUnit `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
 }
 
 func (CommunityEvent) TableName() string {

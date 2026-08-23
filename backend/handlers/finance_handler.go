@@ -205,12 +205,12 @@ func ApproveTransaction(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":           "Transaction approved! Waiting for more approvals.",
-		"transaction":       transaction,
-		"approvalCount":     transaction.ApprovalCount,
-		"requiredApprovals": transaction.RequiredApprovals,
+		"message":            "Transaction approved! Waiting for more approvals.",
+		"transaction":        transaction,
+		"approvalCount":      transaction.ApprovalCount,
+		"requiredApprovals":  transaction.RequiredApprovals,
 		"remainingApprovals": transaction.RequiredApprovals - transaction.ApprovalCount,
-		"completed":         false,
+		"completed":          false,
 	})
 }
 
@@ -584,16 +584,16 @@ func GenerateFinancialReport(c *gin.Context) {
 	balance := totalIncome - totalExpenses
 
 	report := models.FinancialReport{
-		UnitID:       unitID,
-		Title:        input.Title,
-		Type:         input.Type,
-		PeriodStart:  periodStart,
-		PeriodEnd:    periodEnd,
-		TotalIncome:  totalIncome,
+		UnitID:        unitID,
+		Title:         input.Title,
+		Type:          input.Type,
+		PeriodStart:   periodStart,
+		PeriodEnd:     periodEnd,
+		TotalIncome:   totalIncome,
 		TotalExpenses: totalExpenses,
-		Balance:      balance,
-		GeneratedBy:  userObj.ID,
-		Status:       "generated",
+		Balance:       balance,
+		GeneratedBy:   userObj.ID,
+		Status:        "generated",
 	}
 
 	if err := config.DB.Create(&report).Error; err != nil {
@@ -655,8 +655,8 @@ func checkBudgetAlert(unitID uuid.UUID, category string, amount float64) {
 
 		for _, admin := range admins {
 			notification := models.Notification{
-				UserID:  admin.ID,
-				Title:   "⚠️ Budget Alert",
+				UserID: admin.ID,
+				Title:  "⚠️ Budget Alert",
 				Message: fmt.Sprintf("Budget for %s is at %.0f%% used. Current: %.2f, Budget: %.2f",
 					category, percentageUsed, budget.Spent+amount, budget.Amount),
 				Type:   "budget_alert",

@@ -20,16 +20,21 @@ func NewAuthService() *AuthService {
 	return &AuthService{}
 }
 
-// GenerateJWT - Public method for super admin impersonation
+// GenerateJWT is used when a new token needs to be generated
+// for an authenticated user, including controlled impersonation.
 func (s *AuthService) GenerateJWT(user *models.User) (string, error) {
 	return s.generateJWT(user)
 }
 
 func (s *AuthService) Register(user *models.User) (*models.User, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword(
+		[]byte(user.Password),
+		bcrypt.DefaultCost,
+	)
 	if err != nil {
 		return nil, err
 	}
+
 	user.Password = string(hashedPassword)
 
 	if err := config.DB.Create(user).Error; err != nil {
@@ -46,10 +51,14 @@ func (s *AuthService) Login(email, password string) (string, *models.User, error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", nil, errors.New("invalid credentials")
 		}
+
 		return "", nil, err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(user.Password),
+		[]byte(password),
+	); err != nil {
 		return "", nil, errors.New("invalid credentials")
 	}
 
@@ -63,6 +72,7 @@ func (s *AuthService) Login(email, password string) (string, *models.User, error
 
 func (s *AuthService) generateJWT(user *models.User) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
+
 	if secret == "" {
 		secret = "your-secret-key-change-in-production"
 	}
@@ -79,6 +89,7 @@ func (s *AuthService) generateJWT(user *models.User) (string, error) {
 
 func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
 	secret := os.Getenv("JWT_SECRET")
+
 	if secret == "" {
 		secret = "your-secret-key-change-in-production"
 	}
@@ -87,12 +98,14 @@ func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
+
 		return []byte(secret), nil
 	})
 }
 
 func (s *AuthService) GetUserByID(id string) (*models.User, error) {
 	var user models.User
+
 	userID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err

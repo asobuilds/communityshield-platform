@@ -47,30 +47,35 @@ func SetupRoutes(router *gin.Engine) {
 			units.GET("/nearby", handlers.GetNearbyUnits)
 			units.GET("/by-location", handlers.GetUnitsByLocation)
 			units.GET("", handlers.GetAllUnits)
+
+			units.POST("/apply", middleware.AuthMiddleware(), handlers.ApplyForSecurityUnit)
+			units.GET("/my-memberships", middleware.AuthMiddleware(), handlers.GetMyUnitMembership)
+			units.POST("/government-id", middleware.AuthMiddleware(), handlers.SubmitGovernmentID)
+
 			units.GET("/:id", handlers.GetUnitByID)
 			units.POST("", middleware.AuthMiddleware(), handlers.CreateUnit)
 			units.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateUnit)
 		}
 
-                // Push notification routes
-                notify := api.Group("/notifications")
-                {
-	                notify.POST("/register", middleware.AuthMiddleware(), handlers.RegisterDevice)
-	                notify.DELETE("/unregister", middleware.AuthMiddleware(), handlers.UnregisterDevice)
-	                notify.POST("/test", middleware.AuthMiddleware(), handlers.TestNotification)
-                }
+		// Push notification routes
+		notify := api.Group("/notifications")
+		{
+			notify.POST("/register", middleware.AuthMiddleware(), handlers.RegisterDevice)
+			notify.DELETE("/unregister", middleware.AuthMiddleware(), handlers.UnregisterDevice)
+			notify.POST("/test", middleware.AuthMiddleware(), handlers.TestNotification)
+		}
 
 		// Case routes
 		cases := api.Group("/cases")
 		{
 			cases.GET("", middleware.AuthMiddleware(), handlers.GetAllCases)
 			cases.POST("", middleware.AuthMiddleware(), handlers.CreateCase)
+			cases.GET("/analytics", middleware.AuthMiddleware(), handlers.GetCaseAnalytics)
 			cases.GET("/:id", middleware.AuthMiddleware(), handlers.GetCaseByID)
 			cases.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateCaseStatus)
 			cases.POST("/:id/timeline", middleware.AuthMiddleware(), handlers.AddCaseTimeline)
 			cases.GET("/:id/timeline", middleware.AuthMiddleware(), handlers.GetCaseTimeline)
 			cases.POST("/:id/feedback", middleware.AuthMiddleware(), handlers.SubmitCaseFeedback)
-			cases.GET("/analytics", middleware.AuthMiddleware(), handlers.GetCaseAnalytics)
 		}
 
 		// Evidence routes
@@ -129,12 +134,6 @@ func SetupRoutes(router *gin.Engine) {
 			news.POST("", middleware.AuthMiddleware(), handlers.CreateNews)
 			news.GET("", middleware.AuthMiddleware(), handlers.GetAllNews)
 			news.GET("/:id", middleware.AuthMiddleware(), handlers.GetNewsByID)
-		}
-
-		// Alerts routes
-		alerts := api.Group("/alerts")
-		{
-			alerts.GET("/news", middleware.AuthMiddleware(), handlers.GetNewsAlerts)
 		}
 
 		// AI routes
@@ -204,28 +203,37 @@ func SetupRoutes(router *gin.Engine) {
 		}
 
 		// Alert routes
-		alertRoutes := api.Group("/alerts")
+		// Alert routes
+		alerts := api.Group("/alerts")
 		{
-			alertRoutes.POST("", middleware.AuthMiddleware(), handlers.CreateCommunityAlert)
-			alertRoutes.GET("", middleware.AuthMiddleware(), handlers.GetCommunityAlerts)
-			alertRoutes.GET("/:id", middleware.AuthMiddleware(), handlers.GetAlertByID)
-			alertRoutes.POST("/:id/confirm", middleware.AuthMiddleware(), handlers.ConfirmAlert)
-			alertRoutes.POST("/subscribe", middleware.AuthMiddleware(), handlers.SubscribeToAlerts)
-			alertRoutes.GET("/subscriptions", middleware.AuthMiddleware(), handlers.GetAlertSubscriptions)
+			alerts.GET("/news", middleware.AuthMiddleware(), handlers.GetNewsAlerts)
+
+			alerts.POST("", middleware.AuthMiddleware(), handlers.CreateCommunityAlert)
+			alerts.GET("", middleware.AuthMiddleware(), handlers.GetCommunityAlerts)
+
+			alerts.POST("/subscribe", middleware.AuthMiddleware(), handlers.SubscribeToAlerts)
+			alerts.GET("/subscriptions", middleware.AuthMiddleware(), handlers.GetAlertSubscriptions)
+
+			alerts.GET("/:id", middleware.AuthMiddleware(), handlers.GetAlertByID)
+			alerts.POST("/:id/confirm", middleware.AuthMiddleware(), handlers.ConfirmAlert)
 		}
 
 		// Settings routes
 		settings := api.Group("/settings")
 		{
 			settings.GET("/public", handlers.GetPublicSettings)
-			settings.GET("/:key", middleware.AuthMiddleware(), handlers.GetSystemSetting)
-			settings.PUT("/:key", middleware.AuthMiddleware(), handlers.UpdateSystemSetting)
+
 			settings.GET("/templates/:name", middleware.AuthMiddleware(), handlers.GetEmailTemplate)
 			settings.PUT("/templates/:name", middleware.AuthMiddleware(), handlers.UpdateEmailTemplate)
+
 			settings.POST("/exports", middleware.AuthMiddleware(), handlers.CreateDataExport)
 			settings.GET("/exports", middleware.AuthMiddleware(), handlers.GetDataExports)
+
 			settings.GET("/onboarding", middleware.AuthMiddleware(), handlers.GetUserOnboarding)
 			settings.PUT("/onboarding", middleware.AuthMiddleware(), handlers.UpdateUserOnboarding)
+
+			settings.GET("/:key", middleware.AuthMiddleware(), handlers.GetSystemSetting)
+			settings.PUT("/:key", middleware.AuthMiddleware(), handlers.UpdateSystemSetting)
 		}
 
 		// Mobile API routes
@@ -265,12 +273,12 @@ func SetupRoutes(router *gin.Engine) {
 			commGroup.GET("/rooms/:roomId/sync-status", middleware.AuthMiddleware(), handlers.GetSyncStatus)
 		}
 
-                // SMS routes
-                sms := api.Group("/sms")
-                {
-	               sms.POST("/incoming", handlers.HandleIncomingSMS)
-	               sms.POST("/ussd", handlers.HandleUSSD)
-                }
+		// SMS routes
+		sms := api.Group("/sms")
+		{
+			sms.POST("/incoming", handlers.HandleIncomingSMS)
+			sms.POST("/ussd", handlers.HandleUSSD)
+		}
 
 		// Peacebuilding routes
 		peace := api.Group("/peacebuilding")

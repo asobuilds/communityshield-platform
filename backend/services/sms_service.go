@@ -24,14 +24,14 @@ func SendOTPSMS(phone, otpCode string) error {
 func formatPhoneNumber(phone string) string {
 	re := regexp.MustCompile(`[^0-9]`)
 	phone = re.ReplaceAllString(phone, "")
-	
+
 	if len(phone) > 0 && phone[0] == '0' {
 		phone = "234" + phone[1:]
 	}
-	
+
 	if len(phone) > 0 && len(phone) >= 10 && phone[:3] != "234" {
 		phone = "234" + phone
 	}
-	
+
 	return phone
 }
