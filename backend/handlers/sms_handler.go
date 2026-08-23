@@ -37,8 +37,8 @@ func HandleIncomingSMS(c *gin.Context) {
 	var input struct {
 		From    string `json:"from" binding:"required"`
 		Message string `json:"message" binding:"required"`
-		To      string `json:"to"`          // The number the SMS was sent to
-		Id      string `json:"id"`          // Provider's message ID
+		To      string `json:"to"` // The number the SMS was sent to
+		Id      string `json:"id"` // Provider's message ID
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -60,7 +60,7 @@ func HandleIncomingSMS(c *gin.Context) {
 	cmd := parseSMSCommand(input.Message, input.From)
 
 	// Log incoming SMS
-	log.Printf("📩 SMS Received: From=%s, Command=%s, Params=%v", 
+	log.Printf("📩 SMS Received: From=%s, Command=%s, Params=%v",
 		input.From, cmd.Command, cmd.Params)
 
 	// Process command
@@ -72,8 +72,8 @@ func HandleIncomingSMS(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "SMS processed",
+		"status":   "success",
+		"message":  "SMS processed",
 		"response": response,
 	})
 }
@@ -107,7 +107,7 @@ func HandleUSSD(c *gin.Context) {
 	parts := strings.Split(input.Text, "*")
 	step := len(parts)
 
-	log.Printf("📱 USSD Request: Phone=%s, Step=%d, Text=%s", 
+	log.Printf("📱 USSD Request: Phone=%s, Step=%d, Text=%s",
 		input.Phone, step, input.Text)
 
 	var response string
@@ -270,7 +270,7 @@ func processReport(cmd SMSCommand) string {
 
 	// Check for duplicate reports (spam protection)
 	var recentCase models.Case
-	if err := config.DB.Where("reported_by = ? AND created_at > ?", 
+	if err := config.DB.Where("reported_by = ? AND created_at > ?",
 		user.ID, time.Now().Add(-5*time.Minute)).First(&recentCase).Error; err == nil {
 		return "Please wait 5 minutes before reporting again."
 	}
@@ -314,7 +314,7 @@ func processSOS(cmd SMSCommand) string {
 
 	// Check for spam (limit 1 SOS per 5 minutes)
 	var recentSOS models.SOSAlert
-	if err := config.DB.Where("user_id = ? AND created_at > ?", 
+	if err := config.DB.Where("user_id = ? AND created_at > ?",
 		user.ID, time.Now().Add(-5*time.Minute)).First(&recentSOS).Error; err == nil {
 		return "SOS already sent recently. Help is on the way."
 	}
@@ -348,10 +348,10 @@ func processStatus(cmd SMSCommand) string {
 	}
 
 	caseID := cmd.Params[0]
-	
+
 	// Try to find by ID or short ID
 	var caseObj models.Case
-	
+
 	// Check if it's a short ID (8 chars)
 	if len(caseID) >= 8 && len(caseID) <= 12 {
 		if err := config.DB.Where("id::text LIKE ?", "%"+caseID+"%").First(&caseObj).Error; err != nil {
@@ -434,7 +434,7 @@ func handleUSSDStatus(caseID, phone string) string {
 		return "END Case not found."
 	}
 
-	return fmt.Sprintf("END Case: %s\nStatus: %s\nPriority: %s", 
+	return fmt.Sprintf("END Case: %s\nStatus: %s\nPriority: %s",
 		caseObj.Title, caseObj.Status, caseObj.Priority)
 }
 
@@ -492,7 +492,7 @@ func notifyUnitsAboutSOS(sos models.SOSAlert, phone string) {
 
 	for _, unit := range units {
 		if unit.ContactPhone != "" {
-			message := fmt.Sprintf("🚨 SOS Alert!\nID: %s\nFrom: %s\n%s\nPlease respond immediately.", 
+			message := fmt.Sprintf("🚨 SOS Alert!\nID: %s\nFrom: %s\n%s\nPlease respond immediately.",
 				sos.ID.String()[:8], phone, sos.Description)
 			go services.SendSMS(unit.ContactPhone, message)
 			log.Printf("📱 Notified unit %s at %s", unit.Name, unit.ContactPhone)
@@ -520,17 +520,17 @@ func sanitizePhone(phone string) string {
 	// Remove any non-digit characters
 	re := regexp.MustCompile(`[^0-9]`)
 	phone = re.ReplaceAllString(phone, "")
-	
+
 	// If starts with 0, replace with 234
 	if len(phone) > 0 && phone[0] == '0' {
 		phone = "234" + phone[1:]
 	}
-	
+
 	// If doesn't start with 234, add it
 	if len(phone) > 0 && len(phone) >= 10 && phone[:3] != "234" {
 		phone = "234" + phone
 	}
-	
+
 	return phone
 }
 

@@ -118,7 +118,7 @@ Your role is to:
 If you don't know something, be honest and suggest they contact their local security unit.`,
 		},
 		{
-			Role: "user",
+			Role:    "user",
 			Content: fmt.Sprintf("User role: %s\nQuestion: %s", userRole, question),
 		},
 	}
@@ -139,7 +139,7 @@ Analyze the image description and provide:
 4. Recommended actions`,
 		},
 		{
-			Role: "user",
+			Role:    "user",
 			Content: fmt.Sprintf("Image description: %s", imageDescription),
 		},
 	}

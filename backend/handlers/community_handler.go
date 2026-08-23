@@ -151,7 +151,7 @@ func GetForumPostByID(c *gin.Context) {
 // CreateForumReply creates a reply to a forum post
 func CreateForumReply(c *gin.Context) {
 	var input struct {
-		PostID string `json:"postId" binding:"required"`
+		PostID  string `json:"postId" binding:"required"`
 		Content string `json:"content" binding:"required"`
 	}
 
@@ -219,11 +219,11 @@ func CreateForumReply(c *gin.Context) {
 // CreateCommunityAnnouncement creates a community announcement
 func CreateCommunityAnnouncement(c *gin.Context) {
 	var input struct {
-		UnitID   string `json:"unitId"`
-		Title    string `json:"title" binding:"required"`
-		Content  string `json:"content" binding:"required"`
-		Type     string `json:"type"`
-		Priority string `json:"priority"`
+		UnitID    string `json:"unitId"`
+		Title     string `json:"title" binding:"required"`
+		Content   string `json:"content" binding:"required"`
+		Type      string `json:"type"`
+		Priority  string `json:"priority"`
 		ExpiresAt string `json:"expiresAt"`
 	}
 
@@ -280,14 +280,14 @@ func CreateCommunityAnnouncement(c *gin.Context) {
 	}
 
 	announcement := models.CommunityAnnouncement{
-		UnitID:     unitID,
-		Title:      input.Title,
-		Content:    input.Content,
-		Type:       input.Type,
-		Priority:   input.Priority,
-		AuthorID:   userObj.ID,
-		Status:     "published",
-		ExpiresAt:  expiresAt,
+		UnitID:      unitID,
+		Title:       input.Title,
+		Content:     input.Content,
+		Type:        input.Type,
+		Priority:    input.Priority,
+		AuthorID:    userObj.ID,
+		Status:      "published",
+		ExpiresAt:   expiresAt,
 		PublishedAt: time.Now(),
 	}
 

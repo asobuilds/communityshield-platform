@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
-        "security-solution/models" 
+	"security-solution/models"
 )
 
 // RiskPredictionService handles AI predictions

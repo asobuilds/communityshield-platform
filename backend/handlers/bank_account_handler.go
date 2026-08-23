@@ -329,19 +329,19 @@ func RecordDonation(c *gin.Context) {
 
 		// Create transaction record
 		transaction := models.Transaction{
-			UnitID:          unitID,
-			Type:            "donation",
-			Category:        "income",
-			Amount:          input.Amount,
-			Description:     "Donation from " + input.DonorName,
-			InitiatedBy:     userObj.ID,
-			ApprovedBy:      &userObj.ID,
-			ApprovalCount:   1,
+			UnitID:            unitID,
+			Type:              "donation",
+			Category:          "income",
+			Amount:            input.Amount,
+			Description:       "Donation from " + input.DonorName,
+			InitiatedBy:       userObj.ID,
+			ApprovedBy:        &userObj.ID,
+			ApprovalCount:     1,
 			RequiredApprovals: 1,
-			Status:          "approved",
-			TransactionDate: time.Now(),
-			PaymentMethod:   input.PaymentMethod,
-			ReferenceID:     input.Reference,
+			Status:            "approved",
+			TransactionDate:   time.Now(),
+			PaymentMethod:     input.PaymentMethod,
+			ReferenceID:       input.Reference,
 		}
 		config.DB.Create(&transaction)
 
@@ -409,19 +409,19 @@ func ConfirmDonation(c *gin.Context) {
 
 	// Create transaction record
 	transaction := models.Transaction{
-		UnitID:          donation.UnitID,
-		Type:            "donation",
-		Category:        "income",
-		Amount:          donation.Amount,
-		Description:     "Donation from " + donation.DonorName,
-		InitiatedBy:     userObj.ID,
-		ApprovedBy:      &userObj.ID,
-		ApprovalCount:   1,
+		UnitID:            donation.UnitID,
+		Type:              "donation",
+		Category:          "income",
+		Amount:            donation.Amount,
+		Description:       "Donation from " + donation.DonorName,
+		InitiatedBy:       userObj.ID,
+		ApprovedBy:        &userObj.ID,
+		ApprovalCount:     1,
 		RequiredApprovals: 1,
-		Status:          "approved",
-		TransactionDate: time.Now(),
-		PaymentMethod:   donation.PaymentMethod,
-		ReferenceID:     donation.Reference,
+		Status:            "approved",
+		TransactionDate:   time.Now(),
+		PaymentMethod:     donation.PaymentMethod,
+		ReferenceID:       donation.Reference,
 	}
 	config.DB.Create(&transaction)
 

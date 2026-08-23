@@ -15,7 +15,7 @@ import (
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("⚠️ No .env file found, using system environment variables")
+		log.Println("No .env file found, using system environment variables")
 	}
 
 	config.ConnectDatabase()
@@ -47,10 +47,9 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("🚀 Server starting on http://localhost:%s", port)
-	log.Printf("📝 Environment: %s", os.Getenv("GIN_MODE"))
+	log.Printf("Server starting on http://localhost:%s", port)
 
 	if err := router.Run(":" + port); err != nil {
-		log.Fatal("❌ Failed to start server:", err)
+		log.Fatal(err)
 	}
 }

@@ -126,10 +126,10 @@ func RequestTransfer(c *gin.Context) {
 	config.DB.Where("unit_id = ? AND role IN (?)", fromUnitID, []string{"unit_admin", "super_admin"}).Find(&admins)
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":          "Transfer request created successfully",
-		"transferRequest":  transferRequest,
+		"message":           "Transfer request created successfully",
+		"transferRequest":   transferRequest,
 		"requiredApprovals": requiredApprovals,
-		"admins":           len(admins),
+		"admins":            len(admins),
 	})
 }
 
@@ -239,23 +239,23 @@ func ApproveTransfer(c *gin.Context) {
 		config.DB.Save(&transferRequest)
 
 		c.JSON(http.StatusOK, gin.H{
-			"message":              "Transfer fully approved and executed!",
-			"transferRequest":      transferRequest,
-			"approvalCount":        transferRequest.ApprovalCount,
-			"requiredApprovals":    transferRequest.RequiredApprovals,
-			"transferCompleted":    true,
+			"message":           "Transfer fully approved and executed!",
+			"transferRequest":   transferRequest,
+			"approvalCount":     transferRequest.ApprovalCount,
+			"requiredApprovals": transferRequest.RequiredApprovals,
+			"transferCompleted": true,
 		})
 		return
 	}
 
 	// Not fully approved yet
 	c.JSON(http.StatusOK, gin.H{
-		"message":              "Transfer approved! Waiting for more approvals.",
-		"transferRequest":      transferRequest,
-		"approvalCount":        transferRequest.ApprovalCount,
-		"requiredApprovals":    transferRequest.RequiredApprovals,
-		"remainingApprovals":   transferRequest.RequiredApprovals - transferRequest.ApprovalCount,
-		"transferCompleted":    false,
+		"message":            "Transfer approved! Waiting for more approvals.",
+		"transferRequest":    transferRequest,
+		"approvalCount":      transferRequest.ApprovalCount,
+		"requiredApprovals":  transferRequest.RequiredApprovals,
+		"remainingApprovals": transferRequest.RequiredApprovals - transferRequest.ApprovalCount,
+		"transferCompleted":  false,
 	})
 }
 

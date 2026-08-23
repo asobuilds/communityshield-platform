@@ -11,15 +11,15 @@ import (
 
 // Message types
 const (
-	MessageTypeJoin          = "join"
-	MessageTypeLeave         = "leave"
-	MessageTypeSignal        = "signal"
-	MessageTypeOffer         = "offer"
-	MessageTypeAnswer        = "answer"
-	MessageTypeIceCandidate  = "ice-candidate"
-	MessageTypeChat          = "chat"
-	MessageTypeLocation      = "location"
-	MessageTypeStatus        = "status"
+	MessageTypeJoin         = "join"
+	MessageTypeLeave        = "leave"
+	MessageTypeSignal       = "signal"
+	MessageTypeOffer        = "offer"
+	MessageTypeAnswer       = "answer"
+	MessageTypeIceCandidate = "ice-candidate"
+	MessageTypeChat         = "chat"
+	MessageTypeLocation     = "location"
+	MessageTypeStatus       = "status"
 )
 
 // Message represents a WebSocket message

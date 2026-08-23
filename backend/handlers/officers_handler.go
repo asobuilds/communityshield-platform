@@ -98,11 +98,11 @@ func UpdateOfficer(c *gin.Context) {
 	}
 
 	var input struct {
-		Name  string `json:"name"`
-		Rank  string `json:"rank"`
-		Role  string `json:"role"`
-		Phone string `json:"phone"`
-		Email string `json:"email"`
+		Name   string `json:"name"`
+		Rank   string `json:"rank"`
+		Role   string `json:"role"`
+		Phone  string `json:"phone"`
+		Email  string `json:"email"`
 		Status string `json:"status"`
 	}
 

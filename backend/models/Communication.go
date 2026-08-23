@@ -1,9 +1,9 @@
 package models
 
 import (
-	"time"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"time"
 )
 
 // CommunicationRoom represents a communication room for a unit
@@ -30,24 +30,24 @@ func (CommunicationRoom) TableName() string {
 
 // CommunicationMessage represents a message in a room
 type CommunicationMessage struct {
-	ID           uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	RoomID       uuid.UUID      `gorm:"type:uuid;not null" json:"roomId"`
-	SenderID     uuid.UUID      `gorm:"type:uuid;not null" json:"senderId"`
-	Message      string         `gorm:"type:text;not null" json:"message"`
-	MessageType  string         `gorm:"default:text" json:"messageType"` // text, voice, image, location, emergency, file
-	Status       string         `gorm:"default:sent" json:"status"`      // sent, delivered, read
-	Priority     string         `gorm:"default:normal" json:"priority"`  // normal, high, emergency
-	IsBroadcast  bool           `gorm:"default:false" json:"isBroadcast"`
-	IsEmergency  bool           `gorm:"default:false" json:"isEmergency"`
-	Reactions    string         `gorm:"type:text" json:"reactions"` // JSON array of reactions
-	FileURL      string         `json:"fileUrl"`
-	FileName     string         `json:"fileName"`
-	FileSize     int64          `json:"fileSize"`
-	ReadAt       *time.Time     `json:"readAt"`
-	DeliveredAt  *time.Time     `json:"deliveredAt"`
-	CreatedAt    time.Time      `json:"createdAt"`
-	UpdatedAt    time.Time      `json:"updatedAt"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	RoomID      uuid.UUID      `gorm:"type:uuid;not null" json:"roomId"`
+	SenderID    uuid.UUID      `gorm:"type:uuid;not null" json:"senderId"`
+	Message     string         `gorm:"type:text;not null" json:"message"`
+	MessageType string         `gorm:"default:text" json:"messageType"` // text, voice, image, location, emergency, file
+	Status      string         `gorm:"default:sent" json:"status"`      // sent, delivered, read
+	Priority    string         `gorm:"default:normal" json:"priority"`  // normal, high, emergency
+	IsBroadcast bool           `gorm:"default:false" json:"isBroadcast"`
+	IsEmergency bool           `gorm:"default:false" json:"isEmergency"`
+	Reactions   string         `gorm:"type:text" json:"reactions"` // JSON array of reactions
+	FileURL     string         `json:"fileUrl"`
+	FileName    string         `json:"fileName"`
+	FileSize    int64          `json:"fileSize"`
+	ReadAt      *time.Time     `json:"readAt"`
+	DeliveredAt *time.Time     `json:"deliveredAt"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Room   CommunicationRoom `gorm:"foreignKey:RoomID" json:"room,omitempty"`
 	Sender User              `gorm:"foreignKey:SenderID" json:"sender,omitempty"`
@@ -63,7 +63,7 @@ type VoiceCall struct {
 	RoomID      uuid.UUID      `gorm:"type:uuid;not null" json:"roomId"`
 	CallerID    uuid.UUID      `gorm:"type:uuid;not null" json:"callerId"`
 	ReceiverID  uuid.UUID      `gorm:"type:uuid" json:"receiverId"`
-	CallType    string         `gorm:"default:group" json:"callType"` // group, private, emergency
+	CallType    string         `gorm:"default:group" json:"callType"`   // group, private, emergency
 	Status      string         `gorm:"default:initiated" json:"status"` // initiated, ringing, connected, ended, missed
 	StartedAt   *time.Time     `json:"startedAt"`
 	EndedAt     *time.Time     `json:"endedAt"`

@@ -151,8 +151,8 @@ func CreateSuspect(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":  "Suspect created successfully",
-		"suspect":  suspect,
+		"message":   "Suspect created successfully",
+		"suspect":   suspect,
 		"riskScore": riskScore,
 	})
 }
@@ -349,8 +349,8 @@ func UpdateSuspect(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Suspect updated successfully",
-		"suspect":  suspect,
+		"message": "Suspect updated successfully",
+		"suspect": suspect,
 	})
 }
 

@@ -35,17 +35,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Public registration must always create citizens.
+	// Privileged roles should be assigned by an administrator.
 	user := &models.User{
 		Email:     input.Email,
 		Phone:     input.Phone,
 		FirstName: input.FirstName,
 		LastName:  input.LastName,
 		Password:  input.Password,
-		Role:      input.Role,
-	}
-
-	if user.Role == "" {
-		user.Role = "citizen"
+		Role:      "citizen",
 	}
 
 	createdUser, err := h.authService.Register(user)
@@ -95,6 +93,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+func (h *AuthHandler) Logout(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Logged out successfully",
+	})
+}
+
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	userInterface, exists := c.Get("user")
 	if !exists {
@@ -127,8 +131,4 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 			"updatedAt": freshUser.UpdatedAt,
 		},
 	})
-}
-
-func (h *AuthHandler) Logout(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }

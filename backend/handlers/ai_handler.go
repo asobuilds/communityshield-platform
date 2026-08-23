@@ -183,10 +183,10 @@ func AIGetMapInsights(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"analysis":   analysis,
-		"caseCount":  len(cases),
-		"viewLat":    input.Latitude,
-		"viewLng":    input.Longitude,
+		"analysis":  analysis,
+		"caseCount": len(cases),
+		"viewLat":   input.Latitude,
+		"viewLng":   input.Longitude,
 	})
 }
 
@@ -345,10 +345,10 @@ func AIGetSmartTips(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"tips":       tips,
-		"location":   input.Location,
-		"timeOfDay":  input.TimeOfDay,
-		"userRole":   userObj.Role,
+		"tips":      tips,
+		"location":  input.Location,
+		"timeOfDay": input.TimeOfDay,
+		"userRole":  userObj.Role,
 	})
 }
 

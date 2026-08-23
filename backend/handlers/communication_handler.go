@@ -216,9 +216,9 @@ func GetMessages(c *gin.Context) {
 	config.DB.Create(&sync)
 
 	c.JSON(http.StatusOK, gin.H{
-		"messages":     messages,
-		"syncTime":     time.Now().Format(time.RFC3339),
-		"hasMore":      len(messages) > 0,
+		"messages": messages,
+		"syncTime": time.Now().Format(time.RFC3339),
+		"hasMore":  len(messages) > 0,
 	})
 }
 
@@ -337,8 +337,8 @@ func EndCall(c *gin.Context) {
 // SyncMessages syncs offline messages for rural areas
 func SyncMessages(c *gin.Context) {
 	var input struct {
-		RoomID    string `json:"roomId" binding:"required"`
-		LastSync  string `json:"lastSync"`
+		RoomID          string `json:"roomId" binding:"required"`
+		LastSync        string `json:"lastSync"`
 		OfflineMessages []struct {
 			ID          string `json:"id"`
 			Message     string `json:"message"`
@@ -409,10 +409,10 @@ func SyncMessages(c *gin.Context) {
 	query.Order("created_at asc").Find(&newMessages)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":          "Sync completed",
-		"syncedCount":      syncedCount,
-		"newMessages":      newMessages,
-		"syncTime":         time.Now().Format(time.RFC3339),
+		"message":     "Sync completed",
+		"syncedCount": syncedCount,
+		"newMessages": newMessages,
+		"syncTime":    time.Now().Format(time.RFC3339),
 	})
 }
 
@@ -453,11 +453,11 @@ func GetSyncStatus(c *gin.Context) {
 func createEmergencyAlert(roomID uuid.UUID, message models.CommunicationMessage) {
 	// Create emergency alert for all members in the room
 	alert := models.CommunityAlert{
-		Title:    "🚨 Emergency Communication",
-		Content:  message.Message,
-		Type:     "emergency",
-		Severity: "critical",
-		Status:   "active",
+		Title:     "🚨 Emergency Communication",
+		Content:   message.Message,
+		Type:      "emergency",
+		Severity:  "critical",
+		Status:    "active",
 		CreatedBy: message.SenderID,
 	}
 	config.DB.Create(&alert)

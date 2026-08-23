@@ -33,10 +33,10 @@ func GenerateCaseReport(c *gin.Context) {
 	config.DB.Model(&models.Progress{}).Where("case_id = ?", id).Count(&progressCount)
 
 	report := gin.H{
-		"case":           caseObj,
-		"evidenceCount":  evidenceCount,
-		"progressCount":  progressCount,
-		"generatedAt":    time.Now(),
+		"case":          caseObj,
+		"evidenceCount": evidenceCount,
+		"progressCount": progressCount,
+		"generatedAt":   time.Now(),
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -70,14 +70,14 @@ func GenerateUnitReport(c *gin.Context) {
 	config.DB.Where("unit_id = ?", id).Order("created_at desc").Limit(5).Find(&recentCases)
 
 	report := gin.H{
-		"unitId":          id,
-		"totalCases":      totalCases,
-		"resolvedCases":   resolvedCases,
-		"pendingCases":    pendingCases,
+		"unitId":           id,
+		"totalCases":       totalCases,
+		"resolvedCases":    resolvedCases,
+		"pendingCases":     pendingCases,
 		"transferredCases": transferredCases,
-		"officerCount":    len(officers),
-		"recentCases":     recentCases,
-		"generatedAt":     time.Now(),
+		"officerCount":     len(officers),
+		"recentCases":      recentCases,
+		"generatedAt":      time.Now(),
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -111,12 +111,12 @@ func GenerateDailyReport(c *gin.Context) {
 		Scan(&topUnits)
 
 	report := gin.H{
-		"date":           today.Format("2006-01-02"),
-		"newCases":       newCases,
-		"resolvedCases":  resolvedCases,
-		"totalCases":     totalCases,
-		"topUnits":       topUnits,
-		"generatedAt":    time.Now(),
+		"date":          today.Format("2006-01-02"),
+		"newCases":      newCases,
+		"resolvedCases": resolvedCases,
+		"totalCases":    totalCases,
+		"topUnits":      topUnits,
+		"generatedAt":   time.Now(),
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -146,8 +146,8 @@ func ExportCaseReport(c *gin.Context) {
 
 	// For now, return JSON. In production, generate PDF/CSV
 	c.JSON(http.StatusOK, gin.H{
-		"format":  format,
-		"case":    caseObj,
+		"format":     format,
+		"case":       caseObj,
 		"exportedAt": time.Now(),
 	})
 }

@@ -172,9 +172,9 @@ func ConfirmAlert(c *gin.Context) {
 // SubscribeToAlerts subscribes a user to alerts
 func SubscribeToAlerts(c *gin.Context) {
 	var input struct {
-		Type     string `json:"type" binding:"required"`
-		Channel  string `json:"channel"`
-		Location string `json:"location"`
+		Type     string  `json:"type" binding:"required"`
+		Channel  string  `json:"channel"`
+		Location string  `json:"location"`
 		Radius   float64 `json:"radius"`
 	}
 
