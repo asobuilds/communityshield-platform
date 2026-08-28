@@ -78,6 +78,11 @@ func SetupRoutes(router *gin.Engine) {
 			cases.POST("/:id/feedback", middleware.AuthMiddleware(), handlers.SubmitCaseFeedback)
 			cases.POST("/:id/assign", middleware.AuthMiddleware(), handlers.AssignCase)
 			cases.GET("/:id/assignments", middleware.AuthMiddleware(), handlers.GetCaseAssignments)
+			cases.POST("/:id/dispatch", middleware.AuthMiddleware(), handlers.DispatchCase)
+			cases.POST("/:id/arrive", middleware.AuthMiddleware(), handlers.ArriveAtCase)
+			cases.POST("/:id/progress", middleware.AuthMiddleware(), handlers.AddCaseProgress)
+			cases.GET("/:id/progress", middleware.AuthMiddleware(), handlers.GetCaseProgress)
+			cases.POST("/:id/close", middleware.AuthMiddleware(), handlers.CloseCase)
 		}
 
 		// Evidence routes
