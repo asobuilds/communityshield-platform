@@ -10,74 +10,129 @@ import (
 	"security-solution/models"
 )
 
-// AddCaseProgress adds progress to a case
+type CaseProgressRequest struct {
+	Action      string `json:"action" binding:"required"`
+	Description string `json:"description"`
+}
+
 func AddCaseProgress(c *gin.Context) {
-	var input struct {
-		CaseID      string `json:"caseId" binding:"required"`
-		Action      string `json:"action" binding:"required"`
-		Description string `json:"description"`
-	}
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	caseID, err := uuid.Parse(input.CaseID)
+	caseID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid case ID"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid case id",
+		})
 		return
 	}
 
-	// Get user from context
-	user, exists := c.Get("user")
+	var req CaseProgressRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request body",
+		})
+		return
+	}
+
+	var caseRecord models.Case
+	if err := config.DB.First(&caseRecord, "id = ?", caseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "case not found",
+		})
+		return
+	}
+
+	userIDValue, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "authenticated user not found",
+		})
 		return
 	}
-	userObj := user.(*models.User)
 
-	// Check if case exists
-	var caseObj models.Case
-	if err := config.DB.First(&caseObj, "id = ?", caseID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
+	userID, ok := userIDValue.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid authenticated user",
+		})
+		return
+	}
+
+	officerID, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid authenticated user",
+		})
+		return
+	}
+
+	var officer models.Officer
+	if err := config.DB.
+		Where("id = ?", officerID).
+		First(&officer).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "authenticated user is not an officer",
+		})
+		return
+	}
+
+	if officer.UnitID != caseRecord.UnitID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "officer is not assigned to this case unit",
+		})
 		return
 	}
 
 	progress := models.Progress{
 		CaseID:      caseID,
-		OfficerID:   userObj.ID,
-		Action:      input.Action,
-		Description: input.Description,
+		OfficerID:   officerID,
+		Action:      req.Action,
+		Description: req.Description,
 	}
 
 	if err := config.DB.Create(&progress).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add progress"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to record case progress",
+		})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":  "Progress added successfully",
+		"message":  "case progress recorded successfully",
 		"progress": progress,
 	})
 }
 
-// GetCaseProgress gets all progress for a case
 func GetCaseProgress(c *gin.Context) {
-	caseID := c.Param("caseId")
-	id, err := uuid.Parse(caseID)
+	caseID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid case ID"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid case id",
+		})
+		return
+	}
+
+	var caseRecord models.Case
+	if err := config.DB.First(&caseRecord, "id = ?", caseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "case not found",
+		})
 		return
 	}
 
 	var progress []models.Progress
-	if err := config.DB.Where("case_id = ?", id).Order("created_at desc").Find(&progress).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch progress"})
+
+	if err := config.DB.
+		Where("case_id = ?", caseID).
+		Order("created_at ASC").
+		Find(&progress).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to retrieve case progress",
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"caseId":   caseID,
 		"progress": progress,
+		"count":    len(progress),
 	})
 }
