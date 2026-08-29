@@ -60,3 +60,18 @@ go.sum
 # Deployment
 main
 *.pid
+# Local backups and recovery artifacts
+*.zip
+*.dump
+*SAFE-BACKUP*
+*.stage*.tsx
+h origin mai
+
+
+# Local recovery/backups
+*.zip
+*.dump
+*SAFE-BACKUP*
+*.stage1.tsx
+*.stage3.tsx
+
