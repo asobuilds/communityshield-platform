@@ -11,7 +11,7 @@ import (
 	"security-solution/models"
 )
 
-// UploadEvidence uploads evidence for a case
+// UploadEvidence uploads evidence for a case.
 func UploadEvidence(c *gin.Context) {
 	var input struct {
 		CaseID      string  `json:"caseId" binding:"required"`
@@ -23,34 +23,47 @@ func UploadEvidence(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
 	caseID, err := uuid.Parse(input.CaseID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid case ID"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid case ID",
+		})
 		return
 	}
 
-	// Get user from context
-	user, exists := c.Get("user")
+	userValue, exists := c.Get("user")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "user not authenticated",
+		})
 		return
 	}
-	userObj := user.(*models.User)
 
-	// Check if case exists
+	user, ok := userValue.(*models.User)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid authenticated user",
+		})
+		return
+	}
+
 	var caseObj models.Case
 	if err := config.DB.First(&caseObj, "id = ?", caseID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "case not found",
+		})
 		return
 	}
 
 	evidence := models.Evidence{
 		CaseID:      caseID,
-		UploadedBy:  userObj.ID,
+		UploadedBy:  user.ID,
 		Type:        input.Type,
 		FileURL:     input.FileURL,
 		Description: input.Description,
@@ -61,78 +74,116 @@ func UploadEvidence(c *gin.Context) {
 	}
 
 	if err := config.DB.Create(&evidence).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload evidence"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to upload evidence",
+		})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":  "Evidence uploaded successfully",
+		"message":  "evidence uploaded successfully",
 		"evidence": evidence,
 	})
 }
 
-// GetEvidenceByCase returns all evidence for a case
+// GetEvidenceByCase returns all evidence belonging to a case.
 func GetEvidenceByCase(c *gin.Context) {
-	caseID := c.Param("caseId")
-	id, err := uuid.Parse(caseID)
+	caseID, err := uuid.Parse(c.Param("caseId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid case ID"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid case ID",
+		})
+		return
+	}
+
+	var caseObj models.Case
+	if err := config.DB.First(&caseObj, "id = ?", caseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "case not found",
+		})
 		return
 	}
 
 	var evidence []models.Evidence
-	if err := config.DB.Where("case_id = ?", id).Order("created_at desc").Find(&evidence).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch evidence"})
+
+	if err := config.DB.
+		Where("case_id = ?", caseID).
+		Order("created_at DESC").
+		Find(&evidence).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch evidence",
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"caseId":   caseID,
 		"evidence": evidence,
+		"count":    len(evidence),
 	})
 }
 
-// VerifyEvidence verifies evidence
+// VerifyEvidence marks evidence as verified.
 func VerifyEvidence(c *gin.Context) {
-	id := c.Param("id")
-	evidenceID, err := uuid.Parse(id)
+	evidenceID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid evidence ID"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid evidence ID",
+		})
 		return
 	}
 
 	var evidence models.Evidence
+
 	if err := config.DB.First(&evidence, "id = ?", evidenceID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Evidence not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "evidence not found",
+		})
 		return
 	}
 
 	evidence.IsVerified = true
+
 	if err := config.DB.Save(&evidence).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify evidence"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to verify evidence",
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Evidence verified successfully",
+		"message":  "evidence verified successfully",
 		"evidence": evidence,
 	})
 }
 
-// DeleteEvidence deletes evidence
+// DeleteEvidence soft-deletes evidence.
 func DeleteEvidence(c *gin.Context) {
-	id := c.Param("id")
-	evidenceID, err := uuid.Parse(id)
+	evidenceID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid evidence ID"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid evidence ID",
+		})
 		return
 	}
 
-	if err := config.DB.Delete(&models.Evidence{}, "id = ?", evidenceID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete evidence"})
+	var evidence models.Evidence
+
+	if err := config.DB.First(&evidence, "id = ?", evidenceID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "evidence not found",
+		})
+		return
+	}
+
+	if err := config.DB.Delete(&evidence).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to delete evidence",
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Evidence deleted successfully",
+		"message": "evidence deleted successfully",
 	})
 }
