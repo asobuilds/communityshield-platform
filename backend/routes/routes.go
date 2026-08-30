@@ -89,7 +89,7 @@ func SetupRoutes(router *gin.Engine) {
 		evidence := api.Group("/evidence")
 		{
 			evidence.POST("/upload", middleware.AuthMiddleware(), handlers.UploadEvidence)
-			evidence.GET("/:id", handlers.GetEvidenceByCase)
+			evidence.GET("/case/:caseId", middleware.AuthMiddleware(), handlers.GetEvidenceByCase)
 			evidence.DELETE("/:id", middleware.AuthMiddleware(), handlers.DeleteEvidence)
 			evidence.PATCH("/:id/verify", middleware.AuthMiddleware(), handlers.VerifyEvidence)
 		}
