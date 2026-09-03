@@ -11,6 +11,64 @@ import (
 	"security-solution/models"
 )
 
+func getAuthenticatedUserID(c *gin.Context) (uuid.UUID, bool) {
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "authenticated user not found",
+		})
+		return uuid.Nil, false
+	}
+
+	userID, ok := userIDValue.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid authenticated user",
+		})
+		return uuid.Nil, false
+	}
+
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid authenticated user",
+		})
+		return uuid.Nil, false
+	}
+
+	return id, true
+}
+
+func userCanAccessCase(userID uuid.UUID, caseRecord *models.Case) bool {
+	if caseRecord.ReportedBy == userID {
+		return true
+	}
+
+	if caseRecord.AssignedTo != nil && *caseRecord.AssignedTo == userID {
+		return true
+	}
+
+	var officer models.Officer
+	if err := config.DB.First(&officer, "id = ?", userID).Error; err == nil {
+		return officer.UnitID == caseRecord.UnitID
+	}
+
+	return false
+}
+
+func officerCanManageCaseEvidence(userID uuid.UUID, caseRecord *models.Case) bool {
+	if caseRecord.AssignedTo != nil && *caseRecord.AssignedTo == userID {
+		return true
+	}
+
+	var officer models.Officer
+	if err := config.DB.First(&officer, "id = ?", userID).Error; err != nil {
+		return false
+	}
+
+	return officer.UnitID == caseRecord.UnitID
+}
+
 // UploadEvidence uploads evidence for a case.
 func UploadEvidence(c *gin.Context) {
 	var input struct {
@@ -32,38 +90,41 @@ func UploadEvidence(c *gin.Context) {
 	caseID, err := uuid.Parse(input.CaseID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid case ID",
+			"error": "invalid case id",
 		})
 		return
 	}
 
-	userValue, exists := c.Get("user")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "user not authenticated",
-		})
+	userID, ok := getAuthenticatedUserID(c)
+	if !ok {
 		return
 	}
 
-	user, ok := userValue.(*models.User)
-	if !ok || user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid authenticated user",
-		})
-		return
-	}
-
-	var caseObj models.Case
-	if err := config.DB.First(&caseObj, "id = ?", caseID).Error; err != nil {
+	var caseRecord models.Case
+	if err := config.DB.First(&caseRecord, "id = ?", caseID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "case not found",
 		})
 		return
 	}
 
+	if !userCanAccessCase(userID, &caseRecord) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "you are not authorized to add evidence to this case",
+		})
+		return
+	}
+
+	if caseRecord.Status == "closed" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "evidence cannot be uploaded to a closed case",
+		})
+		return
+	}
+
 	evidence := models.Evidence{
 		CaseID:      caseID,
-		UploadedBy:  user.ID,
+		UploadedBy:  userID,
 		Type:        input.Type,
 		FileURL:     input.FileURL,
 		Description: input.Description,
@@ -86,29 +147,40 @@ func UploadEvidence(c *gin.Context) {
 	})
 }
 
-// GetEvidenceByCase returns all evidence belonging to a case.
+// GetEvidenceByCase returns evidence for a case.
 func GetEvidenceByCase(c *gin.Context) {
 	caseID, err := uuid.Parse(c.Param("caseId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid case ID",
+			"error": "invalid case id",
 		})
 		return
 	}
 
-	var caseObj models.Case
-	if err := config.DB.First(&caseObj, "id = ?", caseID).Error; err != nil {
+	userID, ok := getAuthenticatedUserID(c)
+	if !ok {
+		return
+	}
+
+	var caseRecord models.Case
+	if err := config.DB.First(&caseRecord, "id = ?", caseID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "case not found",
 		})
 		return
 	}
 
-	var evidence []models.Evidence
+	if !userCanAccessCase(userID, &caseRecord) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "you are not authorized to view evidence for this case",
+		})
+		return
+	}
 
+	var evidence []models.Evidence
 	if err := config.DB.
 		Where("case_id = ?", caseID).
-		Order("created_at DESC").
+		Order("created_at ASC").
 		Find(&evidence).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to fetch evidence",
@@ -117,27 +189,51 @@ func GetEvidenceByCase(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"caseId":   caseID,
 		"evidence": evidence,
-		"count":    len(evidence),
 	})
 }
 
-// VerifyEvidence marks evidence as verified.
+// VerifyEvidence verifies evidence belonging to an authorized case.
 func VerifyEvidence(c *gin.Context) {
 	evidenceID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid evidence ID",
+			"error": "invalid evidence id",
 		})
 		return
 	}
 
-	var evidence models.Evidence
+	userID, ok := getAuthenticatedUserID(c)
+	if !ok {
+		return
+	}
 
+	var evidence models.Evidence
 	if err := config.DB.First(&evidence, "id = ?", evidenceID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "evidence not found",
+		})
+		return
+	}
+
+	var caseRecord models.Case
+	if err := config.DB.First(&caseRecord, "id = ?", evidence.CaseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "case not found",
+		})
+		return
+	}
+
+	if !officerCanManageCaseEvidence(userID, &caseRecord) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "you are not authorized to verify evidence for this case",
+		})
+		return
+	}
+
+	if evidence.IsVerified {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "evidence is already verified",
 		})
 		return
 	}
@@ -157,21 +253,49 @@ func VerifyEvidence(c *gin.Context) {
 	})
 }
 
-// DeleteEvidence soft-deletes evidence.
+// DeleteEvidence deletes evidence belonging to an authorized case.
 func DeleteEvidence(c *gin.Context) {
 	evidenceID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid evidence ID",
+			"error": "invalid evidence id",
 		})
 		return
 	}
 
-	var evidence models.Evidence
+	userID, ok := getAuthenticatedUserID(c)
+	if !ok {
+		return
+	}
 
+	var evidence models.Evidence
 	if err := config.DB.First(&evidence, "id = ?", evidenceID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "evidence not found",
+		})
+		return
+	}
+
+	var caseRecord models.Case
+	if err := config.DB.First(&caseRecord, "id = ?", evidence.CaseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "case not found",
+		})
+		return
+	}
+
+	if !officerCanManageCaseEvidence(userID, &caseRecord) {
+		if evidence.UploadedBy != userID {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "you are not authorized to delete this evidence",
+			})
+			return
+		}
+	}
+
+	if caseRecord.Status == "closed" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "evidence cannot be deleted from a closed case",
 		})
 		return
 	}
