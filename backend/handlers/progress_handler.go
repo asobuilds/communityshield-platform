@@ -15,6 +15,7 @@ type CaseProgressRequest struct {
 	Description string `json:"description"`
 }
 
+// AddCaseProgress records progress for the officer assigned to the case.
 func AddCaseProgress(c *gin.Context) {
 	caseID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -27,7 +28,7 @@ func AddCaseProgress(c *gin.Context) {
 	var req CaseProgressRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid request body",
+			"error": "action is required",
 		})
 		return
 	}
@@ -65,9 +66,7 @@ func AddCaseProgress(c *gin.Context) {
 	}
 
 	var officer models.Officer
-	if err := config.DB.
-		Where("id = ?", officerID).
-		First(&officer).Error; err != nil {
+	if err := config.DB.First(&officer, "id = ?", officerID).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": "authenticated user is not an officer",
 		})
@@ -81,6 +80,28 @@ func AddCaseProgress(c *gin.Context) {
 		return
 	}
 
+	if caseRecord.AssignedTo == nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "case has not been assigned to an officer",
+		})
+		return
+	}
+
+	if *caseRecord.AssignedTo != officerID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "officer is not assigned to this case",
+		})
+		return
+	}
+
+	if caseRecord.Status != "dispatched" && caseRecord.Status != "on_scene" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":  "progress cannot be added from the current case status",
+			"status": caseRecord.Status,
+		})
+		return
+	}
+
 	progress := models.Progress{
 		CaseID:      caseID,
 		OfficerID:   officerID,
@@ -90,17 +111,18 @@ func AddCaseProgress(c *gin.Context) {
 
 	if err := config.DB.Create(&progress).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to record case progress",
+			"error": "failed to add case progress",
 		})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":  "case progress recorded successfully",
+		"message":  "case progress added successfully",
 		"progress": progress,
 	})
 }
 
+// GetCaseProgress returns the progress timeline for a case.
 func GetCaseProgress(c *gin.Context) {
 	caseID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -119,20 +141,18 @@ func GetCaseProgress(c *gin.Context) {
 	}
 
 	var progress []models.Progress
-
 	if err := config.DB.
 		Where("case_id = ?", caseID).
 		Order("created_at ASC").
 		Find(&progress).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to retrieve case progress",
+			"error": "failed to fetch case progress",
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"caseId":   caseID,
+		"caseId":   caseRecord.ID,
 		"progress": progress,
-		"count":    len(progress),
 	})
 }
