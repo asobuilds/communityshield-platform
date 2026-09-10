@@ -1,10 +1,108 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'leaflet/dist/leaflet.css';
 
-body {
-  background-color: #0A0E17;
-  color: #F8FAFC;
-  font-family: system-ui, -apple-system, sans-serif;
-  margin: 0;
+/*
+  CommunityShield — "Quiet Command" design tokens (Tailwind v4 CSS-first).
+  Deep operational surfaces, one authoritative signal accent, red reserved
+  strictly for emergency. See frontend/frontagent.md for the rationale.
+*/
+@theme {
+  /* Surfaces */
+  --color-void: #070a10;
+  --color-base: #0b0f17;
+  --color-surface: #111725;
+  --color-surface-hi: #18202f;
+  --color-border: #1e293b;
+  --color-border-hi: #2c3a52;
+
+  /* Text */
+  --color-ink: #e8edf6;
+  --color-ink-muted: #97a5bc;
+  --color-ink-faint: #5f6e88;
+
+  /* Signal + semantics */
+  --color-signal: #38bdf8;
+  --color-signal-ink: #04121c;
+  --color-emergency: #ef4444;
+  --color-warn: #f59e0b;
+  --color-ok: #22c55e;
+
+  /* Case lifecycle — colour-blind-safe, one hue per state */
+  --color-status-pending: #94a3b8;
+  --color-status-assigned: #38bdf8;
+  --color-status-dispatched: #f59e0b;
+  --color-status-onscene: #a78bfa;
+  --color-status-closed: #22c55e;
+
+  /* Type */
+  --font-sans:
+    'Inter var', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
+
+  /* Radii + elevation */
+  --radius-panel: 0.875rem;
+  --shadow-panel: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -18px rgb(0 0 0 / 0.9);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-base);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Keep Leaflet beneath app chrome (modals, toasts, nav). */
+  .leaflet-container {
+    z-index: 0;
+    background: var(--color-void);
+    font-family: var(--font-sans);
+  }
+
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .leaflet-bar a,
+  .leaflet-bar a:hover {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border-bottom-color: var(--color-border);
+  }
+
+  /* Monospace treatment for IDs, coordinates and timestamps. */
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
 }
