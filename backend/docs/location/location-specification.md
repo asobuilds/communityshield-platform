@@ -155,3 +155,105 @@ such as PostgreSQL with PostGIS.
 
 The API should expose latitude and longitude explicitly for
 clients such as the Community Shield frontend.
+
+## 9. Incident Location Relationship
+
+An incident has one primary geographic location.
+
+The incident should reference a Location record rather than
+duplicating geographic fields such as latitude, longitude,
+city, and state.
+
+### Relationship
+
+Multiple incidents may reference the same Location when they
+occur at the same known geographic place.
+
+However, incident-specific reported positions should normally
+use their own Location record when the position represents the
+specific reported coordinates of that incident.
+
+### Example
+
+Incident:
+
+- incident_id: INC-001
+- location_id: LOC-001
+
+Location:
+
+- location_id: LOC-001
+- latitude: 6.6018
+- longitude: 3.3515
+- accuracy_meters: 250
+
+### Initial Geographic Scope
+
+Version 1 of Community Shield will represent an incident's
+location as a geographic point.
+
+Future versions may support geographic lines or polygons for
+incidents that affect roads, neighborhoods, flood zones,
+or other geographic areas.
+
+## 10. Location and Domain Model Separation
+
+Location is a geographic foundation and should not contain
+business-specific information about hospitals, police stations,
+fire stations, shelters, or other services.
+
+Emergency and public-service entities should be represented as
+separate domain models that reference a Location.
+
+### Examples
+
+Hospital
+- hospital_id
+- name
+- emergency_services
+- phone
+- operating_status
+- location_id
+
+PoliceStation
+- police_station_id
+- name
+- phone
+- jurisdiction
+- operating_status
+- location_id
+
+FireStation
+- fire_station_id
+- name
+- phone
+- operating_status
+- location_id
+
+### Architectural Principle
+
+Location answers:
+
+"Where is it?"
+
+The domain model answers:
+
+"What is it?"
+
+This separation allows multiple types of entities to share
+the same geographic infrastructure without mixing geographic
+data with business-specific data.
+
+### Location Type
+
+Location type should describe the geographic representation
+rather than the business entity.
+
+Examples:
+
+- point
+- address
+- landmark
+- road
+- area
+- other
