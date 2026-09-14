@@ -176,16 +176,15 @@ export interface CaseWeeklyUpdate {
   outstandingActions?: string
   nextSteps?: string
   /**
-   * Whether this update is exposed to the case reporter. The backend writes `true`
-   * today and filters a reporter's read by it — so the *same* case returns fewer
-   * updates to a citizen than to an officer.
+   * Whether this update is exposed to the case reporter. Backed by
+   * `CitizenVisible bool ... json:"citizenVisible"` in `models.CaseWeeklyUpdate.go`
+   * — verified 2026-09-14, and without `omitempty`, so it is always present.
    *
-   * Optional because the underlying JSON tag is not yet contract-verified
-   * (frontReadme.md §0.4). Read it as a label only, and only when it is `true`:
-   * the server does the filtering, so a missing value must never be treated as
-   * "visible" and rendered as a privacy claim.
+   * The server does the filtering, so this is a **label, not a permission check**:
+   * if it is `false`, say nothing about visibility rather than announcing a privacy
+   * guarantee the client cannot enforce.
    */
-  citizenVisible?: boolean
+  citizenVisible: boolean
   submittedAt?: string | null
   createdAt: string
 }

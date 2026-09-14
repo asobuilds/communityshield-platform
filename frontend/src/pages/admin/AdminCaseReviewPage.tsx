@@ -371,9 +371,16 @@ export function AdminCaseReviewPage() {
 
           {tab === 'weekly' ? (
             <TabPanel id="weekly">
-              {/* Read-only for administrators: filing the weekly narrative is the
-                  responding officer's job, and the endpoint is gated to it. */}
-              <WeeklyUpdates progress={progress} timeline={detail.data?.timeline ?? []} />
+              {/* `canFile` is false: filing the weekly narrative is the responding
+                  officer's job and the endpoint is gated to it. An administrator
+                  reads these to judge a closure, and edits none of them. */}
+              <WeeklyUpdates
+                caseId={id}
+                currentUserId={user?.id}
+                progress={progress}
+                timeline={detail.data?.timeline ?? []}
+                showCitizenVisibility
+              />
             </TabPanel>
           ) : null}
 

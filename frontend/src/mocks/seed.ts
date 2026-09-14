@@ -548,15 +548,6 @@ export const PROGRESS_LIST: Progress[] = [
     createdAt: hoursAgo(2),
   },
   {
-    id: uid('dddd4444', 4),
-    caseId: CASE_IDS.robbery,
-    officerId: OFFICER.userId,
-    action: 'weekly_summary',
-    description:
-      'Week one: scene secured and cordoned, six statements taken, CCTV recovered. Outstanding: identify the two motorcycles and confirm whether the same group is behind the Oshodi shots.',
-    createdAt: daysAgo(4),
-  },
-  {
     id: uid('dddd4444', 5),
     caseId: CASE_IDS.robbery,
     officerId: OFFICER.userId,
@@ -938,6 +929,25 @@ export const WEEKLY_UPDATE_LIST: CaseWeeklyUpdate[] = [
     findings: 'Estate management say the person is not a member of their staff.',
     submittedAt: daysAgo(9),
     createdAt: daysAgo(9),
+    citizenVisible: true,
+  },
+  {
+    /* The P1 case the officer walk opens first, so the Weekly tab has a real filed
+     * narrative rather than only the derived activity grouping. Replaces the old
+     * seed entry that stored this text as a `weekly_summary` *progress* record. */
+    id: uid('3c3c3c3c', 5),
+    caseId: CASE_IDS.robbery,
+    officerId: OFFICER.userId,
+    ...week(now - 7 * DAY),
+    summary: 'Week one: scene secured, statements taken, CCTV recovered.',
+    investigation:
+      'Two patrol vehicles deployed to the plaza and the crowd moved back from the entrance. Cordon set at the Bode Thomas junction; statements taken from three traders. Plaza CCTV was pulled and passed to the analyst — the footage shows the two motorcycles heading toward Mushin.',
+    actionsTaken: 'Cordon held through the afternoon. CCTV copy handed to the analyst.',
+    findings: 'Both motorcycles left toward Mushin. Not yet linked to the Oshodi shots.',
+    outstandingActions: 'Identify both motorcycles.',
+    nextSteps: 'Follow the Mushin lead and compare it against the Oshodi incident.',
+    submittedAt: daysAgo(7),
+    createdAt: daysAgo(7),
     citizenVisible: true,
   },
 ]
