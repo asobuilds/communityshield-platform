@@ -27,11 +27,11 @@ import { WeeklyUpdates } from '@/components/case/WeeklyUpdates'
 import { EvidenceGallery } from '@/components/case/EvidenceGallery'
 import { EvidenceUpload } from '@/components/case/EvidenceUpload'
 import { ReviewHistory, ReviewNextStep, ReviewNotice } from '@/components/case/CaseReviewTrail'
-import { WEEKLY_SUMMARY_ACTION } from '@/components/case/activity'
 import { useCaseActions, useCaseDetail } from '@/hooks/useCases'
 import { useCaseReview } from '@/hooks/useCaseReview'
 import { useAddProgress, useCaseProgress } from '@/hooks/useProgress'
 import { useCaseEvidence, useUploadEvidence, useVerifyEvidence } from '@/hooks/useEvidence'
+import { useAuth } from '@/auth/AuthContext'
 import { ApiError } from '@/lib/apiClient'
 import { canAddProgress, canSubmitForReview, isAwaitingDispatch, isInReviewPhase, statusMeta } from '@/lib/status'
 
@@ -56,6 +56,7 @@ type TabId = 'details' | 'progress' | 'weekly' | 'evidence'
 export function OfficerCasePage() {
   const { id } = useParams<{ id: string }>()
   const { notify } = useToast()
+  const { user } = useAuth()
 
   const detail = useCaseDetail(id)
   const progressQuery = useCaseProgress(id)
@@ -77,6 +78,11 @@ export function OfficerCasePage() {
   const caseItem = detail.data?.case
   const progress = progressQuery.data ?? []
   const evidence = evidenceQuery.data ?? []
+
+  /* Filing a weekly narrative is the *assigned officer's* action — the endpoint is
+   * gated to it — so the composer is offered only to them. `closed` is declared
+   * below, alongside the other status gates and after the early returns. */
+  const ownsCase = Boolean(caseItem?.assignedTo && user?.id && caseItem.assignedTo === user.id)
 
   const networkIssue =
     ApiError.isNetwork(detail.error) ||
@@ -360,19 +366,15 @@ export function OfficerCasePage() {
 
           {tab === 'weekly' ? (
             <TabPanel id="weekly">
+              {/* Filing is the assigned officer's job and the endpoint is gated to it: a
+                  closed case, or one the viewer does not own, gets the read-only view. */}
               <WeeklyUpdates
+                caseId={id}
+                canFile={ownsCase && !closed}
+                currentUserId={user?.id}
                 progress={progress}
                 timeline={detail.data?.timeline ?? []}
-                submitting={addProgress.isPending}
-                onSubmitSummary={(text) =>
-                  addProgress.mutate(
-                    { action: WEEKLY_SUMMARY_ACTION, description: text },
-                    {
-                      onSuccess: () => notify('Weekly summary filed.', 'success'),
-                      onError: (cause) => reportError(cause, 'Could not file the summary.'),
-                    },
-                  )
-                }
+                showCitizenVisibility
               />
             </TabPanel>
           ) : null}
