@@ -64,11 +64,17 @@ const ACTION_LABELS: Record<string, string> = {
   note: 'Note',
   update: 'Update',
   progress: 'Progress update',
-  weekly_summary: 'Weekly summary',
 }
 
-/** Action code used when an officer files the week's narrative summary. */
-export const WEEKLY_SUMMARY_ACTION = 'weekly_summary'
+/*
+ * There is deliberately no `weekly_summary` action here any more.
+ *
+ * A filed weekly narrative is `models.CaseWeeklyUpdate` and is read through
+ * `GET /cases/:id/weekly-updates` — not a progress entry with an invented action.
+ * The old code wrote one and then rendered it twice on the same screen. Any legacy
+ * rows still carrying that action fall through to the Title Case fallback in
+ * `humanizeAction` and read as "Weekly summary", which is the right answer anyway.
+ */
 
 const DECISION_LABELS: Record<string, string> = {
   approve: 'Closure approved',

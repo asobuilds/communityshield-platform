@@ -15,26 +15,27 @@ frontend is now a typed React 19 + Vite + Tailwind v4 application with routing, 
 layer, a server-state cache, a design system, a reusable map, and the first real workflows — citizen
 case tracking, officer operations, and unit-admin triage and assignment.
 
-> ### Frontend stage — late M4.5
+> ### Frontend stage — M4.5 complete
 >
 > M0 is **complete**. M1–M5 are **part-built** (§6): nine routes render working screens against the
 > mock API. Nothing in M6–M8 has started.
 >
-> **M4.5 (lifecycle re-alignment) is nearly done — one item left.** The backend moved the case
-> lifecycle underneath this frontend: a post-frontend commit
-> (`36a94ec feat: add accountable case review workflow`) added three case states, a
-> submit-for-review / approve-or-request-changes loop, and real weekly-update endpoints — and removed
-> the `POST /cases/:id/close` route the shipped **Close case** button called.
+> **M4.5 (lifecycle re-alignment) is done.** The backend moved the case lifecycle underneath this
+> frontend — a post-frontend commit (`36a94ec feat: add accountable case review workflow`) added three
+> case states, a submit-for-review / approve-or-request-changes loop, and real weekly-update
+> endpoints, and removed the `POST /cases/:id/close` route the shipped **Close case** button called.
+> The frontend now matches it: the eight-state vocabulary with unknown states made visible, the
+> officer's submit and resubmit path, the administrator's decision surface with required comments and
+> the explained self-approval guard, and the weekly narrative read from the real entity. The
+> fabricated routes and record types that stood in for those are deleted, not deprecated.
 >
-> **Done:** the eight-state vocabulary and the visible-unknown rule; the officer's **Submit for
-> review** flow, with the 404ing Close button deleted; the officer's read of a changes-requested
-> decision; **the administrator's decision surface** (§0.4 item 3) — approve / request changes with
-> their required comments, the explained self-approval guard, and the decision history; and the mock
-> routes for the whole loop.
+> **The one piece left is not a frontend task:** `on_scene → investigating` has no registered route,
+> so nothing in the UI performs it — reachable in the demo via the seed only.
 >
-> **Not done:** the **weekly-update rewiring** (item 4). The review loop is therefore walkable
-> end-to-end in the demo — officer submits, admin decides, officer resubmits, admin approves, case
-> closes — while the weekly narrative is still derived client-side from progress timestamps.
+> **The biggest gap now is the citizen.** Reporters can see their case *state* and nothing else:
+> there is no citizen case-detail page, so the timeline, final report, review history and weekly
+> narratives this frontend already renders for officers and admins — plus the `citizenVisible`
+> privacy boundary those endpoints enforce — are unreachable to the person who filed the report.
 > Everything else below is either shipped or is net-new feature work that nothing has invalidated.
 
 | Item | Today | Target |
@@ -46,7 +47,7 @@ case tracking, officer operations, and unit-admin triage and assignment.
 | Design system | ✅ primitives + tokens + 4 states | Grow with features |
 | Tests | ✅ 4 unit modules (ISO weeks, API client, assignment rules, status vocabulary) — 58 tests | Component + E2E |
 | Mocks | ✅ in-browser mock API (`VITE_USE_MOCKS`), now covering the full review loop | Contract tests |
-| Case lifecycle | ⚠️ **all 8 states rendered**; the admin decision surface is still missing | Full lifecycle (§0.4) |
+| Case lifecycle | ✅ **all 8 states rendered; the review loop walks end-to-end** (officer submits → admin decides → resubmit → approve → closed). Weekly narratives are read from the real entity | Full lifecycle (§0.4) |
 
 ### 0.1 What exists right now
 
@@ -60,17 +61,24 @@ account: `officer@shield.ng`, `admin@shield.ng`, `citizen@shield.ng`, `super@shi
 | `/auth/login` | Sign-in (role quick-fill under mocks) | ✅ |
 | `/` | Citizen: your reports + lifecycle stepper | ✅ (detail view next) |
 | `/officer/queue` | Case queue — priority sort, filters, search, SLA badge | ✅ |
-| `/officer/cases/:id` | Case workspace — Details · Progress · Weekly · Evidence | ✅ |
+| `/officer/cases/:id` | Case workspace — Details (incl. closure review) · Progress · Weekly · Evidence | ✅ |
 | `/admin/cases` | Admin triage board — attention counters, search, assign/reassign | ✅ |
-| `/admin/cases/:id` | Admin case review — facts · progress · weekly · evidence · assignment | ✅ |
+| `/admin/cases/:id` | Admin case review — **closure decision** · Review history · facts · progress · weekly · evidence · assignment | ✅ |
 | `/map` | Operations map — cases + unit coverage + filters | ✅ |
 | `/admin/*`, `/super/*` | Remaining admin surfaces — named placeholders | ⏳ M5 / M7 |
 | `*` | 404 | ✅ |
 
-The admin console stops at case review on purpose: **assignment is the one lifecycle transition an
-officer cannot perform for themselves.** `pending → assigned` is an administrator's decision, and
-without it the officer workspace can only exercise the second half of the case lifecycle. That is
-why `/admin/cases` leads the unit-admin nav and is where `homePathForRole('unit_admin')` lands.
+The admin console stops at case review on purpose: **the two lifecycle transitions an officer cannot
+perform for themselves both live there.** Assignment (`pending → assigned`) is one, and it is what
+makes the officer workspace reachable at all — without it no case can be dispatched. The closure
+decision (`pending_admin_review → closed`, or back to `admin_changes_requested`) is the other, and it
+is the one the accountability workflow exists for. That is why `/admin/cases` leads the unit-admin nav
+and is where `homePathForRole('unit_admin')` lands.
+
+> **Note the asymmetry in that pair.** Assignment is a *routing* decision — someone has to do the
+> work. Closure approval is a *judgement* about work already done, which is why it carries a required
+> comment and a self-approval refusal and assignment carries neither. If a future change makes those
+> two feel symmetrical, the accountability has probably leaked out of the closure path.
 
 **Key source files**
 
@@ -81,20 +89,25 @@ src/
   types/api.ts             hand-written contract from the Go handlers/models
   lib/apiClient.ts         typed fetch: bearer token, ApiError, 401 → logout
   lib/queryClient.ts       React Query defaults (no retry on 4xx)
-  lib/status.ts            case-status + priority metadata (single source of truth)
-  lib/week.ts              ISO-week grouping — the stopgap for the Weekly interface (§0.4)
+  lib/status.ts            case-status + priority metadata, field rail vs review phase (single source)
+  lib/week.ts              ISO-week display helpers: labelling a supplied weekStart, grouping
+                           activity into weeks (the server owns the reporting week)
   lib/assignment.ts        assignment rules mirroring the backend guard (pure, tested)
   auth/                    AuthContext (session restore) + RequireRole guard
   components/ui/           Button, Card, Chips, Field, Tabs, Modal, Toast, States
   components/layout/       AppShell (sidebar ⇄ bottom nav) + NotificationBell
   components/map/MapView   the one map: view mode + location-pick mode
-  components/case/         CaseHeader, CaseFacts, CaseStatusStepper, ProgressTimeline,
-                           WeeklyUpdates, EvidenceGallery, EvidenceUpload
+  components/case/         CaseHeader, CaseFacts, CaseStatusStepper, CaseReviewTrail,
+                           WeeklyUpdates, ProgressTimeline, EvidenceGallery, EvidenceUpload
   components/admin/        AssignOfficerDialog
-  hooks/                   useCases, useProgress, useEvidence, useUnits,
-                           useOfficers, useNotifications
+  hooks/                   useCases, useCaseReview, useWeeklyUpdates, useProgress, useEvidence,
+                           useUnits, useOfficers, useNotifications
   mocks/                   fetch-level mock API + Lagos seed data
 ```
+
+`CaseReviewTrail` is shared the same way `CaseFacts` is: the officer's "what were you asked to
+change?" notice and the administrator's decision history are two renderings of one record, and
+splitting them would let the two roles disagree about what was decided.
 
 `CaseFacts` is shared by the officer workspace and the admin review on purpose: **an administrator
 reviewing a decision must not be looking at a different rendering of it.** Both consoles read the
@@ -240,11 +253,25 @@ cached officer view into a citizen view.
    they cannot move at all. `selfAssigned` is derived from `case.assignedTo` rather than the
    assignment list, because that list is a separate endpoint allowed to 404 — the guard must not
    vanish when it does.
-4. **Rewire `WeeklyUpdates`** to `GET|POST /cases/:id/weekly-update(s)` behind the `CaseWeeklyUpdate`
-   type (already added) — ⬜ **not started**. Keep `lib/week.ts` for *display* (grouping and labels);
-   stop using it as the source of truth, and stop filing summaries as a `weekly_summary` progress
-   entry. Model the 409-duplicate-week response as a designed state ("you have already filed this
-   week") — it is a normal outcome, not a failure.
+4. ~~**Rewire `WeeklyUpdates`**~~ ✅ **Done.** The tab now reads the real entity through
+   `useWeeklyUpdates` / `useFileWeeklyUpdate` (`GET|POST /cases/:id/weekly-update(s)`) and the
+   fabricated write is gone: no more summaries filed as a `weekly_summary` *progress* entry, and
+   `WEEKLY_SUMMARY_ACTION` is deleted from `activity.ts` (legacy rows would still render as "Weekly
+   summary" via the Title Case fallback).
+   **The old design's actual bug:** a filed narrative was stored as a progress record, so the week's
+   summary panel and the week's timeline listing rendered *the same text twice*, while
+   `models.CaseWeeklyUpdate` — seven fields, a server-computed week, a privacy flag — went unread.
+   The tab is now two clearly separated sections: **Officer narratives** (filed records) and
+   **Activity by week** (assembled from progress + status events, labelled as a reading aid so nobody
+   mistakes it for something a person filed).
+   The duplicate-week **409 is a designed state**, not an error: `conflictingWeeklyUpdate()` extracts
+   the existing update from `{ error, update }` and the screen shows what is on file. The ordinary
+   case is caught *before* the click — the composer is replaced by "This week's update is already
+   filed" as soon as the officer has one for the current UTC week — and the 409 handler covers the
+   race where the week rolls over with the form open. A **closed** case answers 409 too, so
+   `isClosedCaseRefusal()` distinguishes it; conflating the two would tell an officer they had filed
+   a narrative they never wrote.
+   `lib/week.ts` stays display-only, exactly as this item required.
 5. ~~**Extend the mocks**~~ ✅ **Done.** `src/mocks/handlers.ts` now serves the full review loop
    (submit-review, review, request-changes, approve, weekly-update, weekly-updates) with real
    authorization checks, and `seed.ts` seeds a case in each new state — including one in
@@ -392,6 +419,7 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 ### F4 — Case tracking & feedback
 
 **Screens:** my cases list, case detail, timeline, evidence viewer, feedback form.
+*(Only the list exists — see the citizen case-detail gap below.)*
 
 - [x] Case list with status chips, priority, last-updated
 - [x] **Lifecycle stepper** — rebuilt as two instruments: a one-way *field rail* over
@@ -403,13 +431,21 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 - [x] Evidence gallery (thumbnails, type, verification badge)
 - [x] Resolution summary (final report) — rendered whenever present, headed by the case's actual
       review position (draft / submitted for review / changes requested), not only when closed
-- [~] Weekly updates — currently *derived* client-side from progress/timeline timestamps; the real
-      per-week officer narrative endpoints now exist and must be adopted (§0.4 item 4). When adopted,
-      honour the `citizenVisible` filter exactly as returned: a reporter may legitimately see fewer
-      updates than the officer who filed them
-- [x] Review history — the shared `<ReviewHistory>` renders every decision with comment, actor and
-      timestamp: on the **officer** page (where "what were you asked to change?" matters most), in the
-      admin's **Review** tab, and to the citizen, who can read why their case is still open
+- [x] Weekly updates — the real entity: `GET|POST /cases/:id/weekly-update(s)` over
+      `models.CaseWeeklyUpdate`, with all seven fields, the server-computed week, and the
+      duplicate-week 409 as a designed "already filed" state. Display-only helpers
+      (`lib/week.ts`) remain for grouping activity into weeks and labelling a supplied `weekStart`.
+      A reporter would see the `citizenVisible` filter applied exactly as returned — but see the
+      citizen gap below: nothing citizen-facing calls this endpoint yet, so that boundary is
+      enforced in the data layer and exercised by nobody
+- [~] Review history — the shared `<ReviewHistory>` renders every decision with comment, actor and
+      timestamp, and is wired into the **officer** page (where "what were you asked to change?"
+      matters most) and the **admin** Review tab. **Not wired for citizens**, because there is no
+      citizen case-detail page to wire it into: `CitizenHomePage` is a list. A citizen therefore
+      sees the case *state* (the list renders `CaseStatusStepper`, which after the M4.5 rewrite shows
+      "Awaiting review" / "Changes requested" correctly) but not the *reason*. "Why is my case still
+      open" is a question this product currently cannot answer to the person who asked it, and that
+      is the single best argument for building citizen case detail next
 - [~] Feedback: rating + comment rendered; **submission form not built**
 - [ ] Push/in-app updates on every status change
 
@@ -473,9 +509,10 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 - [x] **Read the admin's decision** — a case returning as `admin_changes_requested` shows the
       reviewer's instruction as a notice above the case, not as a log line. `<ReviewNotice>` names the
       admin, the time, and the full comment; the closure-review section repeats it in history
-- [~] Weekly officer narrative — the tab exists and the form works, but it files the summary as a
-      `weekly_summary` progress entry instead of `POST /cases/:id/weekly-update`. Rewire it; the
-      duplicate-week 409 becomes a normal "already filed" state
+- [x] Weekly officer narrative — filed through `POST /cases/:id/weekly-update` by the **assigned
+      officer only** (the endpoint is gated to it, so `canFile` is false for an administrator and the
+      composer is absent rather than refused). Required `summary` + `investigation`; the other five
+      fields sit behind an "Add detail" disclosure
 - [x] ~~Close case with final report~~ — **removed.** `POST /cases/:id/close` is no longer routed, so
       the button could only ever 404. Deleted from `useCaseActions`, `OfficerCasePage` and the mock;
       superseded by *submit for review* (§0.4 item 2). Do not re-add it
@@ -675,21 +712,25 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
 - [x] **M0 — Foundations:** scaffold, router, API client, auth/session, design tokens, component
       primitives *(lint/build/CI wiring still to run — see §9)*
 - [~] **M1 — Auth & onboarding:** login + role routing + guards done; register/OTP/onboarding open
-- [~] **M2 — Citizen core:** F4 case tracking shipped; SOS and reporting wizards open
+- [~] **M2 — Citizen core:** citizen case *tracking* is list-only (`/`), showing status via the shared
+      stepper. **There is no citizen case-detail page**, so the timeline, final report, review history
+      and feedback that the officer and admin surfaces already render are unreachable to the person
+      who filed the report — even though the components are all built and role-agnostic. SOS and
+      reporting wizards open
 - [~] **M3 — Awareness:** F10 case/unit map shipped; alerts, news, notifications centre open
-- [~] **M4 — Officer console:** queue and case workspace (details/progress/weekly/evidence) shipped;
-      dispatch → arrive shipped; **closure handed to the review workflow in M4.5**; team view and
-      comms open
-- [~] **M4.5 — Lifecycle & accountability re-alignment ← CURRENT, nearly done.** Adopt the
-      backend's review workflow: the three new states and their tokens ✅, submit-for-review ✅, the
-      officer's read of a changes-requested decision ✅, the admin's approve/request-changes surface
-      with its required comment and self-approval guard ✅, the mocks for every new state ✅ — **only
-      the real weekly-update endpoints (item 4) remain ⬜.** `on_scene → investigating` stays unbuilt
-      because no route performs it. **This comes before any new feature work** — it is the difference
-      between a demo that walks and a client that lies about case state (§0.2 decision 3)
+- [~] **M4 — Officer console:** queue and case workspace (details/progress/weekly/evidence) shipped,
+      with weekly narratives served by the real endpoints (M4.5); dispatch → arrive shipped;
+      **closure moved to the review workflow**; team view and comms open
+- [x] **M4.5 — Lifecycle & accountability re-alignment — COMPLETE.** The backend's review workflow is
+      fully adopted: the eight states and their tokens, submit-for-review, the officer's read of a
+      changes-requested decision, the admin's approve/request-changes surface with its required
+      comment and explained self-approval guard, the real weekly-update endpoints, and mocks covering
+      every new state. **The only piece left is `on_scene → investigating`, which is not a frontend
+      task** — no registered route performs it, so any button would be inventing a transition. It is
+      reachable in the demo via the seed
 - [~] **M5 — Unit admin:** case review + dispatch board shipped (`/admin/cases`,
-      `/admin/cases/:id`) — triage counters, assignment, evidence verification; **review decisions
-      land in M4.5**; overview, roster, analytics, finance and settings open.
+      `/admin/cases/:id`) — triage counters, assignment, evidence verification, **and the closure
+      decision (delivered in M4.5)**; overview, roster, analytics, finance and settings open.
       **Super admin:** F9 not started
 - [ ] **M6 — Depth:** F11 (comms), F12 (AI), F10 hotspot layer
 - [ ] **M7 — Field hardening:** F14 offline/PWA, performance budget, a11y audit, E2E suite
@@ -742,8 +783,13 @@ npm run dev          # mocks on by default
 
 Manual walk — officer (with mocks): sign in as **Officer** → `/officer/queue` → open the P1 robbery
 case → **Details / Progress / Weekly / Evidence** tabs → add a progress update and confirm it lands
-under **This week** → open **Weekly** and file a weekly summary → verify an evidence item →
-**Dispatch** or **Mark on scene** on a case in the right state → `/map`, toggle status filters and
+under **This week** in the *Activity by week* section → open **Weekly** and confirm the filed
+narrative from last week renders with its full field set, and that the two sections are visibly
+different things → on a case you are assigned to that has no narrative this week, **File this week's
+update** → confirm the primary action is disabled until both *Summary* and *Investigation* are
+filled → file it, then reopen the tab and confirm the composer has been **replaced** by "This week's
+update is already filed" quoting what you wrote (one per officer per week) → verify an evidence item
+→ **Dispatch** or **Mark on scene** on a case in the right state → `/map`, toggle status filters and
 unit coverage → resize to phone width and confirm the stepper and tabs stay one-hand usable.
 
 Manual walk — officer closure path (the M4.5 half that is built): open the seeded case in
