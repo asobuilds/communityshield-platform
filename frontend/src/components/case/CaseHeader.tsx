@@ -101,8 +101,11 @@ export function CaseHeader({
  * a reviewing administrator judges, and what an officer who was sent back has to
  * revise. Heading it by state is what stops a submitted report from reading as a
  * finished one.
+ *
+ * Exported because the citizen's view of the case shows the same reports, and a
+ * reporter and the officer must not read different headings for the same state.
  */
-function finalReportHeading(status: CaseStatus): string {
+export function finalReportHeading(status: CaseStatus): string {
   switch (status) {
     case 'pending_admin_review':
       return 'Final report — submitted for review'

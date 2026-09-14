@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
-  ArrowLeft,
   BellRing,
   CalendarRange,
   FileText,
@@ -13,6 +12,7 @@ import {
   Send,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { BackLink } from '@/components/ui/BackLink'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Chips'
 import { Field, Input, Select, Textarea } from '@/components/ui/Field'
@@ -137,7 +137,7 @@ export function OfficerCasePage() {
   if (detail.isError || !caseItem) {
     return (
       <div className="mx-auto w-full max-w-4xl p-4 sm:p-6">
-        <BackLink />
+        <BackLink to="/officer/queue" label="Back to queue" />
         <Card className="mt-4">
           <ErrorState
             title={ApiError.isNetwork(detail.error) ? 'You are offline' : 'Case unavailable'}
@@ -160,7 +160,7 @@ export function OfficerCasePage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl p-4 sm:p-6">
-      <BackLink />
+      <BackLink to="/officer/queue" label="Back to queue" />
 
       {offline ? (
         <div className="mb-3">
@@ -273,6 +273,7 @@ export function OfficerCasePage() {
                 ) : (
                   <ReviewHistory
                     reviews={review.data?.reviews ?? []}
+                    status={status}
                     isLoading={review.isLoading}
                     className="mt-3"
                   />
@@ -522,6 +523,12 @@ function progressGateMessage(status: string): string {
   if (isAwaitingDispatch(status)) {
     return 'Progress updates can be added once the case is dispatched. This case has not been dispatched yet.'
   }
+  if (status === 'admin_changes_requested') {
+    // Checked before the review phase branch: the case is back with *this*
+    // officer, not sitting with an administrator, so the generic "until they
+    // decide" wording would be wrong twice over.
+    return 'An administrator asked for changes to this case, so the progress record is read-only. Revise the final report and submit it for review again.'
+  }
   if (isInReviewPhase(status)) {
     return 'This case is with an administrator for a closure decision, so the progress record is read-only until they decide.'
   }
@@ -551,16 +558,3 @@ function describeMovedStatus(moved: string): string {
     : `in a state this app does not recognise (${moved})`
   return `This case is now ${label}, so it can no longer be submitted for review. This screen has been refreshed.`
 }
-
-function BackLink() {
-  return (
-    <Link
-      to="/officer/queue"
-      className="inline-flex items-center gap-1.5 text-xs text-ink-muted transition-colors hover:text-ink"
-    >
-      <ArrowLeft className="size-3.5" aria-hidden />
-      Back to queue
-    </Link>
-  )
-}
-
