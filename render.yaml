@@ -3,6 +3,7 @@ services:
   - type: web
     name: communityshield-backend
     runtime: go
+    rootDir: backend
     buildCommand: go build -o main .
     startCommand: ./main
     envVars:
@@ -28,13 +29,14 @@ services:
   - type: web
     name: communityshield-frontend
     runtime: static
+    rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
         value: https://communityshield-backend.onrender.com
     headers:
-      - path: /*
+      - path: /assets/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
     routes:

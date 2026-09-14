@@ -775,3 +775,205 @@ COMMUNITY
 - Existing African public-safety technology products and community-reporting systems.
 
 This research supports the problem framing and landscape analysis; it does not prove that CommunityShield itself is novel in every individual feature.
+
+---
+
+# Living Local Intelligence Architecture
+
+CommunityShield is intended to become more knowledgeable about the communities it serves through structured, permission-aware community observations.
+
+## Core principle
+
+**CommunityShield learns facts before it learns models.**
+
+Never treat raw user answers as ground truth and never continuously train an AI model directly from unvalidated answers.
+
+```text
+USER ANSWER
+  ?
+OBSERVATION
+  ?
+VALIDATION / CONSENSUS
+  ?
+KNOWLEDGE FACT
+  ?
+RETRIEVAL
+  ?
+AI REASONING
+Location intelligence
+
+The map is a central architectural layer.
+
+Initial location-learning behavior:
+
+Detect a meaningful new location/area.
+Use approximately 1 km as the initial survey-anchor threshold.
+Check whether useful local knowledge already exists.
+Avoid prompting users who are simply passing through.
+Ask 1–3 short adaptive questions.
+Store answers as observations.
+Validate and aggregate independent observations.
+Promote sufficiently supported observations into knowledge facts.
+
+Question domains include:
+
+community/village/area identity
+roads and local road names
+junctions
+markets
+schools
+hospitals
+police/security facilities
+emergency facilities
+landmarks
+accessibility and road conditions
+alternative routes
+local safety knowledge
+
+Do not use this collection mechanism to solicit personal, sensitive, suspect or investigative information.
+
+Knowledge provenance
+
+The planned local intelligence domain includes concepts corresponding to:
+
+LocalArea
+LocalPlace
+LocalObservation
+LocalQuestion
+LocalKnowledgeFact
+LocalKnowledgeSource
+
+Knowledge facts should retain:
+
+area
+type
+value
+coordinates
+source type
+source count
+independent source count
+confidence
+first observed
+last confirmed
+verification status
+verified by
+timestamps
+
+Source types may include:
+
+official
+osm
+community_observation
+officer_observation
+admin_verified
+external_api
+ai_inferred
+
+AI inference must never be treated as equivalent to verification.
+
+Central map architecture
+
+Use one central map with permission-controlled layers, not separate map implementations per role.
+
+MAP
+ +-- Current location
+ +-- Roads/search/navigation
+ +-- Public local places
+ +-- Community safety information
+ +-- Citizen incident/report layers
+ +-- Officer operational layers
+ +-- Admin analytics
+ +-- Sensitive case layers
+
+Sensitive layers remain case-scoped.
+
+Critical security rule
+
+Unit access != case access.
+
+An officer's membership in a security unit does not automatically authorize access to every case in that unit.
+
+Suspect tracking and sensitive case locations are restricted to assigned/authorized case personnel and authorized administrators.
+
+Every sensitive location access should be auditable by:
+
+actor
+case/suspect
+permission
+purpose/context
+timestamp
+Location-aware AI
+
+The future CommunityShield assistant may combine:
+
+current location
++
+validated local knowledge
++
+platform knowledge
++
+permitted current operational information
+
+It can answer concise location-specific questions while respecting the same authorization boundary as the Go API.
+
+The AI layer must never:
+
+bypass authorization
+expose protected case information
+expose suspect tracking to unauthorized users
+declare guilt
+authorize enforcement
+make irreversible enforcement decisions
+profile individuals or communities as inherently dangerous
+Information boundaries
+PUBLIC LOCAL KNOWLEDGE
+    ? appropriate general users
+
+OPERATIONAL SECURITY INTELLIGENCE
+    ? authorized officers/admins
+
+SENSITIVE CASE INTELLIGENCE
+    ? assigned/authorized case personnel + authorized admins
+Team ownership
+Core backend/security
+
+Owns:
+
+local intelligence domain model
+observation/provenance/confidence
+authorization
+audit
+AI retrieval boundaries
+case integration
+sensitive intelligence controls
+Frontend
+
+Owns:
+
+central CommunityMap
+LocalKnowledgePanel
+LocalQuestionPrompt
+LocalPlaceMarker
+map layers
+location-aware assistant UI
+GIS/map foundation
+
+Owns:
+
+geospatial queries
+spatial indexing
+location-area resolution
+OSM/GIS integration
+1 km detection
+geographic validation
+
+The GIS foundation must not duplicate the central frontend map or bypass core authorization.
+
+Living Local Intelligence roadmap
+1. Local knowledge collection
+2. Confidence + provenance
+3. Knowledge-aware map
+4. Location-aware AI
+5. Adaptive question selection
+6. Community prevention intelligence
+
