@@ -7,6 +7,7 @@ import { ToastProvider } from '@/components/ui/Toast'
 import { queryClient } from '@/lib/queryClient'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { CitizenHomePage } from '@/pages/citizen/CitizenHomePage'
+import { CitizenCasePage } from '@/pages/citizen/CitizenCasePage'
 import { OfficerQueuePage } from '@/pages/officer/OfficerQueuePage'
 import { OfficerCasePage } from '@/pages/officer/OfficerCasePage'
 import { MapPage } from '@/pages/MapPage'
@@ -47,6 +48,19 @@ export function App() {
 
               <Route element={<ProtectedShell />}>
                 <Route index element={<HomeRoute />} />
+
+                {/* A citizen's own report — the curated detail view, deliberately
+                    narrower than the staff case page. Citizen-only, so an officer
+                    who lands here is sent to their own queue rather than shown a
+                    reporter's rendering of a case they work. */}
+                <Route
+                  path="/cases/:id"
+                  element={
+                    <RequireRole roles={['citizen']}>
+                      <CitizenCasePage />
+                    </RequireRole>
+                  }
+                />
 
                 {/* Officer workspace — the operational core (staff only). */}
                 <Route

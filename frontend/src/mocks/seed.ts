@@ -506,7 +506,11 @@ export const CASE_LIST: Case[] = [
     status: 'pending_admin_review',
     priority: 'routine',
     priorityLevel: 'P3',
-    trackingId: 'CS-2026-0028',
+    /* Not `CS-2026-0028` — that reference belongs to the Ikeja loitering case
+     * above. Two reports sharing a tracking ID is the one piece of demo data a
+     * visitor might quote back at the app, and it was a copy-paste when this case
+     * was seeded. */
+    trackingId: 'CS-2026-0043',
     gisLatitude: 6.5011,
     gisLongitude: 3.3497,
     isPublic: true,
@@ -659,16 +663,10 @@ export const TIMELINE_LIST: CaseTimelineEntry[] = [
     user: USERS[OFFICER.userId],
   },
   {
-    id: uid('eeee5555', 7),
-    caseId: CASE_IDS.lights,
-    userId: OFFICER.userId,
-    action: 'closed',
-    description: 'Case closed with a final report.',
-    status: 'closed',
-    createdAt: daysAgo(9),
-    user: USERS[OFFICER.userId],
-  },
-  {
+    /* The closure is one event, not two. `POST /cases/:id/review/approve` writes a
+     * single `closure_approved` entry with status `closed`; this case previously
+     * also carried a separate `closed` entry, which put two rows on the same
+     * record zero seconds apart on the reporter's case log. */
     id: uid('eeee5555', 8),
     caseId: CASE_IDS.lights,
     userId: ADMIN.userId,
@@ -838,11 +836,17 @@ export const FEEDBACK_LIST: CaseFeedback[] = [
 /**
  * Closure-review decisions (`models.CaseReview`).
  *
- * Both seeded decisions are `request_changes`, because that is the branch the UI
- * has to get right: the comment is not a rejection notice, it is the officer's next
- * task, and the demo data should carry a real instruction rather than "rejected".
- * The `smuggled` case was subsequently resubmitted, which is why it now sits in
+ * The two `request_changes` entries carry the branch the officer's UI has to get
+ * right: the comment is not a rejection notice, it is the officer's next task, and
+ * the demo data should carry a real instruction rather than "rejected". The
+ * `smuggled` case was subsequently resubmitted, which is why it now sits in
  * `pending_admin_review` with a history behind it.
+ *
+ * The `approve` entry exists because without it the approve branch appeared
+ * nowhere in the app: a closed case would show a final report, a `closure_approved`
+ * timeline event, and then "no closure decisions have been recorded" — which reads
+ * as a missing record rather than a decided one. It also gives the reporter's case
+ * log a closed case whose history is complete.
  */
 export const REVIEW_LIST: CaseReview[] = [
   {
@@ -862,6 +866,15 @@ export const REVIEW_LIST: CaseReview[] = [
     comment:
       'You identified a suspect but the report stops there. Was a name taken, and was it raised with the estate management? Add the follow-up, or say plainly why there was none.',
     createdAt: hoursAgo(8),
+  },
+  {
+    id: uid('2b2b2b2b', 3),
+    caseId: CASE_IDS.lights,
+    adminId: ADMIN.userId,
+    decision: 'approve',
+    comment:
+      'Cabling recovered, both suspects handed over, and the electrical board notified — the report answers what was asked of it. Closure approved.',
+    createdAt: daysAgo(9),
   },
 ]
 

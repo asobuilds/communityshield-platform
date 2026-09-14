@@ -182,6 +182,26 @@ describe('transition guards mirror the backend', () => {
     expect(canAddProgress(CASE_STATUS.pendingAdminReview)).toBe(false)
     expect(canAddProgress(CASE_STATUS.closed)).toBe(false)
     expect(canAddProgress(CASE_STATUS.pending)).toBe(false)
+    expect(canAddProgress(CASE_STATUS.assigned)).toBe(false)
+  })
+
+  it('refuses progress on a changes-requested case, because the write would 409', () => {
+    // This one reads like an oversight and is not: `POST /cases/:id/progress` in
+    // src/mocks/handlers.ts accepts exactly the three states asserted above. A
+    // changes-requested case is revised through the final report and resubmitted,
+    // so offering a progress form here would hand the officer a 409. If the real
+    // backend turns out to accept progress in this state, widen both together.
+    expect(canAddProgress(CASE_STATUS.adminChangesRequested)).toBe(false)
+    // Resubmitting is still open to them — that is the intended path.
+    expect(canSubmitForReview(CASE_STATUS.adminChangesRequested)).toBe(true)
+  })
+
+  it('does not contradict ReviewNotice: nothing is fileable while review is pending', () => {
+    // Both gates are shut on a case awaiting a decision, so the notice must not
+    // promise the officer work they cannot file. See ReviewNotice in
+    // src/components/case/CaseReviewTrail.tsx.
+    expect(canAddProgress(CASE_STATUS.pendingAdminReview)).toBe(false)
+    expect(canSubmitForReview(CASE_STATUS.pendingAdminReview)).toBe(false)
   })
 })
 
