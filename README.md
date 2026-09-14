@@ -658,3 +658,239 @@ transparently, safely and with measurable outcomes.
 - Grassroots integration is a core architecture principle.
 
 See [`AGENT.md`](./AGENT.md) for the full architecture and product blueprint.
+
+---
+
+## 16. Living Local Intelligence
+
+CommunityShield is designed to become increasingly useful as communities use it.
+
+The platform treats the map as both an operational interface and a community knowledge-acquisition layer. Users can contribute observations about places they know, while the system validates, aggregates, and contextualizes those observations before exposing them as useful local knowledge.
+
+### 16.1 Core principle
+
+> CommunityShield learns facts before it learns models.
+
+Raw user answers must not be treated as automatically true and must not be used to continuously train AI models directly.
+
+The intended pipeline is:
+
+```text
+USER ANSWER
+    ?
+COMMUNITY OBSERVATION
+    ?
+VALIDATION + CONSENSUS
+    ?
+LOCAL KNOWLEDGE FACT
+    ?
+RETRIEVAL
+    ?
+AI REASONING
+    ?
+BETTER MAP + BETTER GUIDANCE
+16.2 Location-aware knowledge collection
+
+When a user enters an area substantially different from their previous knowledge-collection anchor, CommunityShield may offer a short contextual prompt.
+
+The initial distance threshold is approximately 1 km.
+
+The system must not continuously interrupt users while they are moving. Location prompts should consider:
+
+distance from the previous survey anchor
+whether the user has remained in the area long enough
+whether useful local knowledge already exists
+previous answers from the user
+cooldown periods
+prompt frequency limits
+
+The question engine should normally ask only 1–3 short questions.
+
+Question categories include:
+
+local area, community, village, ward, LGA, and state names
+road and street names
+alternate local road names
+major junctions
+markets
+schools
+hospitals and clinics
+police and security facilities
+fire and emergency facilities
+landmarks
+road accessibility
+rainy-season access difficulties
+alternative routes
+useful local geographic context
+
+This collection mechanism must not be used to solicit personal, sensitive, suspect, or investigative information.
+
+16.3 Community knowledge model
+
+A user response is an observation, not automatically a fact.
+
+CommunityShield should maintain provenance, confidence, freshness, and verification status for local knowledge.
+
+Conceptually:
+
+LocalObservation
+       ?
+VALIDATION
+       ?
+LocalKnowledgeFact
+       ?
+MAP / SEARCH / ASSISTANT / ANALYTICS
+
+A knowledge fact should be able to retain:
+
+area
+knowledge type
+value
+geographic position
+source type
+source count
+independent source count
+confidence
+first observed time
+last confirmed time
+verification status
+verifier where appropriate
+creation and update timestamps
+
+Source types may include:
+
+official
+osm
+community_observation
+officer_observation
+admin_verified
+external_api
+ai_inferred
+
+AI-inferred information must never be treated as equivalent to verified information.
+
+Contributor identity should not be exposed unnecessarily. Public interfaces should prefer aggregated attribution such as:
+
+3 community contributors identify this location as a local market.
+
+rather than exposing individual contributor identities.
+
+16.4 One map, many permission-controlled layers
+
+The map is a central CommunityShield component, not a separate feature implemented independently for each role.
+
+                    COMMUNITYSHIELD MAP
+                           ¦
+          +----------------+----------------+
+          ¦                ¦                ¦
+       PUBLIC          OPERATIONAL       SENSITIVE
+       LAYERS            LAYERS          CASE DATA
+          ¦                ¦                ¦
+     local places      assigned cases    authorized
+     roads             unit coverage     case officers
+     facilities        navigation        + admins
+     safety info       incidents         suspect tracking
+     alerts            response data
+
+Every user should be able to access the core map experience appropriate to their permissions, including:
+
+current location
+roads
+search
+zoom and pan
+location selection
+permitted public places
+relevant safety information
+
+Additional operational and sensitive layers must be permission controlled.
+
+16.5 Sensitive case intelligence
+
+CommunityShield must enforce the rule:
+
+Unit access is not case access.
+
+Being an officer in a security unit does not automatically authorize access to every case belonging to that unit.
+
+Sensitive suspect tracking and sensitive case locations are restricted to:
+
+officers assigned or explicitly authorized for the case
+authorized administrators
+
+Sensitive location access must be case-scoped and auditable.
+
+The system should be able to determine:
+
+WHO accessed the location?
+WHAT case or suspect was accessed?
+WHY was access permitted?
+WHAT permission granted access?
+WHEN did access occur?
+
+Community and public intelligence must never expose protected case evidence or suspect-tracking information.
+
+16.6 Location-aware CommunityShield assistant
+
+Users should eventually be able to ask short questions about the area they are currently in.
+
+The assistant can combine:
+
+CURRENT LOCATION
+        +
+VALIDATED LOCAL KNOWLEDGE
+        +
+PLATFORM KNOWLEDGE
+        +
+PERMITTED CURRENT OPERATIONAL INFORMATION
+
+Example questions include:
+
+What is this area called?
+What is the nearest hospital?
+Which road leads to the market?
+What should I know about this area?
+How can our community improve safety here?
+
+Responses must clearly distinguish verified facts, community observations, and AI-generated guidance.
+
+16.7 Information boundaries
+
+CommunityShield maintains three important information boundaries:
+
+PUBLIC LOCAL KNOWLEDGE
+        ?
+APPROPRIATE GENERAL USERS
+
+OPERATIONAL SECURITY INTELLIGENCE
+        ?
+AUTHORIZED OFFICERS / ADMINS
+
+SENSITIVE CASE INTELLIGENCE
+        ?
+ASSIGNED / AUTHORIZED CASE PERSONNEL + AUTHORIZED ADMINS
+
+The AI layer must respect the same authorization boundary as the Go API.
+
+AI must never become an alternate path around access control.
+
+16.8 Intelligence roadmap
+V1  Local knowledge collection
+V2  Confidence + provenance
+V3  Knowledge-aware map
+V4  Location-aware assistant
+V5  Adaptive question selection
+V6  Community prevention intelligence
+
+Longer-term capabilities may include:
+
+geographic hotspots
+risk zones
+response-time geography
+coverage analysis
+geofencing
+location-aware alerts
+geographic trends
+community safety recommendations
+
+These capabilities must remain prevention-oriented and must not become individual profiling.
+
