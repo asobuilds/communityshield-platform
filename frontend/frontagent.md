@@ -116,21 +116,47 @@ Engagement is an **output of usefulness and trust**, tuned honestly.
   case closed → rate it; alert seen → confirm it).
 - **Graceful degradation** — offline queue + sync means a dropped connection never loses a report.
 
-### The accountability loop — the surfaces this milestone owes
+### The accountability loop — why each surface is shaped this way
 
-The backend has shipped a case-review workflow: an officer investigates and submits a final report,
-an administrator either approves closure or sends it back with a comment, and a rejected case returns
-to the officer to be worked again. **None of it has a screen yet.** These are the designs it needs,
-and each one has a reason to exist beyond the workflow diagram:
+The backend shipped a case-review workflow: an officer investigates and submits a final report, an
+administrator either approves closure or sends it back with a comment, and a rejected case returns to
+the officer to be worked again. **Every screen it needs now exists** (M4.5, plus the reporter's view
+of the result). What follows is why each surface is shaped the way it is — the table is the design
+record, not a to-do list.
 
 | Surface | Role | The job it does |
 |---|---|---|
 | **Submit for review** | Officer | The moment the officer says "I am done and I stand behind this." The final report is the artefact — make it feel like a submission, not a form. Show what the administrator will see |
 | **Review queue / status** | Admin | *Which cases are waiting on me?* A case in `pending_admin_review` is the only kind only an administrator can move. It should be impossible to leave one sitting without noticing |
 | **Approve / request changes** | Admin | A real decision with a **required comment** — the contract will not accept a bare click, and that is correct. Two outcomes deserve two visually distinct acts, so neither is a reflex |
-| **Decision history** | All three | What was decided, by whom, when, and why. This is the audit trail made legible to a citizen asking "why is my case still open?" |
+| **Decision history** | All three | What was decided, by whom, when, and why. This is the audit trail made legible to a citizen asking "why is my case still open?" — **built for all three roles**: the officer's notice, the admin's Review tab, and the reporter's case detail |
 | **Changes requested → resubmit** | Officer | The rejection has to read as an instruction, not a punishment. The comment *is* the next task; put it where the officer already works |
 | **Weekly update (citizen-visible)** | Officer → Citizen | A per-week narrative the officer files, some of it marked visible to the reporter. Respect the boundary exactly: never merge one role's view into another's, and never imply a citizen is seeing the whole record when they are not |
+| **The reporter's own case** | Citizen | `/cases/:id`. The reporter is the one audience with no operational role: their question is not "what do I do next" but *"is anything happening, and why"*. Built as a **subset of the staff page by omission**, never as a mode flag — see below |
+
+**The reporter's view is a subset by omission.** Two people can read the same case and should not
+read the same page: an officer scanning a timeline for their next task and a resident asking whether
+anyone is coming are different jobs. The reporter's page composes its own header and log from the
+shared pieces (`StatusChip`, `CaseStatusStepper`, `ReviewHistory`, `WeeklyUpdates`) and simply does
+not fetch the progress feed or the evidence list, so the derived activity section is *absent* rather
+than hidden. That direction matters: with a shared component and a "hide this for citizens" flag, each
+field added later is visible to reporters unless someone remembers to exclude it. Composing a subset
+inverts the default — forgetfulness shows them less, not more.
+
+Three rules for that page specifically:
+
+- **Role, not name.** `lib/caseLog.ts` derives an actor from ids the case already carries — `You`,
+  `Assigned officer`, `Unit staff` — and never renders the timeline's `description`, which is written
+  for an internal reader and names people. The responding **unit** is named once, in the header; the
+  timeline records which *user* acted, never which unit, so a unit stamp on every row would be a claim
+  the data does not support.
+- **No performance metrics.** The staff header shows "Time to dispatch"; the reporter's does not. A
+  case file is not the place to show someone the unit's service metrics, and the stepper already
+  carries the real timestamps for anyone who wants them.
+- **Never announce a privacy guarantee the client cannot keep.** An empty filtered feed reads
+  *"nothing has been shared with you yet"* — not "nothing was filed", which the screen cannot know.
+  And the curated view is **presentation, not enforcement**: do not describe it to a user as private
+  while the API still returns them the whole record.
 
 Two design consequences worth stating plainly:
 
