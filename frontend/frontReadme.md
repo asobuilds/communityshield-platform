@@ -46,7 +46,7 @@ case tracking, officer operations, and unit-admin triage and assignment.
 | Design system | ✅ primitives + tokens + 4 states | Grow with features |
 | Tests | ✅ 4 unit modules (ISO weeks, API client, assignment rules, status vocabulary) — 58 tests | Component + E2E |
 | Mocks | ✅ in-browser mock API (`VITE_USE_MOCKS`), now covering the full review loop | Contract tests |
-| Case lifecycle | ⚠️ **all 8 states rendered**; the admin decision surface is still missing | Full lifecycle (§0.4) |
+| Case lifecycle | ⚠️ **all 8 states rendered; the review loop is walkable end-to-end** (officer submits → admin decides → resubmit → approve → closed). Weekly updates still derived client-side | Full lifecycle (§0.4) |
 
 ### 0.1 What exists right now
 
@@ -60,17 +60,24 @@ account: `officer@shield.ng`, `admin@shield.ng`, `citizen@shield.ng`, `super@shi
 | `/auth/login` | Sign-in (role quick-fill under mocks) | ✅ |
 | `/` | Citizen: your reports + lifecycle stepper | ✅ (detail view next) |
 | `/officer/queue` | Case queue — priority sort, filters, search, SLA badge | ✅ |
-| `/officer/cases/:id` | Case workspace — Details · Progress · Weekly · Evidence | ✅ |
+| `/officer/cases/:id` | Case workspace — Details (incl. closure review) · Progress · Weekly · Evidence | ✅ |
 | `/admin/cases` | Admin triage board — attention counters, search, assign/reassign | ✅ |
-| `/admin/cases/:id` | Admin case review — facts · progress · weekly · evidence · assignment | ✅ |
+| `/admin/cases/:id` | Admin case review — **closure decision** · Review history · facts · progress · weekly · evidence · assignment | ✅ |
 | `/map` | Operations map — cases + unit coverage + filters | ✅ |
 | `/admin/*`, `/super/*` | Remaining admin surfaces — named placeholders | ⏳ M5 / M7 |
 | `*` | 404 | ✅ |
 
-The admin console stops at case review on purpose: **assignment is the one lifecycle transition an
-officer cannot perform for themselves.** `pending → assigned` is an administrator's decision, and
-without it the officer workspace can only exercise the second half of the case lifecycle. That is
-why `/admin/cases` leads the unit-admin nav and is where `homePathForRole('unit_admin')` lands.
+The admin console stops at case review on purpose: **the two lifecycle transitions an officer cannot
+perform for themselves both live there.** Assignment (`pending → assigned`) is one, and it is what
+makes the officer workspace reachable at all — without it no case can be dispatched. The closure
+decision (`pending_admin_review → closed`, or back to `admin_changes_requested`) is the other, and it
+is the one the accountability workflow exists for. That is why `/admin/cases` leads the unit-admin nav
+and is where `homePathForRole('unit_admin')` lands.
+
+> **Note the asymmetry in that pair.** Assignment is a *routing* decision — someone has to do the
+> work. Closure approval is a *judgement* about work already done, which is why it carries a required
+> comment and a self-approval refusal and assignment carries neither. If a future change makes those
+> two feel symmetrical, the accountability has probably leaked out of the closure path.
 
 **Key source files**
 
@@ -81,20 +88,24 @@ src/
   types/api.ts             hand-written contract from the Go handlers/models
   lib/apiClient.ts         typed fetch: bearer token, ApiError, 401 → logout
   lib/queryClient.ts       React Query defaults (no retry on 4xx)
-  lib/status.ts            case-status + priority metadata (single source of truth)
-  lib/week.ts              ISO-week grouping — the stopgap for the Weekly interface (§0.4)
+  lib/status.ts            case-status + priority metadata, field rail vs review phase (single source)
+  lib/week.ts              ISO-week grouping — the stopgap for the Weekly interface (§0.4 item 4)
   lib/assignment.ts        assignment rules mirroring the backend guard (pure, tested)
   auth/                    AuthContext (session restore) + RequireRole guard
   components/ui/           Button, Card, Chips, Field, Tabs, Modal, Toast, States
   components/layout/       AppShell (sidebar ⇄ bottom nav) + NotificationBell
   components/map/MapView   the one map: view mode + location-pick mode
-  components/case/         CaseHeader, CaseFacts, CaseStatusStepper, ProgressTimeline,
-                           WeeklyUpdates, EvidenceGallery, EvidenceUpload
+  components/case/         CaseHeader, CaseFacts, CaseStatusStepper, CaseReviewTrail,
+                           ProgressTimeline, WeeklyUpdates, EvidenceGallery, EvidenceUpload
   components/admin/        AssignOfficerDialog
-  hooks/                   useCases, useProgress, useEvidence, useUnits,
+  hooks/                   useCases, useCaseReview, useProgress, useEvidence, useUnits,
                            useOfficers, useNotifications
   mocks/                   fetch-level mock API + Lagos seed data
 ```
+
+`CaseReviewTrail` is shared the same way `CaseFacts` is: the officer's "what were you asked to
+change?" notice and the administrator's decision history are two renderings of one record, and
+splitting them would let the two roles disagree about what was decided.
 
 `CaseFacts` is shared by the officer workspace and the admin review on purpose: **an administrator
 reviewing a decision must not be looking at a different rendering of it.** Both consoles read the
@@ -392,6 +403,7 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 ### F4 — Case tracking & feedback
 
 **Screens:** my cases list, case detail, timeline, evidence viewer, feedback form.
+*(Only the list exists — see the citizen case-detail gap below.)*
 
 - [x] Case list with status chips, priority, last-updated
 - [x] **Lifecycle stepper** — rebuilt as two instruments: a one-way *field rail* over
@@ -407,9 +419,14 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
       per-week officer narrative endpoints now exist and must be adopted (§0.4 item 4). When adopted,
       honour the `citizenVisible` filter exactly as returned: a reporter may legitimately see fewer
       updates than the officer who filed them
-- [x] Review history — the shared `<ReviewHistory>` renders every decision with comment, actor and
-      timestamp: on the **officer** page (where "what were you asked to change?" matters most), in the
-      admin's **Review** tab, and to the citizen, who can read why their case is still open
+- [~] Review history — the shared `<ReviewHistory>` renders every decision with comment, actor and
+      timestamp, and is wired into the **officer** page (where "what were you asked to change?"
+      matters most) and the **admin** Review tab. **Not wired for citizens**, because there is no
+      citizen case-detail page to wire it into: `CitizenHomePage` is a list. A citizen therefore
+      sees the case *state* (the list renders `CaseStatusStepper`, which after the M4.5 rewrite shows
+      "Awaiting review" / "Changes requested" correctly) but not the *reason*. "Why is my case still
+      open" is a question this product currently cannot answer to the person who asked it, and that
+      is the single best argument for building citizen case detail next
 - [~] Feedback: rating + comment rendered; **submission form not built**
 - [ ] Push/in-app updates on every status change
 
@@ -675,7 +692,11 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
 - [x] **M0 — Foundations:** scaffold, router, API client, auth/session, design tokens, component
       primitives *(lint/build/CI wiring still to run — see §9)*
 - [~] **M1 — Auth & onboarding:** login + role routing + guards done; register/OTP/onboarding open
-- [~] **M2 — Citizen core:** F4 case tracking shipped; SOS and reporting wizards open
+- [~] **M2 — Citizen core:** citizen case *tracking* is list-only (`/`), showing status via the shared
+      stepper. **There is no citizen case-detail page**, so the timeline, final report, review history
+      and feedback that the officer and admin surfaces already render are unreachable to the person
+      who filed the report — even though the components are all built and role-agnostic. SOS and
+      reporting wizards open
 - [~] **M3 — Awareness:** F10 case/unit map shipped; alerts, news, notifications centre open
 - [~] **M4 — Officer console:** queue and case workspace (details/progress/weekly/evidence) shipped;
       dispatch → arrive shipped; **closure handed to the review workflow in M4.5**; team view and
