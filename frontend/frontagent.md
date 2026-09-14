@@ -85,10 +85,12 @@ tokens) and `src/components/ui/`. Extend those tokens and primitives; never inve
 3. **Never lie with state.** No fake "API Live" badges, no skeleton-for-real-data, no dead buttons.
 4. **Every data surface has four states** — loading, empty, error, offline. Design all four.
 5. **Disabled is explained.** A gated action says *why*, not just grey — and the reason is the real
-   one, not a generic one. Two live examples: submitting a case for review requires a final report,
-   so the refusal reads "add the final report first"; and an administrator who is *also* the case's
+   one, not a generic one. Three live examples: submitting a case for review requires a final report,
+   so the refusal reads "add the final report first"; an administrator who is *also* the case's
    assigned officer cannot approve its closure, so the UI must say that before the click rather than
-   surfacing a server 403 after it.
+   surfacing a server 403 after it; and the report wizard will not submit without a responding unit,
+   because a case whose `unit_id` matches no unit is returned by no unit's `GET /cases` — so the
+   refusal says exactly that, rather than letting someone file a report nobody will be shown.
 6. **Orientation everywhere.** On any case screen the user can answer: what state is this in, who
    owns it, what happens next, and when it last changed.
 7. **Respect the field.** High contrast, big targets, one-handed reach, low bandwidth, gloves/rain.
@@ -114,7 +116,12 @@ Engagement is an **output of usefulness and trust**, tuned honestly.
 - **Quiet recognition** — unit response-quality surfaced as civic pride; never individual profiling.
 - **Momentum cues** — a clear "what to do next" after every milestone (report submitted → track it;
   case closed → rate it; alert seen → confirm it).
-- **Graceful degradation** — offline queue + sync means a dropped connection never loses a report.
+- **Graceful degradation — and the honest limit of it.** A dropped connection must not cost someone
+  what they typed: the report wizard writes its draft to the device as the form is filled and restores
+  it with a notice saying nothing was sent. But **a draft is not a report**, and there is no offline
+  *submit* queue — that needs ordering, retry and dedupe semantics, and until it exists no screen may
+  let a stored draft read as "sent". Keep the two claims apart: "we kept your answers" is true today;
+  "your report will send when you reconnect" is not.
 
 ### The accountability loop — why each surface is shaped this way
 

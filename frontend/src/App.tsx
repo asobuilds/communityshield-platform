@@ -8,6 +8,7 @@ import { queryClient } from '@/lib/queryClient'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { CitizenHomePage } from '@/pages/citizen/CitizenHomePage'
 import { CitizenCasePage } from '@/pages/citizen/CitizenCasePage'
+import { ReportIncidentPage } from '@/pages/citizen/ReportIncidentPage'
 import { OfficerQueuePage } from '@/pages/officer/OfficerQueuePage'
 import { OfficerCasePage } from '@/pages/officer/OfficerCasePage'
 import { MapPage } from '@/pages/MapPage'
@@ -58,6 +59,18 @@ export function App() {
                   element={
                     <RequireRole roles={['citizen']}>
                       <CitizenCasePage />
+                    </RequireRole>
+                  }
+                />
+
+                {/* Filing a report. Citizen-only: the endpoint creates a case
+                    owned by the authenticated reporter, so there is no staff
+                    equivalent to route — staff create nothing here. */}
+                <Route
+                  path="/report"
+                  element={
+                    <RequireRole roles={['citizen']}>
+                      <ReportIncidentPage />
                     </RequireRole>
                   }
                 />
