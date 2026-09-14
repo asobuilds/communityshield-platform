@@ -30,7 +30,7 @@ interface NavItem {
 const NAV: Record<Role, NavItem[]> = {
   citizen: [
     { to: '/', label: 'Home', icon: <LayoutDashboard className="size-4" /> },
-    { to: '/report', label: 'Report', icon: <FileText className="size-4" />, soon: true },
+    { to: '/report', label: 'Report', icon: <FileText className="size-4" /> },
     { to: '/track', label: 'Track', icon: <FolderKanban className="size-4" />, soon: true },
     { to: '/alerts', label: 'Alerts', icon: <Megaphone className="size-4" />, soon: true },
     { to: '/map', label: 'Safety map', icon: <MapIcon className="size-4" /> },
