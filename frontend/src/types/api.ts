@@ -8,8 +8,30 @@
 
 export type Role = 'citizen' | 'officer' | 'unit_admin' | 'super_admin'
 
-/** The five states the backend workflow actually sets, in order. */
-export type CaseStatus = 'pending' | 'assigned' | 'dispatched' | 'on_scene' | 'closed'
+/**
+ * The eight states the backend case workflow actually sets.
+ *
+ * Declared as one const object so the literals live in exactly one place — a
+ * contract correction is then a single edit rather than a hunt. They are
+ * snake_case because the backend stores plain strings: `case_workflow_handler.go`
+ * compares against `"pending"` / `"on_scene"` / … directly, and
+ * `case_review_handler.go` uses `models.CaseStatus*` constants of the same shape.
+ *
+ * NOTE: the three review-phase literals are the ones frontReadme.md §0.4 flags as
+ * needing confirmation against `backend/models` — see the verification command there.
+ */
+export const CASE_STATUS = {
+  pending: 'pending',
+  assigned: 'assigned',
+  dispatched: 'dispatched',
+  onScene: 'on_scene',
+  investigating: 'investigating',
+  pendingAdminReview: 'pending_admin_review',
+  adminChangesRequested: 'admin_changes_requested',
+  closed: 'closed',
+} as const
+
+export type CaseStatus = (typeof CASE_STATUS)[keyof typeof CASE_STATUS]
 
 /** Backend priority banding (see CreateCase in handlers/case_handler.go). */
 export type PriorityLevel = 'P1' | 'P2' | 'P3'
@@ -113,6 +135,70 @@ export interface Case {
   updatedAt: string
   evidence?: Evidence[]
   progress?: Progress[]
+}
+
+/**
+ * One decision recorded against a case's closure review (`models.CaseReview`).
+ *
+ * `decision` is typed as a plain string on purpose: the backend's
+ * `CaseReviewDecision*` literals are not yet verified against `backend/models`
+ * (frontReadme.md §0.4), and a decision this build does not recognise must render
+ * as itself rather than be coerced into one of the two it expects.
+ */
+export interface CaseReview {
+  id: string
+  caseId: string
+  adminId: string
+  /** Expected `approve` | `request_changes`. Not yet contract-verified. */
+  decision: string
+  comment: string
+  createdAt: string
+}
+
+/**
+ * An officer's narrative for one reporting week (`models.CaseWeeklyUpdate`).
+ *
+ * The week is Monday 00:00 UTC → the following Monday, computed **server-side**;
+ * `weekStart` is the key the backend deduplicates on, so a second submission for
+ * the same week is refused rather than merged.
+ */
+export interface CaseWeeklyUpdate {
+  id: string
+  caseId: string
+  officerId: string
+  weekStart: string
+  weekEnd: string
+  summary: string
+  investigation: string
+  actionsTaken?: string
+  findings?: string
+  evidenceSummary?: string
+  outstandingActions?: string
+  nextSteps?: string
+  /**
+   * Whether this update is exposed to the case reporter. The backend writes `true`
+   * today and filters a reporter's read by it — so the *same* case returns fewer
+   * updates to a citizen than to an officer.
+   *
+   * Optional because the underlying JSON tag is not yet contract-verified
+   * (frontReadme.md §0.4). Read it as a label only, and only when it is `true`:
+   * the server does the filtering, so a missing value must never be treated as
+   * "visible" and rendered as a privacy claim.
+   */
+  citizenVisible?: boolean
+  submittedAt?: string | null
+  createdAt: string
+}
+
+/** Body of `POST /cases/:id/weekly-update` — the first two are required. */
+export interface CaseWeeklyUpdateInput {
+  summary: string
+  investigation: string
+  actionsTaken?: string
+  findings?: string
+  evidenceSummary?: string
+  outstandingActions?: string
+  nextSteps?: string
 }
 
 export interface SecurityUnit {
@@ -235,6 +321,44 @@ export interface AssignCaseResponse {
   message: string
   assignment: CaseOfficer
   case: Case
+}
+
+/** `GET /cases/:id/review` — the case's current state plus its decision history. */
+export interface CaseReviewResponse {
+  caseId: string
+  status: CaseStatus
+  reviews: CaseReview[]
+}
+
+/** `GET /cases/:id/weekly-updates` — already filtered for the caller's role. */
+export interface CaseWeeklyUpdatesResponse {
+  caseId: string
+  updates: CaseWeeklyUpdate[]
+}
+
+/**
+ * `POST /cases/:id/weekly-update`. A duplicate week is refused with **409** and a
+ * body of `{ error, update }` — i.e. the existing update is returned so the UI can
+ * show what is already on file instead of an empty failure.
+ */
+export interface CaseWeeklyUpdateCreateResponse {
+  message: string
+  update: CaseWeeklyUpdate
+}
+
+export interface CaseWeeklyUpdateConflictResponse {
+  error: string
+  update: CaseWeeklyUpdate
+}
+
+/**
+ * `POST /cases/:id/submit-review`. The 409 that a wrong-state submission returns
+ * carries the case's actual `status`, so the UI can correct itself instead of
+ * guessing why it was refused.
+ */
+export interface SubmitReviewConflictResponse {
+  error: string
+  status: CaseStatus
 }
 
 export interface NotificationsResponse {
