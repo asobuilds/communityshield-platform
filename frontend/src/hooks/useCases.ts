@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/apiClient'
+import { ApiError, api } from '@/lib/apiClient'
 import type { Case, CaseDetailResponse, CasesResponse } from '@/types/api'
 
 export const caseKeys = {
@@ -30,7 +30,7 @@ type CaseActionResponse = { message: string; case: Case }
 
 async function runAction(
   id: string,
-  action: 'dispatch' | 'arrive' | 'close' | 'assign',
+  action: 'dispatch' | 'arrive' | 'assign' | 'submit-review',
   body?: unknown,
 ): Promise<CaseActionResponse> {
   return api.post<CaseActionResponse>(`/cases/${id}/${action}`, body)
@@ -39,6 +39,11 @@ async function runAction(
 /**
  * Case lifecycle mutations. Each invalidates the case detail + list so the
  * stepper, timeline and queue reflect the new state.
+ *
+ * There is no `close`: closure became an approval on the backend, so the officer's
+ * path to it is `submitForReview` (see `useReviewDecision` for the administrator's
+ * half). The old mutation posted to `POST /cases/:id/close`, which is no longer
+ * registered in `backend/routes/routes.go` — it could only ever 404.
  */
 export function useCaseActions(id: string | undefined) {
   const queryClient = useQueryClient()
@@ -58,9 +63,16 @@ export function useCaseActions(id: string | undefined) {
     mutationFn: () => runAction(id as string, 'arrive'),
     onSuccess: invalidate,
   })
-  const close = useMutation({
-    mutationFn: (finalReport: string) => runAction(id as string, 'close', { finalReport }),
+  const submitForReview = useMutation({
+    mutationFn: (finalReport: string) =>
+      runAction(id as string, 'submit-review', { finalReport }),
     onSuccess: invalidate,
+    // A 409 here means the case moved while this screen was open — the backend
+    // refuses a submission from any state but `investigating` /
+    // `admin_changes_requested`. Refetch so the screen stops showing a stale state.
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) void invalidate()
+    },
   })
   const assign = useMutation({
     mutationFn: (vars: { officerId: string; role?: string }) =>
@@ -68,5 +80,5 @@ export function useCaseActions(id: string | undefined) {
     onSuccess: invalidate,
   })
 
-  return { dispatch, arrive, close, assign }
+  return { dispatch, arrive, submitForReview, assign }
 }

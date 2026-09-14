@@ -6,15 +6,21 @@
  * the data comes from, never how the frontend talks to it.
  *
  * Guards the UI depends on, mirrored here:
- *  - progress may only be added while a case is `dispatched` or `on_scene`;
+ *  - progress may only be added while a case is `dispatched`, `on_scene` or
+ *    `investigating`;
  *  - evidence may not be attached to a closed case;
+ *  - closure is an *approval*: `submit-review` then `approve`, never a `close`;
+ *  - an assigned officer cannot approve their own case's closure;
+ *  - approve / request-changes both require a non-empty comment;
+ *  - a second weekly update for the same UTC week is refused, returning the first;
  *  - `GET /cases` is scoped by role server-side, never by the client.
  */
 
 import { sleep, type MockRoute } from './adapter'
 import { USERS, seedDatabase, type MockDatabase } from './seed'
 import { MOCK_ACCOUNTS, mockTokenFor, userIdFromToken } from './config'
-import type { Case, Progress, User } from '@/types/api'
+import { ISO_WEEK_MS, startOfIsoWeekUtc } from '@/lib/week'
+import type { Case, CaseReview, CaseWeeklyUpdate, Progress, User } from '@/types/api'
 
 const db: MockDatabase = seedDatabase()
 
@@ -56,6 +62,29 @@ function casesVisibleTo(user: User): Case[] {
 
 function canSeeCase(user: User, caseItem: Case): boolean {
   return casesVisibleTo(user).some((c) => c.id === caseItem.id)
+}
+
+/**
+ * Mirrors the backend's `isCaseAdmin`: a super admin, or the administrator of the
+ * case's own unit. The real handler resolves this through an active `UnitMembership`
+ * row with role `admin`; the mock stands that in with the account's role plus the
+ * unit it runs, since `/auth/profile` carries no membership list yet.
+ */
+function isCaseAdmin(user: User, caseItem: Case): boolean {
+  if (user.role === 'super_admin') return true
+  return user.role === 'unit_admin' && caseItem.unitId === ADMIN_UNIT
+}
+
+/** Mirrors the backend's `isAssignedOfficer`. */
+function isAssignedOfficer(user: User, caseItem: Case): boolean {
+  return caseItem.assignedTo != null && caseItem.assignedTo === user.id
+}
+
+/** Who may read a case's review history and weekly updates. */
+function canReviewCase(user: User, caseItem: Case): boolean {
+  return (
+    isCaseAdmin(user, caseItem) || isAssignedOfficer(user, caseItem) || caseItem.reportedBy === user.id
+  )
 }
 
 function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -244,9 +273,13 @@ export const handlers: MockRoute[] = [
     },
   },
 
+  /* -------------------------------------------------- closure review loop */
+  /* Closure is an approval, not an action an officer takes alone. There is no
+     `POST /cases/:id/close` in the real router, and there is none here. */
+
   {
     method: 'POST',
-    path: '/cases/:id/close',
+    path: '/cases/:id/submit-review',
     async respond({ request, params }) {
       await sleep(250)
       const user = currentUser(request)
@@ -254,33 +287,281 @@ export const handlers: MockRoute[] = [
 
       const caseItem = db.cases.find((c) => c.id === params.id)
       if (!caseItem) return notFound('case not found')
-      if (caseItem.status === 'closed') {
-        return { status: 409, body: { error: 'case is already closed' } }
+      if (!isAssignedOfficer(user, caseItem)) {
+        return forbidden('only the assigned officer can submit this case for review')
+      }
+
+      // The 409 carries the case's actual status so the client can correct itself.
+      if (caseItem.status !== 'investigating' && caseItem.status !== 'admin_changes_requested') {
+        return {
+          status: 409,
+          body: {
+            error: 'case cannot be submitted for review from its current status',
+            status: caseItem.status,
+          },
+        }
       }
 
       const body = (await request.json().catch(() => ({}))) as { finalReport?: string }
-      const finalReport = (body.finalReport ?? '').trim()
+      // Accept the report from the request, falling back to whatever is already on
+      // the case — the contract does not say which, and both readings must work.
+      const finalReport = (body.finalReport ?? caseItem.finalReport ?? '').trim()
       if (!finalReport) {
         return { status: 400, body: { error: 'a final report is required' } }
       }
 
-      caseItem.status = 'closed'
-      caseItem.closedAt = nowIso()
-      caseItem.closedBy = user.id
+      caseItem.status = 'pending_admin_review'
       caseItem.finalReport = finalReport
-      caseItem.updatedAt = caseItem.closedAt
+      caseItem.updatedAt = nowIso()
       db.timeline.unshift({
         id: `tl-${Date.now()}`,
         caseId: caseItem.id,
         userId: user.id,
-        action: 'closed',
-        description: 'Case closed with a final report.',
-        status: 'closed',
-        createdAt: caseItem.closedAt,
+        action: 'submitted_for_review',
+        description: 'Final report submitted for closure approval.',
+        status: 'pending_admin_review',
+        createdAt: caseItem.updatedAt,
         user,
       })
 
-      return { body: { message: 'case closed successfully', case: caseItem } }
+      return { body: { message: 'case submitted for review successfully', case: caseItem } }
+    },
+  },
+
+  {
+    method: 'GET',
+    path: '/cases/:id/review',
+    async respond({ request, params }) {
+      await sleep(180)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+
+      const caseItem = db.cases.find((c) => c.id === params.id)
+      if (!caseItem) return notFound('case not found')
+      if (!canReviewCase(user, caseItem)) {
+        return forbidden('you are not authorized to view this review')
+      }
+
+      const reviews = db.reviews
+        .filter((r) => r.caseId === caseItem.id)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+      return { body: { caseId: caseItem.id, status: caseItem.status, reviews } }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/cases/:id/review/request-changes',
+    async respond({ request, params }) {
+      await sleep(250)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+
+      const caseItem = db.cases.find((c) => c.id === params.id)
+      if (!caseItem) return notFound('case not found')
+      if (!isCaseAdmin(user, caseItem)) {
+        return forbidden('only an administrator can request changes to this case')
+      }
+      if (caseItem.status !== 'pending_admin_review') {
+        return {
+          status: 409,
+          body: {
+            error: 'this case is not awaiting an administrative decision',
+            status: caseItem.status,
+          },
+        }
+      }
+
+      const body = (await request.json().catch(() => ({}))) as { comment?: string }
+      const comment = (body.comment ?? '').trim()
+      if (!comment) {
+        return { status: 400, body: { error: 'a comment is required' } }
+      }
+
+      const review: CaseReview = {
+        id: `rv-${Date.now()}`,
+        caseId: caseItem.id,
+        adminId: user.id,
+        decision: 'request_changes',
+        comment,
+        createdAt: nowIso(),
+      }
+      db.reviews.push(review)
+
+      caseItem.status = 'admin_changes_requested'
+      caseItem.updatedAt = review.createdAt
+      db.timeline.unshift({
+        id: `tl-${Date.now()}`,
+        caseId: caseItem.id,
+        userId: user.id,
+        action: 'changes_requested',
+        description: 'Closure not approved — more work requested.',
+        status: 'admin_changes_requested',
+        createdAt: review.createdAt,
+        user,
+      })
+
+      return { body: { message: 'changes requested successfully', review, case: caseItem } }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/cases/:id/review/approve',
+    async respond({ request, params }) {
+      await sleep(250)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+
+      const caseItem = db.cases.find((c) => c.id === params.id)
+      if (!caseItem) return notFound('case not found')
+      if (!isCaseAdmin(user, caseItem)) {
+        return forbidden('only an administrator can approve this case')
+      }
+      // The reviewer must not be the responder.
+      if (isAssignedOfficer(user, caseItem)) {
+        return forbidden('an assigned officer cannot approve their own case closure')
+      }
+      if (caseItem.status !== 'pending_admin_review') {
+        return {
+          status: 409,
+          body: {
+            error: 'this case is not awaiting an administrative decision',
+            status: caseItem.status,
+          },
+        }
+      }
+
+      const body = (await request.json().catch(() => ({}))) as { comment?: string }
+      const comment = (body.comment ?? '').trim()
+      if (!comment) {
+        return { status: 400, body: { error: 'a comment is required' } }
+      }
+
+      const review: CaseReview = {
+        id: `rv-${Date.now()}`,
+        caseId: caseItem.id,
+        adminId: user.id,
+        decision: 'approve',
+        comment,
+        createdAt: nowIso(),
+      }
+      db.reviews.push(review)
+
+      caseItem.status = 'closed'
+      caseItem.closedAt = review.createdAt
+      caseItem.closedBy = user.id
+      caseItem.approvedBy = user.id
+      caseItem.updatedAt = review.createdAt
+      db.timeline.unshift({
+        id: `tl-${Date.now()}`,
+        caseId: caseItem.id,
+        userId: user.id,
+        action: 'closure_approved',
+        description: 'Closure approved.',
+        status: 'closed',
+        createdAt: review.createdAt,
+        user,
+      })
+
+      return { body: { message: 'case closure approved successfully', review, case: caseItem } }
+    },
+  },
+
+  /* ------------------------------------------------------ weekly updates */
+
+  {
+    method: 'GET',
+    path: '/cases/:id/weekly-updates',
+    async respond({ request, params }) {
+      await sleep(200)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+
+      const caseItem = db.cases.find((c) => c.id === params.id)
+      if (!caseItem) return notFound('case not found')
+      if (!canReviewCase(user, caseItem)) {
+        return forbidden('you are not authorized to view this case')
+      }
+
+      // The privacy boundary the contract draws: a reporter who is neither an
+      // administrator nor the assigned officer sees only citizen-visible updates.
+      // Two roles legitimately get different feeds for the same case.
+      const restricted = !isCaseAdmin(user, caseItem) && !isAssignedOfficer(user, caseItem)
+      const updates = db.weeklyUpdates
+        .filter((u) => u.caseId === caseItem.id)
+        .filter((u) => (restricted ? u.citizenVisible === true : true))
+        .sort((a, b) => new Date(a.weekStart).getTime() - new Date(b.weekStart).getTime())
+
+      return { body: { caseId: caseItem.id, updates } }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/cases/:id/weekly-update',
+    async respond({ request, params }) {
+      await sleep(250)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+
+      const caseItem = db.cases.find((c) => c.id === params.id)
+      if (!caseItem) return notFound('case not found')
+      if (!isAssignedOfficer(user, caseItem)) {
+        return forbidden('only the assigned officer can file a weekly update')
+      }
+      if (caseItem.status === 'closed') {
+        return {
+          status: 409,
+          body: { error: 'a closed case does not accept further updates', status: caseItem.status },
+        }
+      }
+
+      const body = (await request.json().catch(() => ({}))) as Partial<CaseWeeklyUpdate>
+      const summary = (body.summary ?? '').trim()
+      const investigation = (body.investigation ?? '').trim()
+      if (!summary || !investigation) {
+        return { status: 400, body: { error: 'summary and investigation are required' } }
+      }
+
+      // The week is the server's, not the client's: Monday 00:00 UTC.
+      const weekStart = startOfIsoWeekUtc(new Date())
+      const existing = db.weeklyUpdates.find(
+        (u) =>
+          u.caseId === caseItem.id &&
+          u.officerId === user.id &&
+          new Date(u.weekStart).getTime() === weekStart.getTime(),
+      )
+      if (existing) {
+        // A refusal that returns the update already on file, so the client can show
+        // what exists instead of an empty failure.
+        return {
+          status: 409,
+          body: { error: 'you have already filed an update for this week', update: existing },
+        }
+      }
+
+      const update: CaseWeeklyUpdate = {
+        id: `wu-${Date.now()}`,
+        caseId: caseItem.id,
+        officerId: user.id,
+        weekStart: weekStart.toISOString(),
+        weekEnd: new Date(weekStart.getTime() + ISO_WEEK_MS - 1).toISOString(),
+        summary,
+        investigation,
+        actionsTaken: body.actionsTaken?.trim() || undefined,
+        findings: body.findings?.trim() || undefined,
+        evidenceSummary: body.evidenceSummary?.trim() || undefined,
+        outstandingActions: body.outstandingActions?.trim() || undefined,
+        nextSteps: body.nextSteps?.trim() || undefined,
+        citizenVisible: true,
+        submittedAt: nowIso(),
+        createdAt: nowIso(),
+      }
+      db.weeklyUpdates.push(update)
+
+      return { status: 201, body: { message: 'weekly update filed successfully', update } }
     },
   },
 
@@ -415,7 +696,11 @@ export const handlers: MockRoute[] = [
         return { status: 400, body: { error: 'action is required' } }
       }
 
-      if (caseItem.status !== 'dispatched' && caseItem.status !== 'on_scene') {
+      if (
+        caseItem.status !== 'dispatched' &&
+        caseItem.status !== 'on_scene' &&
+        caseItem.status !== 'investigating'
+      ) {
         return {
           status: 409,
           body: {

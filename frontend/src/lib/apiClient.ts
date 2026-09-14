@@ -69,12 +69,24 @@ interface RequestOptions {
   anonymous?: boolean
 }
 
-async function extractError(response: Response): Promise<string> {
+/**
+ * Turn a failed response into a message **and** keep the parsed body.
+ *
+ * The body matters: several endpoints refuse with a 409 that carries the reason in
+ * structured form — `{ error, status }` from `submit-review`, `{ error, update }`
+ * from a duplicate weekly update. Discarding it leaves the UI able to say only
+ * "conflict", when the contract is handing over exactly what it needs to correct
+ * itself.
+ */
+async function readError(response: Response): Promise<{ message: string; body: unknown }> {
   try {
     const data = (await response.json()) as { error?: string; message?: string }
-    return data.error ?? data.message ?? response.statusText
+    return { message: data?.error ?? data?.message ?? response.statusText, body: data }
   } catch {
-    return response.statusText || `Request failed (${response.status})`
+    return {
+      message: response.statusText || `Request failed (${response.status})`,
+      body: undefined,
+    }
   }
 }
 
@@ -106,11 +118,13 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
     }
-    throw new ApiError(401, await extractError(response))
+    const { message } = await readError(response)
+    throw new ApiError(401, message)
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, await extractError(response))
+    const { message, body } = await readError(response)
+    throw new ApiError(response.status, message, body)
   }
 
   if (response.status === 204) return undefined as T

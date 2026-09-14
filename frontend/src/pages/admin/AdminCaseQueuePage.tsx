@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ChevronRight,
   Clock,
+  FileCheck,
   Filter,
   MapPin,
   Search,
@@ -30,7 +31,7 @@ import type { Case, CaseStatus } from '@/types/api'
 type SortKey = 'priority' | 'waiting' | 'newest'
 
 /** The things a unit administrator actually acts on. */
-type Focus = 'none' | 'unassigned' | 'awaiting' | 'unverified'
+type Focus = 'none' | 'unassigned' | 'awaiting' | 'unverified' | 'to_decide'
 
 const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2 }
 
@@ -41,14 +42,18 @@ const AWAITING_MS = 24 * 3_600_000
 /**
  * The unit administrator's review queue.
  *
- * Triage-first: the questions an admin opens this screen with are "what has
- * nobody picked up?", "what has been sitting assigned and not dispatched?" and
- * "what evidence is still unverified?" — so those are the counters, and each one
- * is a filter rather than a decoration.
+ * Triage-first: the questions an admin opens this screen with are "what does
+ * nobody have?" and "what is waiting on *me*?" — so those are the counters, and
+ * each one is a filter rather than a decoration.
  *
- * Assignment is the only action offered here: it is the one transition that
- * moves a case out of `pending`, and without it the officer workspace can only
- * exercise the second half of the case lifecycle.
+ * A case in `pending_admin_review` leads the counters because it is the only kind
+ * of case no one else can move: the officer has submitted it and is blocked until
+ * an administrator decides. Leaving one sitting unnoticed is the failure mode this
+ * screen exists to prevent.
+ *
+ * Assignment is the only *transition* offered here; the approve / request-changes
+ * decision lives on the case review screen, where the final report it is judging
+ * is readable in full.
  */
 export function AdminCaseQueuePage() {
   const { notify } = useToast()
@@ -102,6 +107,7 @@ export function AdminCaseQueuePage() {
         )
       : 0
     return {
+      toDecide: cases.filter((c) => c.status === 'pending_admin_review').length,
       unassigned: cases.filter((c) => c.status === 'pending').length,
       awaiting: cases.filter((c) => c.status === 'assigned').length,
       stale: cases.filter(
@@ -116,7 +122,8 @@ export function AdminCaseQueuePage() {
   const visible = useMemo(() => {
     let list = cases
 
-    if (focus === 'unassigned') list = list.filter((c) => c.status === 'pending')
+    if (focus === 'to_decide') list = list.filter((c) => c.status === 'pending_admin_review')
+    else if (focus === 'unassigned') list = list.filter((c) => c.status === 'pending')
     else if (focus === 'awaiting') list = list.filter((c) => c.status === 'assigned')
     else if (focus === 'unverified')
       list = list.filter((c) => (c.evidence ?? []).some((e) => !e.isVerified))
@@ -177,8 +184,24 @@ export function AdminCaseQueuePage() {
 
       {/* What needs a decision today */}
       <div
-        className={cn('mb-4 grid gap-3', evidenceAvailable ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}
+        className={cn(
+          'mb-4 grid gap-3 sm:grid-cols-2',
+          evidenceAvailable ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+        )}
       >
+        <AttentionCard
+          label="Awaiting your decision"
+          value={attention.toDecide}
+          hint={
+            attention.toDecide > 0
+              ? 'Submitted for closure — only an admin can move these'
+              : 'Nothing is blocked on you'
+          }
+          warn={attention.toDecide > 0}
+          icon={<FileCheck className="size-4" aria-hidden />}
+          active={focus === 'to_decide'}
+          onClick={() => toggleFocus('to_decide')}
+        />
         <AttentionCard
           label="Awaiting assignment"
           value={attention.unassigned}

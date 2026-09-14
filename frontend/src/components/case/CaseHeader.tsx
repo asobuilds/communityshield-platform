@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card'
 import { PriorityChip, StatusChip } from '@/components/ui/Chips'
 import { durationBetween, formatCoord, formatDateTime } from '@/lib/format'
 import { CaseStatusStepper } from './CaseStatusStepper'
-import type { Case } from '@/types/api'
+import type { Case, CaseStatus } from '@/types/api'
 
 /**
  * Case identity block: what it is, how urgent, where, who owns it, and how far
@@ -21,7 +21,6 @@ export function CaseHeader({
   assignedOfficerName?: string
   actions?: ReactNode
 }) {
-  const closed = caseItem.status === 'closed'
   const responseTime = durationBetween(
     caseItem.createdAt,
     caseItem.dispatchedAt ?? caseItem.arrivedAt ?? undefined,
@@ -84,10 +83,10 @@ export function CaseHeader({
           }}
         />
 
-        {closed && caseItem.finalReport ? (
+        {caseItem.finalReport ? (
           <div className="rounded-lg border border-border bg-surface-hi p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-              Final report
+              {finalReportHeading(caseItem.status)}
             </p>
             <p className="mt-1 whitespace-pre-line text-sm text-ink">{caseItem.finalReport}</p>
           </div>
@@ -95,6 +94,25 @@ export function CaseHeader({
       </div>
     </Card>
   )
+}
+
+/**
+ * The final report matters *before* closure, not only after it: it is the artefact
+ * a reviewing administrator judges, and what an officer who was sent back has to
+ * revise. Heading it by state is what stops a submitted report from reading as a
+ * finished one.
+ */
+function finalReportHeading(status: CaseStatus): string {
+  switch (status) {
+    case 'pending_admin_review':
+      return 'Final report — submitted for review'
+    case 'admin_changes_requested':
+      return 'Final report — changes requested'
+    case 'closed':
+      return 'Final report'
+    default:
+      return 'Final report — draft'
+  }
 }
 
 function Detail({
