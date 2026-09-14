@@ -1,11 +1,18 @@
 /**
- * ISO-week grouping for the "Weekly updates" interface.
+ * ISO-week helpers for the "Weekly updates" interface.
  *
- * The backend has NO weekly-update entity or endpoint (verified: the only
- * "weekly" reference is a finance budget-period enum), so weekly views are
- * derived here, client-side, from the timestamps of progress / timeline items.
+ * NOTE: the backend DOES own weekly updates — `POST|GET /cases/:id/weekly-update(s)`
+ * over `models.CaseWeeklyUpdate`, with `weekStart` computed server-side (Monday
+ * 00:00 **UTC**) and a second submission for the same week refused with a 409.
  *
- * Weeks are ISO-8601: Monday 00:00 (local) to Sunday 23:59:59.
+ * So this module is no longer the source of the week: the server is. These helpers
+ * are kept for **display** — labelling a supplied `weekStart`, and grouping the
+ * progress / timeline feeds (which have no week of their own) into readable weeks.
+ *
+ * The display helpers are deliberately *local*; `startOfIsoWeekUtc` is the explicit
+ * UTC variant for anything that has to agree with the server's dedup key.
+ *
+ * Weeks are ISO-8601: Monday to Sunday.
  */
 
 const DAY_MS = 86_400_000
@@ -53,6 +60,24 @@ export function isoWeekKey(input: Date | string): string {
   const { year, week } = isoWeekParts(input)
   return `${year}-W${String(week).padStart(2, '0')}`
 }
+
+/**
+ * Monday 00:00 **UTC** of the week containing `input`.
+ *
+ * The backend derives `weekStart` this way (`(weekday + 6) % 7` off a UTC clock)
+ * and deduplicates submissions on it, so anything that must agree with the server
+ * — the mock API, tests — has to use UTC too. `ISO_WEEK_MS` is the span the server
+ * treats as one reporting week.
+ */
+export function startOfIsoWeekUtc(input: Date | string): Date {
+  const d = new Date(input)
+  const mondayOffset = (d.getUTCDay() + 6) % 7
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - mondayOffset, 0, 0, 0, 0),
+  )
+}
+
+export const ISO_WEEK_MS = 7 * DAY_MS
 
 function formatRange(start: Date): string {
   const end = new Date(start.getTime() + 6 * DAY_MS)

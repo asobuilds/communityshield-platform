@@ -9,7 +9,9 @@ import type {
   Case,
   CaseFeedback,
   CaseOfficer,
+  CaseReview,
   CaseTimelineEntry,
+  CaseWeeklyUpdate,
   Evidence,
   Notification,
   Progress,
@@ -18,6 +20,7 @@ import type {
   User,
 } from '@/types/api'
 import { MOCK_ACCOUNTS, mockUid as uid } from './config'
+import { startOfIsoWeekUtc } from '@/lib/week'
 
 const now = Date.now()
 const HOUR = 3_600_000
@@ -26,6 +29,19 @@ const DAY = 24 * HOUR
 const iso = (ms: number) => new Date(ms).toISOString()
 const hoursAgo = (n: number) => iso(now - n * HOUR)
 const daysAgo = (n: number) => iso(now - n * DAY)
+
+/**
+ * The reporting week containing `ms`, as the backend computes it: Monday 00:00 UTC
+ * to the following Sunday. Weekly-update seed data has to use the server's UTC week
+ * or the mock would deduplicate on a different key than the real API.
+ */
+const week = (ms: number) => {
+  const start = startOfIsoWeekUtc(new Date(ms))
+  return {
+    weekStart: start.toISOString(),
+    weekEnd: new Date(start.getTime() + 6 * DAY).toISOString(),
+  }
+}
 
 const OFFICER = MOCK_ACCOUNTS[0]
 const ADMIN = MOCK_ACCOUNTS[1]
@@ -148,6 +164,13 @@ const CASE_IDS = {
   lights: uid('cccc3333', 6),
   loitering: uid('cccc3333', 7),
   flooding: uid('cccc3333', 8),
+  workshop: uid('cccc3333', 9),
+  smuggled: uid('cccc3333', 10),
+  generator: uid('cccc3333', 11),
+  // Assigned to the unit admin *and* awaiting their decision — the only seed that
+  // makes the self-approval rule reachable in the demo. Without it the rule is
+  // invisible until a real deployment produces the collision.
+  selfreview: uid('cccc3333', 12),
 }
 
 export const CASE_LIST: Case[] = [
@@ -309,6 +332,8 @@ export const CASE_LIST: Case[] = [
     dispatchedAt: daysAgo(11),
     arrivedAt: daysAgo(11),
     closedAt: daysAgo(9),
+    closedBy: OFFICER.userId,
+    approvedBy: ADMIN.userId,
     finalReport:
       'Patrol identified two suspects who had been stripping cabling for resale. Both were handed to the divisional police. The LGA electrical board has been notified to restore the poles.',
     createdAt: daysAgo(12),
@@ -337,6 +362,8 @@ export const CASE_LIST: Case[] = [
     dispatchedAt: daysAgo(15),
     arrivedAt: daysAgo(15),
     closedAt: daysAgo(14),
+    closedBy: OFFICER.userId,
+    approvedBy: ADMIN.userId,
     finalReport:
       'Vehicle traced to a parent with a disputed custody arrangement. No criminal intent established; the matter was referred to the family court liaison officer.',
     createdAt: daysAgo(16),
@@ -368,6 +395,129 @@ export const CASE_LIST: Case[] = [
     finalReport: '',
     createdAt: daysAgo(6),
     updatedAt: daysAgo(6),
+  },
+
+  /* --- The review phase. These three exist so every state of the accountability
+     loop is reachable in the demo without hand-editing data: an officer still
+     investigating with no final report yet, a case waiting on an administrator,
+     and a case an administrator has sent back with an instruction. --- */
+
+  {
+    id: CASE_IDS.workshop,
+    unitId: UNIT_MAIN,
+    reportedBy: CITIZEN.userId,
+    assignedTo: OFFICER.userId,
+    title: 'Firearms cache reported at a mechanic workshop on Ogunlana Drive',
+    description:
+      'A caller reports seeing rifles being moved into a workshop yard at night on three separate occasions. The workshop fronts as a panel-beating business.',
+    incidentDate: daysAgo(4),
+    location: 'Ogunlana Drive, Surulere, Lagos',
+    latitude: 6.5003,
+    longitude: 3.3489,
+    status: 'investigating',
+    priority: 'critical',
+    priorityLevel: 'P1',
+    trackingId: 'CS-2026-0042',
+    gisLatitude: 6.5003,
+    gisLongitude: 3.3489,
+    isPublic: true,
+    assignedAt: daysAgo(4),
+    dispatchedAt: daysAgo(3),
+    arrivedAt: daysAgo(3),
+    closedAt: null,
+    // Deliberately empty: this is the case that demonstrates the *explained*
+    // refusal on "Submit for review" — the report is what the admin will judge.
+    finalReport: '',
+    createdAt: daysAgo(4),
+    updatedAt: hoursAgo(6),
+  },
+  {
+    id: CASE_IDS.smuggled,
+    unitId: UNIT_MAIN,
+    reportedBy: CITIZEN.userId,
+    assignedTo: OFFICER.userId,
+    title: 'Contraband goods offloaded at night at a warehouse on Apapa Road',
+    description:
+      'Unmarked lorries offload crates between 1am and 3am. Neighbours report armed men guarding the gate while the offloading happens.',
+    incidentDate: daysAgo(9),
+    location: 'Apapa Road, Ijora, Lagos',
+    latitude: 6.4739,
+    longitude: 3.3597,
+    status: 'pending_admin_review',
+    priority: 'high',
+    priorityLevel: 'P2',
+    trackingId: 'CS-2026-0036',
+    gisLatitude: 6.4739,
+    gisLongitude: 3.3597,
+    isPublic: true,
+    assignedAt: daysAgo(9),
+    dispatchedAt: daysAgo(8),
+    arrivedAt: daysAgo(8),
+    closedAt: null,
+    finalReport:
+      'Observation post maintained from a neighbouring building across four nights. Two lorries matched the description; plates traced to a haulage company in Ijora. Goods were household appliances, not contraband. No armed presence observed on any of the four nights. Recommend closing with a referral to Customs for the unlicensed haulage.',
+    createdAt: daysAgo(9),
+    updatedAt: hoursAgo(5),
+  },
+  {
+    id: CASE_IDS.generator,
+    unitId: UNIT_MAIN,
+    reportedBy: CITIZEN.userId,
+    assignedTo: OFFICER.userId,
+    title: 'Generator fuel being siphoned from the estate standpipe',
+    description:
+      'Fuel is being drawn from the estate generator at night and sold on. The estate has run out of diesel twice this month as a result.',
+    incidentDate: daysAgo(14),
+    location: 'Ojuelegba Estate, Surulere, Lagos',
+    latitude: 6.5078,
+    longitude: 3.3582,
+    status: 'admin_changes_requested',
+    priority: 'routine',
+    priorityLevel: 'P3',
+    trackingId: 'CS-2026-0033',
+    gisLatitude: 6.5078,
+    gisLongitude: 3.3582,
+    isPublic: true,
+    assignedAt: daysAgo(14),
+    dispatchedAt: daysAgo(13),
+    arrivedAt: daysAgo(13),
+    closedAt: null,
+    finalReport:
+      'Watch kept on the generator house for two nights. One person was seen drawing fuel and carrying it off the estate. They have not been seen since.',
+    createdAt: daysAgo(14),
+    updatedAt: hoursAgo(8),
+  },
+  {
+    /* A small unit where the administrator also carries a caseload: they
+     * investigated this one themselves and cannot approve its closure. This is
+     * exactly the collision the rule exists for, and the only way to see the
+     * *explained* refusal without editing the seed. */
+    id: CASE_IDS.selfreview,
+    unitId: UNIT_MAIN,
+    reportedBy: CITIZEN.userId,
+    assignedTo: ADMIN.userId,
+    title: 'Repeated vandalism of the street lighting on Ogunlana Drive',
+    description:
+      'Street lights along a 200-metre stretch have been smashed four times in six weeks. Residents report it happens after midnight and the same group is suspected.',
+    incidentDate: daysAgo(21),
+    location: 'Ogunlana Drive, Surulere, Lagos',
+    latitude: 6.5011,
+    longitude: 3.3497,
+    status: 'pending_admin_review',
+    priority: 'routine',
+    priorityLevel: 'P3',
+    trackingId: 'CS-2026-0028',
+    gisLatitude: 6.5011,
+    gisLongitude: 3.3497,
+    isPublic: true,
+    assignedAt: daysAgo(21),
+    dispatchedAt: daysAgo(20),
+    arrivedAt: daysAgo(20),
+    closedAt: null,
+    finalReport:
+      'Four incidents logged, all between 00:30 and 02:00 on weeknights. Two residents independently describe a group of three on a single motorcycle. A discarded ball peen hammer was recovered from the base of the fourth lamp and logged as evidence. No CCTV covers the stretch. Consider closing with a recommendation to the council for a lamp-post camera.',
+    createdAt: daysAgo(21),
+    updatedAt: hoursAgo(20),
   },
 ]
 
@@ -429,6 +579,30 @@ export const PROGRESS_LIST: Progress[] = [
     action: 'progress',
     description: 'En route from Surulere, ETA eight minutes. Requesting backup at the interchange.',
     createdAt: hoursAgo(18),
+  },
+  {
+    id: uid('dddd4444', 8),
+    caseId: CASE_IDS.workshop,
+    officerId: OFFICER.userId,
+    action: 'observation',
+    description: 'Observation post set up opposite the workshop yard. Two nights covered, no movement after 22:00.',
+    createdAt: hoursAgo(30),
+  },
+  {
+    id: uid('dddd4444', 9),
+    caseId: CASE_IDS.workshop,
+    officerId: OFFICER.userId,
+    action: 'interview',
+    description: 'Took a statement from the neighbouring business owner who made the report. They will keep a written log.',
+    createdAt: hoursAgo(6),
+  },
+  {
+    id: uid('dddd4444', 10),
+    caseId: CASE_IDS.smuggled,
+    officerId: OFFICER.userId,
+    action: 'observation',
+    description: 'Four-night observation completed. Lorry plates recorded and passed to the analyst.',
+    createdAt: hoursAgo(28),
   },
 ]
 
@@ -503,6 +677,106 @@ export const TIMELINE_LIST: CaseTimelineEntry[] = [
     createdAt: daysAgo(9),
     user: USERS[OFFICER.userId],
   },
+  {
+    id: uid('eeee5555', 8),
+    caseId: CASE_IDS.lights,
+    userId: ADMIN.userId,
+    action: 'closure_approved',
+    description: 'Closure approved by Ngozi Eze.',
+    status: 'closed',
+    createdAt: daysAgo(9),
+    user: USERS[ADMIN.userId],
+  },
+  {
+    id: uid('eeee5555', 9),
+    caseId: CASE_IDS.workshop,
+    userId: CITIZEN.userId,
+    action: 'case_created',
+    description: 'Report submitted from the mobile app.',
+    status: 'pending',
+    createdAt: daysAgo(4),
+    user: USERS[CITIZEN.userId],
+  },
+  {
+    id: uid('eeee5555', 10),
+    caseId: CASE_IDS.workshop,
+    userId: OFFICER.userId,
+    action: 'arrived',
+    description: 'Officer arrived on scene.',
+    status: 'on_scene',
+    createdAt: daysAgo(3),
+    user: USERS[OFFICER.userId],
+  },
+  {
+    id: uid('eeee5555', 11),
+    caseId: CASE_IDS.workshop,
+    userId: OFFICER.userId,
+    action: 'investigating',
+    description: 'Investigation opened. Observation and enquiries under way.',
+    status: 'investigating',
+    createdAt: daysAgo(3),
+    user: USERS[OFFICER.userId],
+  },
+  {
+    id: uid('eeee5555', 12),
+    caseId: CASE_IDS.smuggled,
+    userId: ADMIN.userId,
+    action: 'changes_requested',
+    description: 'Closure not approved — the administrator asked for more detail.',
+    status: 'admin_changes_requested',
+    createdAt: daysAgo(2),
+    user: USERS[ADMIN.userId],
+  },
+  {
+    id: uid('eeee5555', 13),
+    caseId: CASE_IDS.smuggled,
+    userId: OFFICER.userId,
+    action: 'submitted_for_review',
+    description: 'Final report resubmitted for closure approval.',
+    status: 'pending_admin_review',
+    createdAt: hoursAgo(5),
+    user: USERS[OFFICER.userId],
+  },
+  {
+    id: uid('eeee5555', 14),
+    caseId: CASE_IDS.generator,
+    userId: OFFICER.userId,
+    action: 'submitted_for_review',
+    description: 'Final report submitted for closure approval.',
+    status: 'pending_admin_review',
+    createdAt: daysAgo(3),
+    user: USERS[OFFICER.userId],
+  },
+  {
+    id: uid('eeee5555', 15),
+    caseId: CASE_IDS.generator,
+    userId: ADMIN.userId,
+    action: 'changes_requested',
+    description: 'Closure not approved — the administrator asked for the follow-up on the suspect.',
+    status: 'admin_changes_requested',
+    createdAt: hoursAgo(8),
+    user: USERS[ADMIN.userId],
+  },
+  {
+    id: uid('eeee5555', 16),
+    caseId: CASE_IDS.selfreview,
+    userId: CITIZEN.userId,
+    action: 'case_created',
+    description: 'Report submitted from the mobile app.',
+    status: 'pending',
+    createdAt: daysAgo(21),
+    user: USERS[CITIZEN.userId],
+  },
+  {
+    id: uid('eeee5555', 17),
+    caseId: CASE_IDS.selfreview,
+    userId: ADMIN.userId,
+    action: 'submitted_for_review',
+    description: 'Final report submitted for closure approval.',
+    status: 'pending_admin_review',
+    createdAt: hoursAgo(20),
+    user: USERS[ADMIN.userId],
+  },
 ]
 
 export const EVIDENCE_LIST: Evidence[] = [
@@ -567,6 +841,104 @@ export const FEEDBACK_LIST: CaseFeedback[] = [
     comment: 'Response was quick and the street lights were fixed within the week.',
     isPublic: true,
     createdAt: daysAgo(8),
+  },
+]
+
+/**
+ * Closure-review decisions (`models.CaseReview`).
+ *
+ * Both seeded decisions are `request_changes`, because that is the branch the UI
+ * has to get right: the comment is not a rejection notice, it is the officer's next
+ * task, and the demo data should carry a real instruction rather than "rejected".
+ * The `smuggled` case was subsequently resubmitted, which is why it now sits in
+ * `pending_admin_review` with a history behind it.
+ */
+export const REVIEW_LIST: CaseReview[] = [
+  {
+    id: uid('2b2b2b2b', 1),
+    caseId: CASE_IDS.smuggled,
+    adminId: ADMIN.userId,
+    decision: 'request_changes',
+    comment:
+      'The report says the crates held appliances but not how that was established. State whether a crate was opened or catalogued, or say plainly that it was not possible and why.',
+    createdAt: daysAgo(2),
+  },
+  {
+    id: uid('2b2b2b2b', 2),
+    caseId: CASE_IDS.generator,
+    adminId: ADMIN.userId,
+    decision: 'request_changes',
+    comment:
+      'You identified a suspect but the report stops there. Was a name taken, and was it raised with the estate management? Add the follow-up, or say plainly why there was none.',
+    createdAt: hoursAgo(8),
+  },
+]
+
+/**
+ * Weekly case updates (`models.CaseWeeklyUpdate`).
+ *
+ * One officer's narrative for one reporting week. `citizenVisible` is what the
+ * backend writes and filters a reporter's read by — so the seeded updates are all
+ * visible, and the *restriction* is exercised by the handler, which hides
+ * non-visible ones from a reporter, not by the seed.
+ */
+export const WEEKLY_UPDATE_LIST: CaseWeeklyUpdate[] = [
+  {
+    id: uid('3c3c3c3c', 1),
+    caseId: CASE_IDS.smuggled,
+    officerId: OFFICER.userId,
+    ...week(now - 7 * DAY),
+    summary: 'Week one of the Apapa Road observation.',
+    investigation:
+      'Four nights of observation from the building opposite. Two unmarked lorries arrived between 01:10 and 02:40; crates were offloaded by four men. No weapons were seen on any night.',
+    actionsTaken: 'Observation log kept. Lorry plates photographed and passed to the analyst.',
+    findings: 'The lorries are registered to a haulage company in Ijora.',
+    outstandingActions: 'Establish what the crates contained.',
+    nextSteps: 'Approach the haulage company directly.',
+    submittedAt: daysAgo(7),
+    createdAt: daysAgo(7),
+    citizenVisible: true,
+  },
+  {
+    id: uid('3c3c3c3c', 2),
+    caseId: CASE_IDS.smuggled,
+    officerId: OFFICER.userId,
+    ...week(now - 2 * DAY),
+    summary: 'Week two — observation closed out and the report resubmitted.',
+    investigation:
+      'The final two nights produced no further offloading. The crates seen in week one were household appliances moved into the warehouse, confirmed with the warehouse manager.',
+    findings: 'No contraband. The activity is unlicensed haulage rather than a security matter.',
+    nextSteps: 'Refer the haulage licence question to Customs.',
+    submittedAt: hoursAgo(5),
+    createdAt: hoursAgo(5),
+    citizenVisible: true,
+  },
+  {
+    id: uid('3c3c3c3c', 3),
+    caseId: CASE_IDS.workshop,
+    officerId: OFFICER.userId,
+    ...week(now - 2 * DAY),
+    summary: 'First week on the Ogunlana Drive report.',
+    investigation:
+      'Observation post established opposite the workshop. Two nights covered; the yard was quiet after 22:00 on both, which does not match the pattern the caller described.',
+    actionsTaken: 'Took a statement from the reporting neighbour and asked them to keep a written log.',
+    outstandingActions: 'Cover a weekend night, when the earlier sightings were reported.',
+    submittedAt: hoursAgo(6),
+    createdAt: hoursAgo(6),
+    citizenVisible: true,
+  },
+  {
+    id: uid('3c3c3c3c', 4),
+    caseId: CASE_IDS.generator,
+    officerId: OFFICER.userId,
+    ...week(now - 9 * DAY),
+    summary: 'Two nights watching the estate generator house.',
+    investigation:
+      'One person was seen drawing fuel into two jerrycans at about 02:00 and leaving through the service gate.',
+    findings: 'Estate management say the person is not a member of their staff.',
+    submittedAt: daysAgo(9),
+    createdAt: daysAgo(9),
+    citizenVisible: true,
   },
 ]
 
@@ -758,6 +1130,8 @@ export function seedDatabase() {
     units: UNITS.map((u) => ({ ...u })),
     officers: OFFICERS.map((o) => ({ ...o })),
     assignments: ASSIGNMENT_LIST.map((a) => ({ ...a })),
+    reviews: REVIEW_LIST.map((r) => ({ ...r })),
+    weeklyUpdates: WEEKLY_UPDATE_LIST.map((w) => ({ ...w })),
   }
 }
 

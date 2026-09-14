@@ -52,6 +52,10 @@ const ACTION_LABELS: Record<string, string> = {
   dispatched: 'Officer dispatched',
   arrived: 'Officer on scene',
   on_scene: 'Officer on scene',
+  investigating: 'Investigation opened',
+  submitted_for_review: 'Submitted for review',
+  changes_requested: 'Closure not approved',
+  closure_approved: 'Closure approved',
   closed: 'Case closed',
   status_updated: 'Status updated',
   evidence_added: 'Evidence added',
@@ -65,6 +69,21 @@ const ACTION_LABELS: Record<string, string> = {
 
 /** Action code used when an officer files the week's narrative summary. */
 export const WEEKLY_SUMMARY_ACTION = 'weekly_summary'
+
+const DECISION_LABELS: Record<string, string> = {
+  approve: 'Closure approved',
+  request_changes: 'Changes requested',
+  // The backend defines this decision (`CaseReviewDecisionDeescalate`), but nothing
+  // in this frontend sets it and no route that does has been found — so it is
+  // labelled, not designed for. An unrecognised decision falls through to Title Case.
+  deescalate: 'De-escalated',
+}
+
+/** `request_changes` → "Changes requested"; unknown codes fall back to Title Case. */
+export function humanizeDecision(decision: string | undefined): string {
+  if (!decision) return 'Decision recorded'
+  return DECISION_LABELS[decision] ?? humanizeAction(decision)
+}
 
 /** `on_scene` → "Officer on scene"; unknown codes fall back to Title Case. */
 export function humanizeAction(action: string | undefined): string {
