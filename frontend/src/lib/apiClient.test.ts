@@ -101,6 +101,24 @@ describe('api client', () => {
     })
   })
 
+  it('keeps a structured error body so a conflict can explain itself', async () => {
+    // A 409 from submit-review carries the case's actual status; dropping the body
+    // would leave the UI able to say only "conflict".
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          { error: 'case cannot be submitted for review from its current status', status: 'closed' },
+          { status: 409, statusText: 'Conflict' },
+        ),
+      ),
+    )
+
+    const error = (await api.get('/cases/1').catch((cause: unknown) => cause)) as ApiError
+    expect(error.status).toBe(409)
+    expect(error.body).toMatchObject({ status: 'closed' })
+  })
+
   it('clears the session on 401', async () => {
     tokenStore.set('token-123')
     vi.stubGlobal(

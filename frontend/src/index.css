@@ -27,11 +27,17 @@
   --color-warn: #f59e0b;
   --color-ok: #22c55e;
 
-  /* Case lifecycle — colour-blind-safe, one hue per state */
+  /* Case lifecycle — colour-blind-safe, one hue per state.
+     The first five are the one-way field lifecycle; the next two are the review
+     phase, which is a loop and not a sixth and seventh step on a straight line.
+     Labels carry the meaning; hue only reinforces it. */
   --color-status-pending: #94a3b8;
   --color-status-assigned: #38bdf8;
   --color-status-dispatched: #f59e0b;
   --color-status-onscene: #a78bfa;
+  --color-status-investigating: #2dd4bf;
+  --color-status-adminreview: #818cf8;
+  --color-status-changes: #e879f9;
   --color-status-closed: #22c55e;
 
   /* Type */

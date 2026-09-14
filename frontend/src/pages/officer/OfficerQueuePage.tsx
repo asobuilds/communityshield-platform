@@ -8,7 +8,7 @@ import { PriorityChip, StatusChip } from '@/components/ui/Chips'
 import { Input } from '@/components/ui/Field'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import { useCases } from '@/hooks/useCases'
-import { CASE_STATUS_ORDER, statusIndex, statusMeta } from '@/lib/status'
+import { CASE_STATUS_ORDER, isAwaitingDispatch, statusMeta } from '@/lib/status'
 import { formatDate, relativeTime, truncate } from '@/lib/format'
 import type { Case, CaseStatus } from '@/types/api'
 
@@ -39,7 +39,7 @@ export function OfficerQueuePage() {
   const counts = useMemo(() => {
     return {
       open: cases.filter((c) => c.status !== 'closed').length,
-      awaiting: cases.filter((c) => c.status === 'pending' || c.status === 'assigned').length,
+      awaiting: cases.filter((c) => isAwaitingDispatch(c.status)).length,
       onScene: cases.filter((c) => c.status === 'on_scene').length,
       closed: cases.filter((c) => c.status === 'closed').length,
     }
@@ -214,7 +214,7 @@ export function OfficerQueuePage() {
 function CaseRow({ caseItem }: { caseItem: Case }) {
   const meta = statusMeta(caseItem.status)
   const overdue =
-    caseItem.status !== 'closed' && statusIndex(caseItem.status) <= 1 &&
+    isAwaitingDispatch(caseItem.status) &&
     Date.now() - new Date(caseItem.createdAt).getTime() > 24 * 3600_000
 
   return (

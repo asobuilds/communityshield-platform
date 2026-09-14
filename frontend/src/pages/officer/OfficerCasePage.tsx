@@ -4,13 +4,13 @@ import {
   ArrowLeft,
   BellRing,
   CalendarRange,
-  CheckCircle2,
   FileText,
   Image as ImageIcon,
   Info,
   MapPin,
   NotebookPen,
   Paperclip,
+  Send,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -26,12 +26,14 @@ import { ProgressTimeline } from '@/components/case/ProgressTimeline'
 import { WeeklyUpdates } from '@/components/case/WeeklyUpdates'
 import { EvidenceGallery } from '@/components/case/EvidenceGallery'
 import { EvidenceUpload } from '@/components/case/EvidenceUpload'
+import { ReviewHistory, ReviewNextStep, ReviewNotice } from '@/components/case/CaseReviewTrail'
 import { WEEKLY_SUMMARY_ACTION } from '@/components/case/activity'
 import { useCaseActions, useCaseDetail } from '@/hooks/useCases'
+import { useCaseReview } from '@/hooks/useCaseReview'
 import { useAddProgress, useCaseProgress } from '@/hooks/useProgress'
 import { useCaseEvidence, useUploadEvidence, useVerifyEvidence } from '@/hooks/useEvidence'
 import { ApiError } from '@/lib/apiClient'
-import { canAddProgress } from '@/lib/status'
+import { canAddProgress, canSubmitForReview, isAwaitingDispatch, isInReviewPhase, statusMeta } from '@/lib/status'
 
 const PROGRESS_ACTIONS = [
   { value: 'progress', label: 'Progress update' },
@@ -58,14 +60,16 @@ export function OfficerCasePage() {
   const detail = useCaseDetail(id)
   const progressQuery = useCaseProgress(id)
   const evidenceQuery = useCaseEvidence(id)
-  const { dispatch, arrive, close } = useCaseActions(id)
+  const { dispatch, arrive, submitForReview } = useCaseActions(id)
+  const review = useCaseReview(id)
   const addProgress = useAddProgress(id)
   const uploadEvidence = useUploadEvidence(id)
   const verifyEvidence = useVerifyEvidence(id)
 
   const [tab, setTab] = useState<TabId>('details')
-  const [closeOpen, setCloseOpen] = useState(false)
+  const [submitOpen, setSubmitOpen] = useState(false)
   const [finalReport, setFinalReport] = useState('')
+  const [submitConflict, setSubmitConflict] = useState<string | null>(null)
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [action, setAction] = useState(PROGRESS_ACTIONS[0].value)
   const [description, setDescription] = useState('')
@@ -196,14 +200,26 @@ export function OfficerCasePage() {
                 </Button>
               ) : null}
 
-              {status === 'on_scene' ? (
+              {canSubmitForReview(status) ? (
                 <Button
                   variant="primary"
-                  icon={<CheckCircle2 className="size-4" aria-hidden />}
-                  onClick={() => setCloseOpen(true)}
+                  icon={<Send className="size-4" aria-hidden />}
+                  onClick={() => {
+                    setSubmitConflict(null)
+                    // Prefill with whatever is already on the case: an officer sent
+                    // back for changes is revising a report, not writing a new one.
+                    setFinalReport(caseItem.finalReport ?? '')
+                    setSubmitOpen(true)
+                  }}
                 >
-                  Close case
+                  Submit for review
                 </Button>
+              ) : null}
+
+              {status === 'pending_admin_review' ? (
+                <Badge tone="neutral" className="h-9 px-3">
+                  With an administrator for a closure decision
+                </Badge>
               ) : null}
 
               {status === 'pending' ? (
@@ -215,6 +231,20 @@ export function OfficerCasePage() {
           }
         />
 
+        {/* What the reviewer wants, or what they are waiting on — put where the
+            officer already works, so a refusal reads as the next task. */}
+        <ReviewNotice status={status} reviews={review.data?.reviews ?? []} />
+
+        {submitConflict ? (
+          <div className="flex items-start gap-2.5 rounded-panel border border-warn/30 bg-warn/5 p-3">
+            <Info className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
+            <p className="min-w-0 flex-1 text-sm text-ink">{submitConflict}</p>
+            <Button size="sm" variant="ghost" onClick={() => setSubmitConflict(null)}>
+              Dismiss
+            </Button>
+          </div>
+        ) : null}
+
         <Card>
           <Tabs items={tabs} activeId={tab} onChange={(next) => setTab(next as TabId)} />
 
@@ -225,6 +255,23 @@ export function OfficerCasePage() {
                 timeline={detail.data?.timeline ?? []}
                 feedback={detail.data?.feedback ?? []}
               />
+              <section className="border-t border-border p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                  Closure review
+                </h3>
+                <ReviewNextStep status={status} />
+                {review.isError ? (
+                  <p className="mt-2 text-xs text-ink-muted">
+                    The review history did not load. It may be a connection problem.
+                  </p>
+                ) : (
+                  <ReviewHistory
+                    reviews={review.data?.reviews ?? []}
+                    isLoading={review.isLoading}
+                    className="mt-3"
+                  />
+                )}
+              </section>
             </TabPanel>
           ) : null}
 
@@ -292,10 +339,7 @@ export function OfficerCasePage() {
                 ) : (
                   <p className="flex items-start gap-2 text-xs text-ink-muted">
                     <Info className="mt-0.5 size-4 shrink-0 text-signal" aria-hidden />
-                    {closed
-                      ? 'This case is closed — the progress record is now read-only.'
-                      : 'Progress updates can be added once the case is dispatched. This case is still ' +
-                        `${status}.`}
+                    {progressGateMessage(status)}
                   </p>
                 )}
               </div>
@@ -379,33 +423,42 @@ export function OfficerCasePage() {
         </Card>
       </div>
 
-      {/* Close case */}
+      {/* Submit for closure review — the officer's half of the accountability loop.
+          The old "Close case" modal posted to a route the backend no longer serves. */}
       <Modal
-        open={closeOpen}
-        onClose={() => setCloseOpen(false)}
-        title="Close this case"
-        description="The final report becomes the permanent record. This cannot be undone."
+        open={submitOpen}
+        onClose={() => setSubmitOpen(false)}
+        title="Submit this case for closure review"
+        description="The final report is what the administrator judges. They can approve the closure, or send the case back to you with a comment."
         footer={
           <>
-            <Button variant="ghost" onClick={() => setCloseOpen(false)}>
-              Cancel
+            <Button variant="ghost" onClick={() => setSubmitOpen(false)}>
+              Keep editing
             </Button>
             <Button
               variant="primary"
-              loading={close.isPending}
+              loading={submitForReview.isPending}
               disabled={!finalReport.trim()}
               onClick={() =>
-                close.mutate(finalReport.trim(), {
+                submitForReview.mutate(finalReport.trim(), {
                   onSuccess: () => {
-                    setCloseOpen(false)
+                    setSubmitOpen(false)
                     setFinalReport('')
-                    notify('Case closed.', 'success')
+                    notify('Submitted for review.', 'success')
                   },
-                  onError: (cause) => reportError(cause, 'Could not close this case.'),
+                  onError: (cause) => {
+                    setSubmitOpen(false)
+                    const moved = conflictStatus(cause)
+                    if (moved) {
+                      setSubmitConflict(describeMovedStatus(moved))
+                      return
+                    }
+                    reportError(cause, 'Could not submit this case for review.')
+                  },
                 })
               }
             >
-              Close case
+              Submit for review
             </Button>
           </>
         }
@@ -413,18 +466,25 @@ export function OfficerCasePage() {
         <Field
           label="Final report"
           required
-          hint="What was found, what was done, and how the case was resolved."
+          hint="What was found, what was done, and how the case was resolved. This becomes part of the permanent record."
         >
           {(props) => (
             <Textarea
               {...props}
-              rows={6}
+              rows={8}
               value={finalReport}
               onChange={(event) => setFinalReport(event.target.value)}
               placeholder="Summary of the investigation and its outcome…"
             />
           )}
         </Field>
+
+        {!finalReport.trim() ? (
+          <p className="mt-2 flex items-start gap-2 text-xs text-ink-muted">
+            <Info className="mt-0.5 size-4 shrink-0 text-signal" aria-hidden />
+            Add the final report first — an administrator cannot approve a closure without one.
+          </p>
+        ) : null}
       </Modal>
 
       <EvidenceUpload
@@ -446,6 +506,48 @@ export function OfficerCasePage() {
       />
     </div>
   )
+}
+
+/**
+ * Why progress cannot be added right now — the real reason, per state.
+ *
+ * The gate is not "once the case is dispatched" any more: `investigating` allows
+ * progress (the review workflow needs a written record of the investigation), and
+ * a case sitting in `pending_admin_review` allows none until an admin decides.
+ */
+function progressGateMessage(status: string): string {
+  if (status === 'closed') return 'This case is closed — the progress record is now read-only.'
+  if (isAwaitingDispatch(status)) {
+    return 'Progress updates can be added once the case is dispatched. This case has not been dispatched yet.'
+  }
+  if (isInReviewPhase(status)) {
+    return 'This case is with an administrator for a closure decision, so the progress record is read-only until they decide.'
+  }
+  const meta = statusMeta(status)
+  return meta.known
+    ? `Progress updates cannot be added while a case is ${meta.label.toLowerCase()}.`
+    : `Progress updates cannot be added while a case is in a state this app does not recognise (${status}).`
+}
+
+/**
+ * The status the backend returned inside a 409 body, if it sent one.
+ *
+ * `POST /cases/:id/submit-review` refuses a submission from the wrong state with
+ * `{ error, status }`, so the UI can name the state the case actually moved to
+ * rather than guessing why it was refused.
+ */
+function conflictStatus(cause: unknown): string | undefined {
+  if (!(cause instanceof ApiError) || cause.status !== 409) return undefined
+  const body = cause.body as { status?: unknown } | undefined
+  return typeof body?.status === 'string' ? body.status : undefined
+}
+
+function describeMovedStatus(moved: string): string {
+  const meta = statusMeta(moved)
+  const label = meta.known
+    ? meta.label.toLowerCase()
+    : `in a state this app does not recognise (${moved})`
+  return `This case is now ${label}, so it can no longer be submitted for review. This screen has been refreshed.`
 }
 
 function BackLink() {
