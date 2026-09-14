@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom'
-import { FolderSearch, MapPin } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { FolderSearch, MapPin, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { StatusChip } from '@/components/ui/Chips'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
@@ -12,18 +13,31 @@ import { relativeTime } from '@/lib/format'
  *
  * `GET /cases` is scoped server-side by role, so a citizen only ever receives
  * their own cases — this page renders that list. Each row opens
- * `CitizenCasePage`, the curated view of a single report.
+ * `CitizenCasePage`, the curated view of a single report, and both the header
+ * and the empty state lead to `/report`, which is the only way into the product's
+ * one creating flow.
  */
 export function CitizenHomePage() {
+  const navigate = useNavigate()
   const { data, isLoading, isError, refetch } = useCases()
 
   return (
     <div className="mx-auto w-full max-w-3xl p-4 sm:p-6">
-      <header className="mb-4">
-        <h1 className="text-xl font-semibold text-ink">Your reports</h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          Track what you have reported and where it has got to.
-        </p>
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-ink">Your reports</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            Track what you have reported and where it has got to.
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Plus className="size-4" aria-hidden />}
+          onClick={() => navigate('/report')}
+        >
+          New report
+        </Button>
       </header>
 
       {isLoading ? (
@@ -52,6 +66,11 @@ export function CitizenHomePage() {
             icon={<FolderSearch className="size-5" aria-hidden />}
             title="You haven't reported anything yet"
             description="When you report an incident, it will appear here with live status updates from the responding unit."
+            action={
+              <Button variant="primary" onClick={() => navigate('/report')}>
+                Report an incident
+              </Button>
+            }
           />
         </Card>
       ) : (
