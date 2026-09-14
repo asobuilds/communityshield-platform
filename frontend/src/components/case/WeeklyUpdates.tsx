@@ -43,6 +43,7 @@ export function WeeklyUpdates({
   progress,
   timeline,
   showCitizenVisibility = false,
+  restrictedFeed = false,
   className,
 }: {
   caseId: string | undefined
@@ -50,10 +51,25 @@ export function WeeklyUpdates({
   canFile?: boolean
   /** Used to detect "you have already filed this week" before the click. */
   currentUserId?: string
-  progress: Progress[]
-  timeline: CaseTimelineEntry[]
+  /**
+   * Progress notes and case events, used **only** to assemble the "Activity by
+   * week" reading aid below. Both are optional, and when a caller omits them the
+   * section is *absent* rather than empty — which is what the citizen view wants.
+   * "Absent, not hidden" is the point: the citizen page must never fetch the
+   * progress feed at all, so there is nothing to hide. A caller that passes `[]`
+   * has the data and it is genuinely empty, so it still gets the empty state.
+   */
+  progress?: Progress[]
+  timeline?: CaseTimelineEntry[]
   /** Admins and the filing officer see which updates reach the reporter. */
   showCitizenVisibility?: boolean
+  /**
+   * True when the server has already filtered this feed down to what the reporter
+   * may read. It changes one sentence and nothing else — but it has to change it,
+   * because on a filtered feed an empty list does **not** mean nothing was filed,
+   * and telling the reporter that it does would be a lie the screen cannot check.
+   */
+  restrictedFeed?: boolean
   className?: string
 }) {
   const query = useWeeklyUpdates(caseId)
@@ -224,7 +240,9 @@ export function WeeklyUpdates({
             description={
               canFile
                 ? 'File a short account of this week: what was done, what was found, and what happens next.'
-                : 'The assigned officer has not filed a weekly account for this case yet.'
+                : restrictedFeed
+                  ? 'Nothing has been shared with you yet. Narratives are filed weekly, and sharing one with the reporter is a decision the officer makes.'
+                  : 'The assigned officer has not filed a weekly account for this case yet.'
             }
           />
         ) : (
@@ -240,7 +258,9 @@ export function WeeklyUpdates({
         )}
       </section>
 
-      <WeeklyActivity progress={progress} timeline={timeline} />
+      {progress !== undefined || timeline !== undefined ? (
+        <WeeklyActivity progress={progress ?? []} timeline={timeline ?? []} />
+      ) : null}
 
       {composerOpen ? (
         <Modal

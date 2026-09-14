@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
-  ArrowLeft,
   CalendarRange,
   CheckCircle2,
   FileText,
@@ -15,6 +14,7 @@ import {
   Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { BackLink } from '@/components/ui/BackLink'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Chips'
 import { Field, Textarea } from '@/components/ui/Field'
@@ -157,7 +157,7 @@ export function AdminCaseReviewPage() {
   if (detail.isError || !caseItem) {
     return (
       <div className="mx-auto w-full max-w-4xl p-4 sm:p-6">
-        <BackLink />
+        <BackLink to="/admin/cases" label="Back to case review" />
         <Card className="mt-4">
           <ErrorState
             title={networkIssue ? 'You are offline' : 'Case unavailable'}
@@ -178,7 +178,7 @@ export function AdminCaseReviewPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl p-4 sm:p-6">
-      <BackLink />
+      <BackLink to="/admin/cases" label="Back to case review" />
 
       {networkIssue ? (
         <div className="mb-3">
@@ -314,7 +314,11 @@ export function AdminCaseReviewPage() {
                     onRetry={() => void reviewQuery.refetch()}
                   />
                 ) : (
-                  <ReviewHistory reviews={reviews} isLoading={reviewQuery.isLoading} />
+                  <ReviewHistory
+                    reviews={reviews}
+                    status={caseItem.status}
+                    isLoading={reviewQuery.isLoading}
+                  />
                 )}
 
                 {awaitingDecision ? (
@@ -731,18 +735,6 @@ function AssignmentPanel({
         )}
       </div>
     </Card>
-  )
-}
-
-function BackLink() {
-  return (
-    <Link
-      to="/admin/cases"
-      className="inline-flex items-center gap-1.5 text-xs text-ink-muted transition-colors hover:text-ink"
-    >
-      <ArrowLeft className="size-3.5" aria-hidden />
-      Back to case review
-    </Link>
   )
 }
 

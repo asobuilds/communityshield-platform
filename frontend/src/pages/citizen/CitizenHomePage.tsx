@@ -11,8 +11,8 @@ import { relativeTime } from '@/lib/format'
  * Citizen home: the reports *this* citizen filed.
  *
  * `GET /cases` is scoped server-side by role, so a citizen only ever receives
- * their own cases — this page renders that list. Case detail for citizens
- * (full timeline, feedback, ratings) is the next milestone.
+ * their own cases — this page renders that list. Each row opens
+ * `CitizenCasePage`, the curated view of a single report.
  */
 export function CitizenHomePage() {
   const { data, isLoading, isError, refetch } = useCases()
@@ -58,25 +58,34 @@ export function CitizenHomePage() {
         <ul className="flex flex-col gap-3">
           {data.map((caseItem) => (
             <li key={caseItem.id}>
-              <Card as="article">
-                <CardHeader
-                  title={caseItem.title}
-                  subtitle={
-                    <span className="tabular-nums">
-                      {caseItem.trackingId} · reported {relativeTime(caseItem.createdAt)}
-                    </span>
-                  }
-                  actions={<StatusChip status={caseItem.status} />}
-                />
-                <CardBody className="flex flex-col gap-4">
-                  <p className="text-sm text-ink-muted">{caseItem.description}</p>
-                  <p className="flex items-center gap-1.5 text-xs text-ink-faint">
-                    <MapPin className="size-3.5" aria-hidden />
-                    {caseItem.location || 'Location recorded'}
-                  </p>
-                  <CaseStatusStepper status={caseItem.status} />
-                </CardBody>
-              </Card>
+              {/* The whole card is the target: on a phone this is a thumb, not a
+                  cursor, and a title-sized hit area is the difference between a
+                  tap that lands and one that does not. */}
+              <Link
+                to={`/cases/${caseItem.id}`}
+                aria-label={`Open report ${caseItem.trackingId}: ${caseItem.title}`}
+                className="block rounded-panel transition-colors hover:border-border-hi focus:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+              >
+                <Card as="article">
+                  <CardHeader
+                    title={caseItem.title}
+                    subtitle={
+                      <span className="tabular-nums">
+                        {caseItem.trackingId} · reported {relativeTime(caseItem.createdAt)}
+                      </span>
+                    }
+                    actions={<StatusChip status={caseItem.status} />}
+                  />
+                  <CardBody className="flex flex-col gap-4">
+                    <p className="text-sm text-ink-muted">{caseItem.description}</p>
+                    <p className="flex items-center gap-1.5 text-xs text-ink-faint">
+                      <MapPin className="size-3.5" aria-hidden />
+                      {caseItem.location || 'Location recorded'}
+                    </p>
+                    <CaseStatusStepper status={caseItem.status} />
+                  </CardBody>
+                </Card>
+              </Link>
             </li>
           ))}
         </ul>
