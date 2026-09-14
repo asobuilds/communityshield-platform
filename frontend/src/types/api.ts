@@ -278,6 +278,53 @@ export interface CasesResponse {
   cases: Case[]
 }
 
+/**
+ * The body of `POST /cases`, field for field from the `CreateCase` input struct
+ * in `backend/handlers/case_handler.go`.
+ *
+ * Three things about that shape are worth stating, because each one forbids a
+ * screen from promising something:
+ *
+ *  - **There is no category field.** Neither the input nor the `Case` model has
+ *    one, so the wizard cannot ask for it and nothing may render it back.
+ *  - **`unitId` is optional, and a malformed value is silently dropped.** The
+ *    backend parses it as a UUID and only attaches the unit when that succeeds —
+ *    an empty or unparseable string still creates the case, just unattached. A
+ *    chosen unit is therefore a *request*, not a guarantee, and no copy may say
+ *    "dispatched to" a unit on the strength of it.
+ *  - **`priority` is passed through untouched.** `isSOS` alone bands P1; the
+ *    literal `"high"` bands P2; anything else (including an omitted value) is P3.
+ *    So this field is a hint, and `priorityLevel` on the response is the answer.
+ */
+export interface CreateCaseInput {
+  /** A unit id — honoured only if it parses as a UUID. */
+  unitId?: string
+  title: string
+  description: string
+  latitude?: number
+  longitude?: number
+  location?: string
+  /** Only the literal `"high"` changes the band. */
+  priority?: string
+  /** Bands P1 and triggers an immediate dispatch attempt. Only SOS sets it. */
+  isSOS?: boolean
+}
+
+/**
+ * The 201 from `POST /cases`.
+ *
+ * `trackingId` and `priorityLevel` are repeated at the top level *and* on `case`.
+ * The receipt reads the top-level pair: they are the values the create actually
+ * decided, and reaching into a freshly created object for them invites a screen
+ * that disagrees with the server about what it just made.
+ */
+export interface CreateCaseResponse {
+  message: string
+  case: Case
+  trackingId: string
+  priorityLevel: PriorityLevel
+}
+
 export interface CaseDetailResponse {
   case: Case
   timeline: CaseTimelineEntry[]

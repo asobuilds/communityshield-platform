@@ -13,14 +13,25 @@
  *  - an assigned officer cannot approve their own case's closure;
  *  - approve / request-changes both require a non-empty comment;
  *  - a second weekly update for the same UTC week is refused, returning the first;
+ *  - `POST /cases` requires a title and a description, bands priority from
+ *    `isSOS` / `priority`, attaches a unit only if the id parses, and always
+ *    stores the case public;
  *  - `GET /cases` is scoped by role server-side, never by the client.
  */
 
 import { sleep, type MockRoute } from './adapter'
 import { USERS, seedDatabase, type MockDatabase } from './seed'
-import { MOCK_ACCOUNTS, mockTokenFor, userIdFromToken } from './config'
+import { MOCK_ACCOUNTS, mockTokenFor, mockUid, userIdFromToken } from './config'
 import { ISO_WEEK_MS, startOfIsoWeekUtc } from '@/lib/week'
-import type { Case, CaseReview, CaseWeeklyUpdate, Progress, User } from '@/types/api'
+import type {
+  Case,
+  CaseReview,
+  CaseWeeklyUpdate,
+  CreateCaseInput,
+  PriorityLevel,
+  Progress,
+  User,
+} from '@/types/api'
 
 const db: MockDatabase = seedDatabase()
 
@@ -100,6 +111,15 @@ function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): nu
 
 const nowIso = () => new Date().toISOString()
 
+/**
+ * What a `uuid.UUID` field serialises to when the backend never assigned it.
+ *
+ * `models.Case.UnitID` is `not null` and `CreateCase` leaves it zero when the
+ * submitted `unitId` does not parse, so Go marshals the zero value rather than
+ * omitting the key. A case filed with no resolvable unit carries this string.
+ */
+const ZERO_UNIT_ID = '00000000-0000-0000-0000-000000000000'
+
 export const handlers: MockRoute[] = [
   /* ---------------------------------------------------------------- auth */
 
@@ -162,6 +182,114 @@ export const handlers: MockRoute[] = [
         progress: db.progress.filter((p) => p.caseId === c.id),
       }))
       return { body: { cases } }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/cases',
+    async respond({ request }) {
+      await sleep(400)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+
+      const body = (await request.json().catch(() => ({}))) as Partial<CreateCaseInput>
+
+      // Gin binds `title` and `description` as `required` and answers 400 with
+      // its own validation string. The wizard disables submit on an empty form,
+      // so this is the guard for the request that got past it — a direct call,
+      // or a draft restored from storage with a field since cleared.
+      if (!body.title?.trim() || !body.description?.trim()) {
+        return { status: 400, body: { error: 'title and description are required' } }
+      }
+
+      // Mirrors CreateCase's banding: `isSOS` → P1, the literal "high" → P2,
+      // anything else → P3. `priority` itself is stored exactly as sent, which
+      // is why the wizard omits it rather than sending "normal".
+      const priorityLevel: PriorityLevel = body.isSOS
+        ? 'P1'
+        : body.priority === 'high'
+          ? 'P2'
+          : 'P3'
+
+      /*
+       * `generateTrackingID` is `CS-YYYYMMDD-<n>`, where n is a nanosecond clock
+       * reading modulo 10000. The *format* is reproduced rather than approximated:
+       * a citizen reads this string aloud to a unit and writes it on a form, so a
+       * mock that taught a different shape would be teaching the wrong thing.
+       *
+       * The `% 10000` is why the real ids collide — it is a 4-digit space minted
+       * per call, not a sequence — so this mock inherits that flaw on purpose.
+       */
+      const trackingId = `CS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now() % 10000}`
+
+      /*
+       * A unit attaches only if the id resolves, which is what `uuid.Parse`
+       * decides server-side. An unattached case is not a broken one: the queue is
+       * scoped by unit, so it is visible to its reporter and to a super admin and
+       * to nobody else — which is what a case no unit has been asked to handle
+       * should look like.
+       */
+      const unit = db.units.find((u) => u.id === body.unitId)
+      const now = nowIso()
+      const caseItem: Case = {
+        id: mockUid('eeee5555', db.cases.length + 1),
+        unitId: unit?.id ?? ZERO_UNIT_ID,
+        reportedBy: user.id,
+        title: body.title.trim(),
+        description: body.description.trim(),
+        location: body.location,
+        latitude: body.latitude ?? 0,
+        longitude: body.longitude ?? 0,
+        gisLatitude: body.latitude ?? 0,
+        gisLongitude: body.longitude ?? 0,
+        status: 'pending',
+        priority: body.priority,
+        priorityLevel,
+        trackingId,
+        // Hardcoded on the real create path: a report cannot be filed privately,
+        // so the UI must never imply the reporter chose to keep it off the map.
+        isPublic: true,
+        createdAt: now,
+        updatedAt: now,
+      }
+      db.cases.push(caseItem)
+
+      /*
+       * The real backend writes no timeline row here — only an async audit log,
+       * for which this frontend has no endpoint. This entry exists so the
+       * reporter's case log has the event it is about: without it, opening a
+       * report just filed shows an empty log, and `pending` becomes a status
+       * with nothing on record saying how the case got there. If the backend
+       * ever writes a real `case_created` row, delete this and let the server's
+       * own entry be the first line.
+       */
+      db.timeline.unshift({
+        id: `tl-${Date.now()}`,
+        caseId: caseItem.id,
+        userId: user.id,
+        action: 'case_created',
+        description: 'Report submitted.',
+        status: 'pending',
+        createdAt: now,
+        user,
+      })
+
+      /*
+       * Not modelled: the real handler fires `triggerImmediateDispatch` for P1 in
+       * a goroutine. Nothing here sends `isSOS` — SOS is its own surface with its
+       * own arming flow, not a checkbox on a report form — so the branch would
+       * never run. It gets modelled when that surface lands.
+       */
+      return {
+        status: 201,
+        body: {
+          message: 'Case reported successfully',
+          case: caseItem,
+          trackingId,
+          priorityLevel,
+        },
+      }
     },
   },
 
