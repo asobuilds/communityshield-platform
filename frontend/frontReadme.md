@@ -15,7 +15,7 @@ frontend is now a typed React 19 + Vite + Tailwind v4 application with routing, 
 layer, a server-state cache, a design system, a reusable map, and the first real workflows — citizen
 case tracking, officer operations, and unit-admin triage and assignment.
 
-> ### Frontend stage — M4.5 complete
+> ### Frontend stage — M4.5 complete, M2 citizen tracking landed
 >
 > M0 is **complete**. M1–M5 are **part-built** (§6): nine routes render working screens against the
 > mock API. Nothing in M6–M8 has started.
@@ -32,11 +32,21 @@ case tracking, officer operations, and unit-admin triage and assignment.
 > **The one piece left is not a frontend task:** `on_scene → investigating` has no registered route,
 > so nothing in the UI performs it — reachable in the demo via the seed only.
 >
-> **The biggest gap now is the citizen.** Reporters can see their case *state* and nothing else:
-> there is no citizen case-detail page, so the timeline, final report, review history and weekly
-> narratives this frontend already renders for officers and admins — plus the `citizenVisible`
-> privacy boundary those endpoints enforce — are unreachable to the person who filed the report.
-> Everything else below is either shipped or is net-new feature work that nothing has invalidated.
+> **The citizen gap is closed — the citizen case-detail page is built**, which is the last outstanding
+> item of **M2 (citizen core)**. Reporters previously saw their case *state* and nothing else. `/cases/:id` is now a curated record: the final report, the
+> closure decisions with their comments, the weekly narratives an officer chose to share, and a log of
+> status changes with descriptions and personal names withheld. It is a *subset* of the staff case
+> page by omission, not by a mode flag — it does not fetch the progress feed or the evidence list, so
+> there is no code path on that screen that could render them.
+>
+> **What that did *not* fix, and cannot:** the API still hands the reporter the progress feed, the
+> evidence list and timeline descriptions naming officers. The curated view is presentation. See the
+> note at the end of F4.
+>
+> **Next on the list, in order:** (1) the citizen *report* wizard — reporting is still the one citizen
+> journey with no UI at all, so the reports this page renders cannot be created from inside the app;
+> (2) `on_scene → investigating`, which is blocked on a backend route rather than on frontend work;
+> (3) the admin surfaces still named as placeholders (M5/M7).
 
 | Item | Today | Target |
 |---|---|---|
@@ -45,9 +55,9 @@ case tracking, officer operations, and unit-admin triage and assignment.
 | API layer | ✅ typed client, mock adapter, 401 handling | Complete |
 | State | ✅ React Query (server) + auth context | Complete |
 | Design system | ✅ primitives + tokens + 4 states | Grow with features |
-| Tests | ✅ 4 unit modules (ISO weeks, API client, assignment rules, status vocabulary) — 58 tests | Component + E2E |
+| Tests | ✅ 5 unit modules (ISO weeks, API client, assignment rules, status vocabulary, reporter case-log disclosure) — 69 tests | Component + E2E |
 | Mocks | ✅ in-browser mock API (`VITE_USE_MOCKS`), now covering the full review loop | Contract tests |
-| Case lifecycle | ✅ **all 8 states rendered; the review loop walks end-to-end** (officer submits → admin decides → resubmit → approve → closed). Weekly narratives are read from the real entity | Full lifecycle (§0.4) |
+| Case lifecycle | ✅ **all 8 states rendered; the review loop walks end-to-end** (officer submits → admin decides → resubmit → approve → closed). Weekly narratives are read from the real entity, and the reporter now reads their own case through a curated view | Full lifecycle (§0.4) |
 
 ### 0.1 What exists right now
 
@@ -59,7 +69,8 @@ account: `officer@shield.ng`, `admin@shield.ng`, `citizen@shield.ng`, `super@shi
 | Route | Screen | State |
 |---|---|---|
 | `/auth/login` | Sign-in (role quick-fill under mocks) | ✅ |
-| `/` | Citizen: your reports + lifecycle stepper | ✅ (detail view next) |
+| `/` | Citizen: your reports + lifecycle stepper | ✅ |
+| `/cases/:id` | Citizen: one report — curated record, case log, shared weekly narratives | ✅ |
 | `/officer/queue` | Case queue — priority sort, filters, search, SLA badge | ✅ |
 | `/officer/cases/:id` | Case workspace — Details (incl. closure review) · Progress · Weekly · Evidence | ✅ |
 | `/admin/cases` | Admin triage board — attention counters, search, assign/reassign | ✅ |
@@ -93,12 +104,14 @@ src/
   lib/week.ts              ISO-week display helpers: labelling a supplied weekStart, grouping
                            activity into weeks (the server owns the reporting week)
   lib/assignment.ts        assignment rules mirroring the backend guard (pure, tested)
+  lib/caseLog.ts           what a reporter's case log shows and withholds (pure, tested)
   auth/                    AuthContext (session restore) + RequireRole guard
-  components/ui/           Button, Card, Chips, Field, Tabs, Modal, Toast, States
+  components/ui/           Button, BackLink, Card, Chips, Field, Tabs, Modal, Toast, States
   components/layout/       AppShell (sidebar ⇄ bottom nav) + NotificationBell
   components/map/MapView   the one map: view mode + location-pick mode
   components/case/         CaseHeader, CaseFacts, CaseStatusStepper, CaseReviewTrail,
-                           WeeklyUpdates, ProgressTimeline, EvidenceGallery, EvidenceUpload
+                           WeeklyUpdates, ProgressTimeline, EvidenceGallery, EvidenceUpload,
+                           CaseLog (the redacted reporter log)
   components/admin/        AssignOfficerDialog
   hooks/                   useCases, useCaseReview, useWeeklyUpdates, useProgress, useEvidence,
                            useUnits, useOfficers, useNotifications
@@ -113,6 +126,15 @@ splitting them would let the two roles disagree about what was decided.
 reviewing a decision must not be looking at a different rendering of it.** Both consoles read the
 same case facts from one component (`components/case/CaseFacts.tsx`), which also exports the
 `SystemTimeline` used by both.
+
+**The citizen view breaks that pattern deliberately, and the difference is worth stating.** The
+officer and the administrator are the same audience — people accountable for a case — so sharing a
+component makes them agree. The reporter is a different audience with different rights, and there the
+safe default inverts: with a shared component, every field added later becomes visible to reporters
+unless somebody remembers to exclude them. `/cases/:id` therefore composes its own header and log from
+the shared primitives (`StatusChip`, `CaseStatusStepper`, `ReviewHistory`, `WeeklyUpdates`) and
+composes a *subset* — the failure mode of forgetting to add something is a reporter seeing less than
+they could, not more than they should.
 
 ### 0.2 Three decisions worth knowing
 
@@ -152,14 +174,16 @@ same case facts from one component (`components/case/CaseFacts.tsx`), which also
 | No binary upload endpoint — evidence takes a hosted `fileUrl` | `EvidenceUpload` asks for a link and says so plainly |
 | Notification reads live under `/mobile/notifications*` only | `useNotifications` uses the mobile endpoints |
 | **`GetCaseAccountability` is implemented but never routed** — `handlers.GetCaseAccountability` exists in `case_review_handler.go` and calls `services.GetCaseAccountability`, but no route registers it. Its model is `models.CaseAccountabilityEvent` | Nothing calls it. Treat it as *available to design against*, not as a live endpoint — see §0.4 item 5 |
+| **`GET /cases/:id` returns a reporter more than they should read** — the progress feed, the evidence list, and timeline `description` strings that name officers and administrators ("Assigned to Officer Tunde Balogun.") | The citizen view curates by **omission**: it does not fetch progress or evidence, and `lib/caseLog.ts` renders an actor *role* instead of a name. This is presentation, not enforcement — the same token gets the rest with `curl`. **A real boundary means the backend stops sending it**; until then, do not describe the citizen view as private |
 
 **Prerequisite still open:** the Go backend does not build from this repo (`go.sum` is git-ignored),
 so `VITE_USE_MOCKS=false` has nothing to talk to yet.
 
 ### 0.4 Lifecycle drift — the backend changed the case workflow under this frontend
 
-**This is the current milestone (M4.5).** It is not new feature work; it is the frontend catching up
-to a contract that already shipped.
+**This was the M4.5 milestone, and M4.5 is complete.** It was not new feature work; it was the
+frontend catching up to a contract that already shipped. What remains below is the record of what
+moved and the one item still blocked on the backend.
 
 Verified against `backend/routes/routes.go` and `backend/handlers/case_review_handler.go`.
 
@@ -419,35 +443,57 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 ### F4 — Case tracking & feedback
 
 **Screens:** my cases list, case detail, timeline, evidence viewer, feedback form.
-*(Only the list exists — see the citizen case-detail gap below.)*
+*(The list and the case detail exist; the evidence viewer and feedback form do not.)*
 
-- [x] Case list with status chips, priority, last-updated
+- [x] Case list with status chips, priority, last-updated — each card is the link to the detail view
+- [x] **Case detail (`/cases/:id`, citizen-only) — a curated record, built as a *subset* of the staff
+      case page by omission.** It renders status + stepper, the final report, the closure decisions
+      with their comments, the weekly narratives shared with the reporter, and a **case log of status
+      changes only**. It calls three endpoints (`GET /cases/:id`, `/review`, `/weekly-updates`) and
+      never fetches the progress feed or the evidence list, so the "Activity by week" reading aid is
+      *absent* rather than hidden — there is no code path that could render a progress note. Names are
+      withheld: the log shows an **actor role** (`You` / `Assigned officer` / `Unit staff`) derived
+      from ids the case already carries, and never renders timeline `description` text, which is
+      written for an internal audience and names people ("Assigned to Officer Tunde Balogun."). The
+      responding **unit** is named once in the header, not per row — the timeline says which *user*
+      acted, never which unit, so a per-row unit stamp would be a guess
 - [x] **Lifecycle stepper** — rebuilt as two instruments: a one-way *field rail* over
       `FIELD_LIFECYCLE` (pending → assigned → dispatched → on scene → investigating) and a separate
       *review phase* block, because approve/request-changes is a loop and cannot be drawn as a sixth
       step. An unrecognised status renders its raw value instead of pretending to be step 1
-- [x] Progress timeline (action, description, officer, time)
-- [~] Assigned unit/officer visibility (respecting privacy) — officer shown when named on the timeline
-- [x] Evidence gallery (thumbnails, type, verification badge)
+- [x] Progress timeline (action, description, officer, time) — **officer and admin views only**
+- [~] Assigned unit/officer visibility (respecting privacy) — the staff views show the officer when
+      named on the timeline; the citizen view shows the **unit** and no officer identity at all
+- [x] Evidence gallery (thumbnails, type, verification badge) — **officer and admin views only**
 - [x] Resolution summary (final report) — rendered whenever present, headed by the case's actual
       review position (draft / submitted for review / changes requested), not only when closed
 - [x] Weekly updates — the real entity: `GET|POST /cases/:id/weekly-update(s)` over
       `models.CaseWeeklyUpdate`, with all seven fields, the server-computed week, and the
       duplicate-week 409 as a designed "already filed" state. Display-only helpers
       (`lib/week.ts`) remain for grouping activity into weeks and labelling a supplied `weekStart`.
-      A reporter would see the `citizenVisible` filter applied exactly as returned — but see the
-      citizen gap below: nothing citizen-facing calls this endpoint yet, so that boundary is
-      enforced in the data layer and exercised by nobody
-- [~] Review history — the shared `<ReviewHistory>` renders every decision with comment, actor and
+      **The reporter reads the same endpoint, server-filtered to `citizenVisible = true`** — that
+      boundary now has a caller, and the empty state says "nothing has been shared with you yet"
+      rather than "nothing was filed", because on a filtered feed those are different facts
+- [x] Review history — the shared `<ReviewHistory>` renders every decision with comment, actor and
       timestamp, and is wired into the **officer** page (where "what were you asked to change?"
-      matters most) and the **admin** Review tab. **Not wired for citizens**, because there is no
-      citizen case-detail page to wire it into: `CitizenHomePage` is a list. A citizen therefore
-      sees the case *state* (the list renders `CaseStatusStepper`, which after the M4.5 rewrite shows
-      "Awaiting review" / "Changes requested" correctly) but not the *reason*. "Why is my case still
-      open" is a question this product currently cannot answer to the person who asked it, and that
-      is the single best argument for building citizen case detail next
-- [~] Feedback: rating + comment rendered; **submission form not built**
+      matters most), the **admin** Review tab, and now the **citizen case detail**, so "why is my case
+      still open" has an answer addressed to the person who asked it. A closed case with no recorded
+      decision is described as such rather than as "not decided yet"
+- [~] Feedback: rating + comment **rendered** where present; **submission form not built**, and no
+      citizen-facing surface renders feedback yet
 - [ ] Push/in-app updates on every status change
+
+**States:** empty · loading · not-found · forbidden · closed-readonly · awaiting-review · changes-requested
+**APIs:** `GET /cases`, `GET /cases/:id`, `GET /cases/:id/timeline`, `GET /cases/:id/progress`,
+`GET /cases/:id/review`, `GET /cases/:id/weekly-updates`, `GET /evidence/case/:caseId`,
+`POST /cases/:id/feedback`, `POST /ratings`, `GET /ratings/units/:unitId`
+
+> **The citizen view is presentation, not a privacy boundary.** `GET /cases/:id` already returns the
+> reporter the progress feed, the evidence list and timeline descriptions that name officers and
+> administrators, and the mock's `canSeeCase` permits it. Not fetching two endpoints and not rendering
+> a third field is a decision about what a reporter should have to read; it is not a control on what
+> they can obtain, because the same token gets the rest with `curl`. If this must be enforced, the
+> backend has to stop sending it.
 
 **States:** empty · loading · not-found · forbidden · closed-readonly · awaiting-review · changes-requested
 **APIs:** `GET /cases`, `GET /cases/:id`, `GET /cases/:id/timeline`, `GET /cases/:id/progress`,
@@ -712,11 +758,12 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
 - [x] **M0 — Foundations:** scaffold, router, API client, auth/session, design tokens, component
       primitives *(lint/build/CI wiring still to run — see §9)*
 - [~] **M1 — Auth & onboarding:** login + role routing + guards done; register/OTP/onboarding open
-- [~] **M2 — Citizen core:** citizen case *tracking* is list-only (`/`), showing status via the shared
-      stepper. **There is no citizen case-detail page**, so the timeline, final report, review history
-      and feedback that the officer and admin surfaces already render are unreachable to the person
-      who filed the report — even though the components are all built and role-agnostic. SOS and
-      reporting wizards open
+- [~] **M2 — Citizen core:** citizen case *tracking* is **complete** as of this change — the list at
+      `/` links to `/cases/:id`, a curated record rendering the final report, the closure decisions and
+      their comments, the shared weekly narratives, and a status-change log with names and internal
+      notes withheld. Listing and tracking were the two halves that existed; the **report wizard is now
+      the whole remaining gap in this milestone**, which means the reports these screens display cannot
+      be created from inside the app. SOS open; feedback submission not built
 - [~] **M3 — Awareness:** F10 case/unit map shipped; alerts, news, notifications centre open
 - [~] **M4 — Officer console:** queue and case workspace (details/progress/weekly/evidence) shipped,
       with weekly narratives served by the real endpoints (M4.5); dispatch → arrive shipped;
@@ -822,12 +869,32 @@ confirm the case reaches `closed`, shows `closedAt` / `closedBy` / `approvedBy`,
 tab now holds both decisions in order.
 
 > Then the guard: open the seeded case **"Repeated vandalism of the street lighting on Ogunlana
-> Drive"** (`CS-2026-0028`) — it is in `pending_admin_review` **and** assigned to the unit admin, so
+> Drive"** (`CS-2026-0043`) — it is in `pending_admin_review` **and** assigned to the unit admin, so
 > signing in as **Unit admin** makes the collision visible immediately. Confirm **Approve closure** is
 > disabled and explains the self-approval rule, and that **Request changes** still works — the rule
 > blocks approval, not the whole decision. That seed exists *only* for this: without it the guard is
 > unreachable until a real deployment happens to produce the collision, and an untestable privacy
 > rule is one that quietly rots.
+
+Manual walk — citizen (with mocks): sign in as **Citizen** → `/` lists your reports and **every card
+is a link** (hover highlights the border) → open **"Armed robbery in progress at Adeniran Ogunsanya
+Plaza"** (`CS-2026-0041`, `on_scene`) → confirm the header shows the **responding unit by name**
+("Surulere Central Response Unit"), that there is **no officer name and no evidence gallery
+anywhere on the page**, and **no "Activity by week" section** — only *Officer narratives* → the
+**Case log** reads oldest first: *Case reported* (You) → *Officer assigned* (Unit staff) → *Officer
+dispatched* (Assigned officer) → *Officer on scene* (Assigned officer), each with the status chip it
+moved to. **If any row shows a description sentence or a name — "Assigned to Officer Tunde Balogun."
+is the one the seed carries — the redaction has been lost.**
+
+> Then the two ends of the record: open **"Vandalised street lights along Herbert Macaulay Way"**
+> (`CS-2026-0031`, `closed`) — final report, **Closure approved** with the administrator's comment, a
+> one-row log. Open **"Contraband goods offloaded at night at a warehouse on Apapa Road"**
+> (`CS-2026-0036`) — **two** shared narratives and a **Changes requested** decision with its comment,
+> which is the case that answers "why is my case still open".
+
+> `CS-2026-0028` (the Ikeja loitering case) is closed with **no** recorded decision, on purpose: it is
+> the legacy-closed state, and the review section must say the record is absent rather than that a
+> decision is still coming.
 
 If you are working on files that predate this rebuild, note that stale Vite entry points
 (`src/App.jsx`, `src/main.jsx`, `src/App.css`, `vite.config.js`, `src/assets/`) must **not** exist:

@@ -189,13 +189,20 @@ export function isAwaitingDispatch(status: string | undefined | null): boolean {
  * written during investigation, and a case being investigated with no record of
  * the work would leave the reviewing administrator judging an empty file. ASSUMED
  * to match the backend guard — see frontReadme.md F7 for the open question.
+ *
+ * `admin_changes_requested` is deliberately **excluded**. It reads like it belongs
+ * — the case is back with the officer, so let them work — but every progress write
+ * goes through `POST /cases/:id/progress`, and the mock's guard accepts only the
+ * three states above. Including it offered the officer a form that answers 409.
+ * The revision path for that state is the final report, not progress: revise it to
+ * answer the comment and resubmit. If the real backend turns out to accept progress
+ * there, widen this *and* the mock guard together, in one change.
  */
 export function canAddProgress(status: string | undefined | null): boolean {
   return (
     status === CASE_STATUS.dispatched ||
     status === CASE_STATUS.onScene ||
-    status === CASE_STATUS.investigating ||
-    status === CASE_STATUS.adminChangesRequested
+    status === CASE_STATUS.investigating
   )
 }
 

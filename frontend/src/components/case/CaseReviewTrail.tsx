@@ -45,8 +45,8 @@ export function ReviewNotice({
         <div className="min-w-0">
           <p className="text-sm font-medium text-ink">Submitted for closure review</p>
           <p className="mt-0.5 text-xs text-ink-muted">
-            An administrator will either approve the closure or send it back with a comment. You can
-            keep adding progress while it waits.
+            An administrator will either approve the closure or send it back with a comment. The
+            case is locked while it waits — no further progress can be filed until they decide.
           </p>
         </div>
       </div>
@@ -83,7 +83,8 @@ export function ReviewNotice({
           </p>
         )}
         <p className="mt-1.5 text-xs text-ink-muted">
-          Add what was asked for, then submit the case for closure review again.
+          Revise the final report to answer the comment, then submit the case for closure review
+          again.
         </p>
       </div>
     </div>
@@ -92,10 +93,19 @@ export function ReviewNotice({
 
 export function ReviewHistory({
   reviews,
+  status,
   isLoading = false,
   className,
 }: {
   reviews: CaseReview[]
+  /**
+   * The case's current status, used for one sentence of the empty state only.
+   * Optional so a caller without it still compiles, but pass it: a closed case
+   * with no recorded decision is a *different* fact from a case that has not been
+   * decided yet, and "have been recorded … yet" is a promise about the future
+   * that a closed case cannot keep.
+   */
+  status?: CaseStatus
   isLoading?: boolean
   className?: string
 }) {
@@ -108,9 +118,12 @@ export function ReviewHistory({
   }
 
   if (reviews.length === 0) {
+    const closed = status === 'closed'
     return (
       <p className={cn('text-xs text-ink-muted', className)}>
-        No closure decisions have been recorded on this case yet.
+        {closed
+          ? 'This case is closed but no closure decision is on record — it was closed before the review workflow existed, or the record was lost.'
+          : 'No closure decisions have been recorded on this case yet.'}
       </p>
     )
   }

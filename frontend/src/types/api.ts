@@ -140,16 +140,18 @@ export interface Case {
 /**
  * One decision recorded against a case's closure review (`models.CaseReview`).
  *
- * `decision` is typed as a plain string on purpose: the backend's
- * `CaseReviewDecision*` literals are not yet verified against `backend/models`
- * (frontReadme.md §0.4), and a decision this build does not recognise must render
- * as itself rather than be coerced into one of the two it expects.
+ * `decision` stays a plain string on purpose, even though the backend's
+ * `models.CaseReviewDecision*` literals are now known — `approve`,
+ * `request_changes` and `deescalate`. Only the first two are reachable from this
+ * frontend, so a narrow union would buy nothing today and would make a decision
+ * added later render as a `never`-typed crash instead of as itself. Unknown
+ * values fall through `humanizeDecision` to Title Case.
  */
 export interface CaseReview {
   id: string
   caseId: string
   adminId: string
-  /** Expected `approve` | `request_changes`. Not yet contract-verified. */
+  /** Verified against `models.CaseReviewDecision*`: `approve` | `request_changes` | `deescalate`. */
   decision: string
   comment: string
   createdAt: string
