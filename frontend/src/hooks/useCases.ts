@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, api } from '@/lib/apiClient'
-import type { Case, CaseDetailResponse, CasesResponse } from '@/types/api'
+import type {
+  Case,
+  CaseDetailResponse,
+  CasesResponse,
+  CreateCaseInput,
+  CreateCaseResponse,
+} from '@/types/api'
 
 export const caseKeys = {
   all: ['cases'] as const,
@@ -27,6 +33,26 @@ export function useCaseDetail(id: string | undefined) {
 }
 
 type CaseActionResponse = { message: string; case: Case }
+
+/**
+ * File a new report (`POST /cases`).
+ *
+ * Deliberately *not* an optimistic update: the tracking id, the priority band and
+ * the case's own id are all decided by the server, so there is nothing honest to
+ * show before the response arrives. The receipt waits for the real one.
+ *
+ * On success the list is refetched — but note the flow does not depend on it:
+ * the receipt renders from the mutation's own response, so a slow refetch cannot
+ * make a successfully filed report look like it failed.
+ */
+export function useCreateCase() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: CreateCaseInput) => api.post<CreateCaseResponse>('/cases', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: caseKeys.list() }),
+  })
+}
 
 async function runAction(
   id: string,

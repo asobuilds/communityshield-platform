@@ -15,9 +15,9 @@ frontend is now a typed React 19 + Vite + Tailwind v4 application with routing, 
 layer, a server-state cache, a design system, a reusable map, and the first real workflows — citizen
 case tracking, officer operations, and unit-admin triage and assignment.
 
-> ### Frontend stage — M4.5 complete, M2 citizen tracking landed
+> ### Frontend stage — M4.5 complete, M2 (citizen reporting + tracking) complete
 >
-> M0 is **complete**. M1–M5 are **part-built** (§6): nine routes render working screens against the
+> M0 is **complete**. M1–M5 are **part-built** (§6): ten routes render working screens against the
 > mock API. Nothing in M6–M8 has started.
 >
 > **M4.5 (lifecycle re-alignment) is done.** The backend moved the case lifecycle underneath this
@@ -32,31 +32,43 @@ case tracking, officer operations, and unit-admin triage and assignment.
 > **The one piece left is not a frontend task:** `on_scene → investigating` has no registered route,
 > so nothing in the UI performs it — reachable in the demo via the seed only.
 >
-> **The citizen gap is closed — the citizen case-detail page is built**, which is the last outstanding
-> item of **M2 (citizen core)**. Reporters previously saw their case *state* and nothing else. `/cases/:id` is now a curated record: the final report, the
-> closure decisions with their comments, the weekly narratives an officer chose to share, and a log of
-> status changes with descriptions and personal names withheld. It is a *subset* of the staff case
-> page by omission, not by a mode flag — it does not fetch the progress feed or the evidence list, so
-> there is no code path on that screen that could render them.
+> **M2 (citizen core) is now complete — reporting and tracking are both built.** Reporters previously
+> saw their case *state* and nothing else, and could not create a case from inside the app at all.
+> `/report` is now the one creating flow in the product: four steps (what happened → where → optional
+> evidence → review) against `POST /cases`, ending in a receipt that carries the tracking ID and
+> attaches the links the reporter added. `/cases/:id` is the curated record that follows it: the final
+> report, the closure decisions with their comments, the weekly narratives an officer chose to share,
+> and a log of status changes with descriptions and personal names withheld. It is a *subset* of the
+> staff case page by omission, not by a mode flag — it does not fetch the progress feed or the evidence
+> list, so there is no code path on that screen that could render them.
 >
-> **What that did *not* fix, and cannot:** the API still hands the reporter the progress feed, the
-> evidence list and timeline descriptions naming officers. The curated view is presentation. See the
-> note at the end of F4.
+> **Two of the wizard's rules come from the contract, not from taste.** `POST /cases` has **no category
+> field** — so the wizard cannot ask for one and nothing may read one back; a title and a description
+> are what a unit triages on, which is why they are the only two free-text answers that are required.
+> And `GetAllCases` scopes an officer's and a unit administrator's list by `unit_id`, so **a case with
+> no unit is returned to nobody except its reporter and a super admin** — which is why choosing a unit
+> is *required* here even though the endpoint treats it as optional, and why the wizard offers no
+> "no preference" option. The location pin is required for a related reason: the contract defaults
+> coordinates to zero, and a case pinned at 0,0 sends a unit to the Gulf of Guinea.
 >
-> **Next on the list, in order:** (1) the citizen *report* wizard — reporting is still the one citizen
-> journey with no UI at all, so the reports this page renders cannot be created from inside the app;
-> (2) `on_scene → investigating`, which is blocked on a backend route rather than on frontend work;
-> (3) the admin surfaces still named as placeholders (M5/M7).
+> **What the curated view did *not* fix, and cannot:** the API still hands the reporter the progress
+> feed, the evidence list and timeline descriptions naming officers. The curated view is presentation.
+> See the note at the end of F4.
+>
+> **Next on the list, in order:** (1) `on_scene → investigating`, which is blocked on a backend route
+> rather than on frontend work; (2) the remaining admin surfaces still named as placeholders (M5/M7);
+> (3) `MapView` cannot draw units or coverage while in `pick` mode, so a reporter choosing a unit reads
+> the candidates as a list rather than seeing them on the map.
 
 | Item | Today | Target |
 |---|---|---|
-| Screens | 9 routes rendering real screens | 40+ across 4 role consoles |
+| Screens | 10 routes rendering real screens | 40+ across 4 role consoles |
 | Routing | ✅ React Router v7, role-gated | Complete |
 | API layer | ✅ typed client, mock adapter, 401 handling | Complete |
 | State | ✅ React Query (server) + auth context | Complete |
 | Design system | ✅ primitives + tokens + 4 states | Grow with features |
-| Tests | ✅ 5 unit modules (ISO weeks, API client, assignment rules, status vocabulary, reporter case-log disclosure) — 69 tests | Component + E2E |
-| Mocks | ✅ in-browser mock API (`VITE_USE_MOCKS`), now covering the full review loop | Contract tests |
+| Tests | ✅ 6 unit modules (ISO weeks, API client, assignment rules, status vocabulary, reporter case-log disclosure, report draft) — 83 tests | Component + E2E |
+| Mocks | ✅ in-browser mock API (`VITE_USE_MOCKS`), covering the full review loop **and case creation** | Contract tests |
 | Case lifecycle | ✅ **all 8 states rendered; the review loop walks end-to-end** (officer submits → admin decides → resubmit → approve → closed). Weekly narratives are read from the real entity, and the reporter now reads their own case through a curated view | Full lifecycle (§0.4) |
 
 ### 0.1 What exists right now
@@ -70,6 +82,7 @@ account: `officer@shield.ng`, `admin@shield.ng`, `citizen@shield.ng`, `super@shi
 |---|---|---|
 | `/auth/login` | Sign-in (role quick-fill under mocks) | ✅ |
 | `/` | Citizen: your reports + lifecycle stepper | ✅ |
+| `/report` | Citizen: **report wizard** — what happened · where (pin + unit) · evidence links · review, then a receipt | ✅ |
 | `/cases/:id` | Citizen: one report — curated record, case log, shared weekly narratives | ✅ |
 | `/officer/queue` | Case queue — priority sort, filters, search, SLA badge | ✅ |
 | `/officer/cases/:id` | Case workspace — Details (incl. closure review) · Progress · Weekly · Evidence | ✅ |
@@ -105,6 +118,7 @@ src/
                            activity into weeks (the server owns the reporting week)
   lib/assignment.ts        assignment rules mirroring the backend guard (pure, tested)
   lib/caseLog.ts           what a reporter's case log shows and withholds (pure, tested)
+  lib/reportDraft.ts       the report wizard's localStorage draft: parse, save, clear (pure, tested)
   auth/                    AuthContext (session restore) + RequireRole guard
   components/ui/           Button, BackLink, Card, Chips, Field, Tabs, Modal, Toast, States
   components/layout/       AppShell (sidebar ⇄ bottom nav) + NotificationBell
@@ -135,6 +149,12 @@ unless somebody remembers to exclude them. `/cases/:id` therefore composes its o
 the shared primitives (`StatusChip`, `CaseStatusStepper`, `ReviewHistory`, `WeeklyUpdates`) and
 composes a *subset* — the failure mode of forgetting to add something is a reporter seeing less than
 they could, not more than they should.
+
+**The wizard reuses rather than recomposes, and that is the same principle read the other way.** Every
+step of `/report` is built out of existing primitives — `MapView` in `pick` mode (including its own
+locate control), `Field` + `Input`/`Textarea`/`Select`, `Badge`, `Button`, `Card`, `Skeleton` — because
+a reporter filing a report has no narrower set of rights than themselves. There is no second audience
+to withhold from, so subset-by-omission does not apply and sharing is the safer default again.
 
 ### 0.2 Three decisions worth knowing
 
@@ -171,9 +191,10 @@ they could, not more than they should.
 | `GET /cases` may not preload `evidence` | The queue's "evidence unverified" counter is gated on any case actually carrying the array; otherwise the card is hidden rather than reporting a confident zero |
 | `GET /cases/:id/progress` has no server-side authorization | Case shows only what it is given; gap documented, backend untouched |
 | `GET /cases/analytics` counts `status="resolved"`, which the workflow never sets → `resolutionRate` always 0 | Analytics surfaces are not built on it; KPIs will use `closed` |
-| No binary upload endpoint — evidence takes a hosted `fileUrl` | `EvidenceUpload` asks for a link and says so plainly |
+| No binary upload endpoint — evidence takes a hosted `fileUrl` | `EvidenceUpload` asks for a link and says so plainly; the report wizard's evidence step does the same, and caps it at three links rather than implying a file picker is coming |
 | Notification reads live under `/mobile/notifications*` only | `useNotifications` uses the mobile endpoints |
 | **`GetCaseAccountability` is implemented but never routed** — `handlers.GetCaseAccountability` exists in `case_review_handler.go` and calls `services.GetCaseAccountability`, but no route registers it. Its model is `models.CaseAccountabilityEvent` | Nothing calls it. Treat it as *available to design against*, not as a live endpoint — see §0.4 item 5 |
+| **`POST /cases` accepts a `unitId` that attaches nothing**, and `models.Case.UnitID` is `not null`, so a case whose unit does not parse is stored against the zero UUID. `GetAllCases` scopes officers and unit admins by `unit_id`, so **that case is returned to nobody but its reporter and a super admin** — no unit's queue shows it, and no admin can triage it | The wizard requires a unit (and a location pin) before it will submit, and says why: the endpoint allows omitting both, but a report no unit can see is not a feature. If the backend ever grows a triage pool for unattached cases, the requirement can be relaxed — not before |
 | **`GET /cases/:id` returns a reporter more than they should read** — the progress feed, the evidence list, and timeline `description` strings that name officers and administrators ("Assigned to Officer Tunde Balogun.") | The citizen view curates by **omission**: it does not fetch progress or evidence, and `lib/caseLog.ts` renders an actor *role* instead of a name. This is presentation, not enforcement — the same token gets the rest with `curl`. **A real boundary means the backend stops sending it**; until then, do not describe the citizen view as private |
 
 **Prerequisite still open:** the Go backend does not build from this repo (`go.sum` is git-ignored),
@@ -425,18 +446,62 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 ### F3 — Incident reporting
 
 **Screens:** report wizard (multi-step), report review, success/receipt, my reports.
+*(All four exist: the wizard and its review step and receipt are `/report`; "my reports" is the citizen
+home, documented under F4.)*
 
-- [ ] Step 1: category/type; Step 2: title + description; Step 3: media; Step 4: location; Step 5: review
-- [ ] Media capture (photo/video/voice note) with upload + preview + remove
-- [ ] Location picker (map + manual address + "use my location")
-- [ ] Priority hint (advisory only — triage is server-side)
-- [ ] Public/private visibility choice with plain-language explanation
-- [ ] Draft auto-save; offline queue with sync on reconnect
-- [ ] Receipt with **Tracking ID** + "track this case" CTA
-- [ ] Validation inline, never a raw error toast
+The wizard shipped as **four steps, not the five sketched below**, and every departure is a contract
+fact rather than a design preference:
 
-**States:** drafting · validating · uploading · submitting · queued-offline · submitted · failed-retry
-**APIs:** `POST /cases`, `POST /evidence/upload`, `GET /cases`, `GET /cases/:id`
+- **The category/type step is gone.** `POST /cases` has no category field and `models.Case` has no
+  category column, so a step asking for one would collect an answer that is discarded on the way out
+  and unreadable on the way back. A title and a description are what triage actually reads, which is
+  why those two are the only required answers.
+- **"Where" also picks the responding unit**, because the pin is exactly what decides which units are
+  candidates (`GET /units/nearby`, sorted by distance, split by whether the unit's coverage reaches the
+  point).
+- **Media capture became evidence *links*, collected before the case exists and attached after it.**
+  There is no binary-upload endpoint, so a file must already be hosted somewhere the reporter can
+  share. The links are staged in step 3, but `POST /evidence/upload` needs a `caseId` — so they are
+  sent in step 4's wake, each reported separately on the receipt and each retryable on its own. A
+  failed link never becomes a failed report.
+- **The public/private choice is gone.** `IsPublic` is hardcoded `true` on create, so the reporter has
+  no such choice to make and the review step says the record is public instead of offering a toggle the
+  server would ignore.
+
+- [x] Step 1 — **what happened**: title + description, sized and hinted for a report rather than a form
+- [x] Step 2 — **where**: `MapView` in `pick` mode with "use my location", an optional landmark field
+      for when the pin is slightly off, and the responding unit. **Both halves are required, and the
+      refusal states the real reason** — the endpoint accepts neither as mandatory, but a case with no
+      `unit_id` is returned by no unit's `GET /cases` (see §0.3), and one pinned at 0,0 sends a unit to
+      the Gulf of Guinea
+- [x] Step 3 — **evidence**: up to three hosted links, each with a type and a remove control, each
+      validated as `http(s)` before Submit will enable. The copy says the file must be hosted already;
+      it does not imply a file picker is coming
+- [x] Step 4 — **review**: every answer shown with an **Edit** that returns to its step, a
+      "what happens when you send this" block (recorded as `pending`, a tracking ID is issued, reports
+      are public records), and the flow's single Send button
+- [x] Location picker (map + "use my location" + manual landmark)
+- [x] Priority hint (advisory only — triage is server-side): the amber "someone is in danger or injured
+      now" checkbox maps to `priority: "high"` → **P2**. It is **not** an SOS path — `isSOS` bands P1
+      and triggers an immediate dispatch attempt, and that belongs to an arming flow with its own
+      confirm step. The copy says the checkbox marks the report for faster triage and does not send
+      anyone
+- [x] Draft auto-save — `localStorage` via `lib/reportDraft.ts` (pure and tested), written as the form
+      is typed and cleared the moment a case is created, so a failed evidence attach can never leave a
+      reporter able to file the same report twice. A restored draft reopens at step 1 and says so; a
+      corrupt or foreign value opens a fresh form rather than half-restoring one
+- [–] **Offline queue with sync — not built, deliberately.** A draft is not a report: it has no tracking
+      ID and no unit has seen it, and nothing in the UI may let a saved draft read as "sent". A real
+      queue needs ordering, retry and dedupe semantics, and a local draft is not a partial version of
+      one
+- [x] Receipt with **Tracking ID** + "track this report" CTA, rendered from the create response rather
+      than a refetched list, so a slow refresh cannot make a filed report look unfiled
+- [x] Validation inline, never a raw error toast: field-level errors, a disabled Continue/Submit whose
+      reason names the missing thing, and a failed create that says outright that nothing was created
+      and every answer is still on screen
+
+**States:** drafting · validating · submitting · partial-evidence-failed · submitted · create-failed
+**APIs:** `POST /cases`, `POST /evidence/upload`, `GET /units/nearby`, `GET /cases`, `GET /cases/:id`
 
 ---
 
@@ -758,12 +823,13 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
 - [x] **M0 — Foundations:** scaffold, router, API client, auth/session, design tokens, component
       primitives *(lint/build/CI wiring still to run — see §9)*
 - [~] **M1 — Auth & onboarding:** login + role routing + guards done; register/OTP/onboarding open
-- [~] **M2 — Citizen core:** citizen case *tracking* is **complete** as of this change — the list at
-      `/` links to `/cases/:id`, a curated record rendering the final report, the closure decisions and
-      their comments, the shared weekly narratives, and a status-change log with names and internal
-      notes withheld. Listing and tracking were the two halves that existed; the **report wizard is now
-      the whole remaining gap in this milestone**, which means the reports these screens display cannot
-      be created from inside the app. SOS open; feedback submission not built
+- [x] **M2 — Citizen core: reporting and tracking — COMPLETE.** `/report` is a four-step wizard
+      against `POST /cases` — what happened, where (pin + unit), optional evidence links, review —
+      ending in a receipt that carries the tracking ID and attaches the links, each with its own
+      outcome. `/` lists the reporter's cases and `/cases/:id` renders one as a curated record: the
+      final report, the closure decisions and their comments, the shared weekly narratives, and a
+      status-change log with names and internal notes withheld. Draft auto-save is in; **SOS (F2) and
+      feedback submission are the parts of this milestone still open**
 - [~] **M3 — Awareness:** F10 case/unit map shipped; alerts, news, notifications centre open
 - [~] **M4 — Officer console:** queue and case workspace (details/progress/weekly/evidence) shipped,
       with weekly narratives served by the real endpoints (M4.5); dispatch → arrive shipped;
@@ -823,7 +889,8 @@ cd frontend
 npm install
 npm run lint         # eslint, TS + hooks rules
 npm run typecheck    # tsc --noEmit
-npm run test         # vitest (ISO weeks, API client, assignment rules, status vocabulary)
+npm run test         # vitest (ISO weeks, API client, assignment rules, status vocabulary,
+                     #         reporter case-log disclosure, report draft) — 83 tests
 npm run build        # tsc --noEmit && vite build
 npm run dev          # mocks on by default
 ```
@@ -875,6 +942,40 @@ tab now holds both decisions in order.
 > blocks approval, not the whole decision. That seed exists *only* for this: without it the guard is
 > unreachable until a real deployment happens to produce the collision, and an untestable privacy
 > rule is one that quietly rots.
+
+Manual walk — citizen, filing a report (F3, with mocks): sign in as **Citizen** → `/` shows a **New
+report** button and the nav's **Report** item is live (its "Soon" chip is gone) → both that button and
+the empty-state button lead to `/report` → on **step 1**, leave the form empty and confirm **Continue
+is disabled** and says a title is needed; add a title and confirm the reason changes to name the
+description → **reload mid-form**: the answers come back with "We kept the answers you had started.
+Nothing has been sent." → on **step 2**, with no pin the unit list says to place the pin first; press
+**Use my location** or tap the map, then confirm a coordinate readout appears and the units list by
+distance with the nearest marked **Closest** → confirm **Continue** stays disabled until *both* a pin
+and a unit are chosen, and that the refusal names whichever is missing → on **step 3**, add a link and
+type `myphoto`: it must show "Must be a link starting with http:// or https://" and block Continue →
+fix it to `https://example.com/p.jpg` → on **step 4** the summary shows the title, the description,
+the unit by name and the link, plus a **Marked urgent** badge if you ticked the danger box. That badge
+must be **amber, not red** — red is SOS only.
+
+Send it, and read the receipt: **"Report filed"**, a `CS-YYYYMMDD-NNNN` tracking ID with a copy
+button, a **Pending** chip, **P3** (or **P2** if you ticked urgent), and your links attaching one at a
+time. **Track this report** opens the reporter's case page, whose log's first row reads **Case
+reported** with the actor **You** — a report you just filed must never open on an empty log.
+
+> Then the failure paths, which matter more here than the happy one:
+>
+> **Nothing created** — stop the dev server and press Send: the message must read *"Your report was
+> not sent. Nothing was created, and every answer is still here"*, with every field still filled. A
+> create failure that reads as a success, or that costs the reporter their typing, is the worst bug
+> this flow can have.
+>
+> **Report filed, link failed** — file a report with the server up, then stop it before the uploads
+> finish: the receipt must still read **"Report filed"**, the failed link must say *"Not attached"*
+> with its own **Retry**, and nothing may describe the *report* as having failed.
+>
+> **Draft cleared** — after a successful send, reload `/report`: it must open blank. The draft is
+> cleared the instant the case is created, and a draft that survives a successful submit is how the
+> same report gets filed twice.
 
 Manual walk — citizen (with mocks): sign in as **Citizen** → `/` lists your reports and **every card
 is a link** (hover highlights the border) → open **"Armed robbery in progress at Adeniran Ogunsanya
