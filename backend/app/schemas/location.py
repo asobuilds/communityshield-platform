@@ -10,6 +10,3 @@ class LocationCreate(BaseModel):
 
 class LocationResponse(LocationCreate):
     id: int
-
-    Field(ge=-90, le=90)
-    Field(ge=-180, le=180)

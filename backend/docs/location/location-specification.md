@@ -257,3 +257,10 @@ Examples:
 - road
 - area
 - other
+
+
+#### NOTES ####
+#### *DATABASE.PY* ####
+Think of get_db() as:
+
+"Whenever an API request needs the database, give it a session, and when it's finished, close that session."
