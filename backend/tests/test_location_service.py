@@ -4,7 +4,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.database import Base
-from app.models.location import Location
 from app.services.location_service import (
     create_location,
     get_location,
