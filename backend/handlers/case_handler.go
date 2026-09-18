@@ -223,17 +223,60 @@ func GetCaseByID(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
+	accessLevel := c.GetString("case_access_level")
+
 	var caseObj models.Case
 	if err := config.DB.Preload("Evidence").Preload("Progress").First(&caseObj, "id = ?", caseID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
 		return
 	}
 
+	// Reporter / citizen: public-safe view only
+	if accessLevel == "reporter" || (userObj.Role == "citizen" && caseObj.ReportedBy == userObj.ID) {
+		if caseObj.ReportedBy != userObj.ID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view this case"})
+			return
+		}
+
+		var timeline []models.CaseTimeline
+		config.DB.Where("case_id = ?", caseID).Order("created_at asc").Find(&timeline)
+
+		var feedback []models.CaseFeedback
+		config.DB.Where("case_id = ?", caseID).Find(&feedback)
+
+		publicCase := gin.H{
+			"id":            caseObj.ID,
+			"trackingId":    caseObj.TrackingID,
+			"title":         caseObj.Title,
+			"description":   caseObj.Description,
+			"status":        caseObj.Status,
+			"priority":      caseObj.Priority,
+			"priorityLevel": caseObj.PriorityLevel,
+			"location":      caseObj.Location,
+			"latitude":      caseObj.Latitude,
+			"longitude":     caseObj.Longitude,
+			"isPublic":      caseObj.IsPublic,
+			"finalReport":   caseObj.FinalReport,
+			"closedAt":      caseObj.ClosedAt,
+			"createdAt":     caseObj.CreatedAt,
+			"updatedAt":     caseObj.UpdatedAt,
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"case":     publicCase,
+			"timeline": timeline,
+			"feedback": feedback,
+		})
+		return
+	}
+
+	// Defense-in-depth: block non-owner citizens even if middleware is bypassed
 	if userObj.Role == "citizen" && caseObj.ReportedBy != userObj.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view this case"})
 		return
 	}
 
+	// Authorized staff: full case view
 	var timeline []models.CaseTimeline
 	config.DB.Where("case_id = ?", caseID).Order("created_at asc").Find(&timeline)
 

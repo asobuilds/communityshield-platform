@@ -33,10 +33,24 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 	}
 }
 
-// CanAccessCase checks if user can access a specific case
+// CanAccessCase enforces the CommunityShield core rule: unit access is NOT case access.
+//
+// Access levels (stored in context as "case_access_level"):
+//   - super_admin:     all cases
+//   - head_admin:      all cases in the user's unit
+//   - assigned_admin:  cases submitted to this admin via CaseAdminAssignment
+//   - officer_primary: full access (Case.AssignedTo == user.ID)
+//   - officer_paired:  full access (CaseOfficer.Role in {primary, paired, investigator})
+//   - officer_support: limited access (CaseOfficer.Role == support)
+//   - reporter:        public-safe view only (Case.ReportedBy == user.ID)
+//
+// Accepts either :id or :caseId route params.
 func CanAccessCase(c *gin.Context) {
-	caseID := c.Param("id")
-	id, err := uuid.Parse(caseID)
+	caseIDStr := c.Param("id")
+	if caseIDStr == "" {
+		caseIDStr = c.Param("caseId")
+	}
+	id, err := uuid.Parse(caseIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid case ID"})
 		c.Abort()
@@ -51,8 +65,9 @@ func CanAccessCase(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	// Super Admin can access everything
-	if userObj.Role == "super_admin" {
+	// Super Admin bypass
+	if userObj.IsSuperAdmin || userObj.Role == "super_admin" {
+		c.Set("case_access_level", "super_admin")
 		c.Next()
 		return
 	}
@@ -64,37 +79,73 @@ func CanAccessCase(c *gin.Context) {
 		return
 	}
 
-	// Citizen: only their own cases
-	if userObj.Role == "citizen" {
-		if caseObj.ReportedBy != userObj.ID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "You can only access your own cases"})
-			c.Abort()
-			return
-		}
+	// Reporter (public-safe view only)
+	if caseObj.ReportedBy == userObj.ID {
+		c.Set("case_access_level", "reporter")
 		c.Next()
 		return
 	}
 
-	// Officer: cases in their unit
-	if userObj.Role == "officer" {
-		if userObj.UnitID == nil || caseObj.UnitID != *userObj.UnitID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "You can only access cases in your unit"})
-			c.Abort()
-			return
-		}
+	// Authoritative membership lookup (UnitMembership is the source of truth)
+	var membership models.UnitMembership
+	hasMembership := config.DB.
+		Where("unit_id = ? AND user_id = ? AND status = ?", caseObj.UnitID, userObj.ID, "active").
+		First(&membership).Error == nil
+
+	if !hasMembership {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		c.Abort()
+		return
+	}
+
+	// Head Admin: all cases in their unit
+	if membership.IsHeadAdmin {
+		c.Set("case_access_level", "head_admin")
 		c.Next()
 		return
 	}
 
-	// Unit Admin: cases in their unit
-	if userObj.Role == "unit_admin" {
-		if userObj.UnitID == nil || caseObj.UnitID != *userObj.UnitID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "You can only access cases in your unit"})
-			c.Abort()
+	// Regular Admin: only cases submitted to them
+	if membership.Role == "unit_admin" {
+		var assignment models.CaseAdminAssignment
+		if err := config.DB.
+			Where("case_id = ? AND admin_id = ? AND status IN ?", caseObj.ID, userObj.ID, []string{"pending", "approved"}).
+			First(&assignment).Error; err == nil {
+			c.Set("case_access_level", "assigned_admin")
+			c.Next()
 			return
 		}
-		c.Next()
+		c.JSON(http.StatusForbidden, gin.H{"error": "Case not submitted to you"})
+		c.Abort()
 		return
+	}
+
+	// Officer tiers
+	if membership.Role == "officer" {
+		// Primary: Case.AssignedTo == user.ID
+		if caseObj.AssignedTo != nil && *caseObj.AssignedTo == userObj.ID {
+			c.Set("case_access_level", "officer_primary")
+			c.Next()
+			return
+		}
+
+		// Paired / Support via CaseOfficer
+		var caseOfficer models.CaseOfficer
+		if err := config.DB.
+			Where("case_id = ? AND officer_id = ?", caseObj.ID, userObj.ID).
+			First(&caseOfficer).Error; err == nil {
+			switch caseOfficer.Role {
+			case "primary", "paired", "investigator":
+				// "investigator" is the legacy default — treated as paired for compatibility
+				c.Set("case_access_level", "officer_paired")
+				c.Next()
+				return
+			case "support":
+				c.Set("case_access_level", "officer_support")
+				c.Next()
+				return
+			}
+		}
 	}
 
 	c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})

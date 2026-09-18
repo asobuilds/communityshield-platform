@@ -74,3 +74,4 @@ h origin mai
 *.stage1.tsx
 *.stage3.tsx
 
+.aider*

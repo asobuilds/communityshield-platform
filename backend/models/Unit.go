@@ -29,6 +29,11 @@ type SecurityUnit struct {
 	VerifiedBy              *uuid.UUID     `gorm:"type:uuid" json:"verifiedBy,omitempty"`
 	VerificationNotes       string         `gorm:"type:text" json:"verificationNotes,omitempty"`
 	AdminCount              int            `gorm:"default:0" json:"adminCount"`
+	HostUserID              *uuid.UUID     `gorm:"type:uuid" json:"hostUserId,omitempty"`
+	FormationStatus         string         `gorm:"not null;default:forming;index:idx_security_unit_formation_status" json:"formationStatus"`
+	MemberCount             int            `gorm:"default:0" json:"memberCount"`
+	BrandName               string         `gorm:"type:varchar(120)" json:"brandName,omitempty"`
+	BrandLogoURL            string         `gorm:"type:text" json:"brandLogoUrl,omitempty"`
 	CreatedAt               time.Time      `json:"createdAt"`
 	UpdatedAt               time.Time      `json:"updatedAt"`
 	DeletedAt               gorm.DeletedAt `gorm:"index" json:"-"`
