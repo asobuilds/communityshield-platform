@@ -38,7 +38,8 @@ func main() {
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.SecurityUnit{},
-		&models.UnitMember{},`r`n               &models.Officer{},
+		&models.UnitMember{},
+		&models.Officer{},
 		&models.GovernmentIDVerification{},
 
 		&models.Case{},
@@ -118,6 +119,16 @@ func main() {
 		&models.Report{},
 		&models.CaseReview{},
 		&models.CaseWeeklyUpdate{},
+		&models.UnitMembership{},
+		&models.UnitAuth{},
+		&models.UnitInvite{},
+		&models.UnitAdminSeat{},
+		&models.UnitAdminElection{},
+		&models.AdminVote{},
+		&models.HeadAdminVote{},
+		&models.CaseAdminAssignment{},
+		&models.RevocationCycle{},
+		&models.RevocationVote{},
 	)
 
 	if err != nil {

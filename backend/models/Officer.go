@@ -8,10 +8,11 @@ import (
 
 type Officer struct {
 	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UnitID      uuid.UUID      `gorm:"type:uuid;not null" json:"unitId"`
+	UnitID      uuid.UUID      `gorm:"type:uuid;not null;index;uniqueIndex:idx_officer_unit_officer_id" json:"unitId"`
 	Name        string         `gorm:"not null" json:"name"`
 	Rank        string         `gorm:"not null" json:"rank"`
 	BadgeNumber string         `gorm:"unique;not null" json:"badgeNumber"`
+	UnitOfficerID string       `gorm:"not null;uniqueIndex:idx_officer_unit_officer_id" json:"unitOfficerId"`
 	Role        string         `gorm:"not null" json:"role"`
 	Phone       string         `json:"phone"`
 	Email       string         `json:"email"`

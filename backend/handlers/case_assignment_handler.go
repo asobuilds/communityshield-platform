@@ -25,6 +25,13 @@ func AssignCase(c *gin.Context) {
 		return
 	}
 
+	accessLevel := c.GetString("case_access_level")
+	if accessLevel != "super_admin" && accessLevel != "head_admin" && accessLevel != "assigned_admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only admins may assign officers to a case"})
+		c.Abort()
+		return
+	}
+
 	var req assignCaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{

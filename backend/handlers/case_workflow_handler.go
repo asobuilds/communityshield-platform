@@ -218,6 +218,13 @@ func CloseCase(c *gin.Context) {
 		return
 	}
 
+	accessLevel := c.GetString("case_access_level")
+	if accessLevel != "super_admin" && accessLevel != "head_admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only admins may close a case directly; officers must submit for review"})
+		c.Abort()
+		return
+	}
+
 	_, officerID, ok := authorizeCaseOfficer(c, &caseRecord, true)
 	if !ok {
 		return

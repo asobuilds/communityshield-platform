@@ -64,32 +64,51 @@ func isCaseAdmin(user *models.User, caseRecord *models.Case) bool {
 		return true
 	}
 
+	// Head Admin of the case's unit
 	var membership models.UnitMembership
+	if err := config.DB.
+		Where("unit_id = ? AND user_id = ? AND status = ?", caseRecord.UnitID, user.ID, models.MembershipActive).
+		First(&membership).Error; err == nil {
+		if membership.IsHeadAdmin {
+			return true
+		}
 
-	err := config.DB.
-		Where(
-			"unit_id = ? AND user_id = ? AND role = ? AND status = ?",
-			caseRecord.UnitID,
-			user.ID,
-			models.UnitRoleAdmin,
-			models.MembershipActive,
-		).
-		First(&membership).Error
+		// Regular Admin: only if the case was submitted to them
+		if strings.EqualFold(membership.Role, models.UnitRoleAdmin) {
+			var assignment models.CaseAdminAssignment
+			if err := config.DB.
+				Where("case_id = ? AND admin_id = ? AND status IN ?", caseRecord.ID, user.ID, []string{"pending", "approved"}).
+				First(&assignment).Error; err == nil {
+				return true
+			}
+		}
+	}
 
-	return err == nil
+	return false
 }
 
 func isAssignedOfficer(user *models.User, caseRecord *models.Case) bool {
-	if user == nil || caseRecord == nil || caseRecord.AssignedTo == nil {
+	if user == nil || caseRecord == nil {
 		return false
 	}
 
-	if *caseRecord.AssignedTo != user.ID {
-		return false
+	// Primary via Case.AssignedTo
+	if caseRecord.AssignedTo != nil && *caseRecord.AssignedTo == user.ID {
+		return true
 	}
 
-	return strings.EqualFold(user.Role, "officer") ||
-		strings.EqualFold(user.Role, "unit_officer")
+	// Paired via CaseOfficer with role primary or paired
+	var caseOfficer models.CaseOfficer
+	if err := config.DB.
+		Where("case_id = ? AND officer_id = ?", caseRecord.ID, user.ID).
+		First(&caseOfficer).Error; err == nil {
+		role := strings.ToLower(caseOfficer.Role)
+		if role == "primary" || role == "paired" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func SubmitCaseForReview(c *gin.Context) {
