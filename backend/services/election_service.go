@@ -146,6 +146,7 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	_ = policyVersion
 
 	type tally struct {
 		CandidateID uuid.UUID
@@ -169,14 +170,12 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 	quorumMet := totalVotes >= election.QuorumCount
 
 	now := time.Now().UTC()
-	updates := map[string]interface{}{
-		"status":              "finalized",
-		"result_finalized_at": now,
-	}
 
 	if !quorumMet {
-		updates["status"] = "failed"
-		return config.DB.Model(&election).Updates(updates).Error
+		return config.DB.Model(&election).Updates(map[string]interface{}{
+			"status":              "failed",
+			"result_finalized_at": now,
+		}).Error
 	}
 
 	winnerCount := election.SeatCount
@@ -184,8 +183,15 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 		winnerCount = len(rows)
 	}
 
-	_ = policy
-	_ = policyVersion
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
 	for i := 0; i < winnerCount; i++ {
 		winner := rows[i]
@@ -201,12 +207,13 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 			Status:        "active",
 			ElectedAt:     now,
 		}
-		if err := config.DB.Create(&seat).Error; err != nil {
+		if err := tx.Create(&seat).Error; err != nil {
+			tx.Rollback()
 			return err
 		}
 
 		var membership models.UnitMembership
-		if err := config.DB.
+		if err := tx.
 			Where("unit_id = ? AND user_id = ?", election.UnitID, winner.CandidateID).
 			First(&membership).Error; err != nil {
 			continue
@@ -225,12 +232,21 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 			membership.CoolingOffUntil = &cooling
 		}
 
-		if err := config.DB.Save(&membership).Error; err != nil {
+		if err := tx.Save(&membership).Error; err != nil {
+			tx.Rollback()
 			return err
 		}
 	}
 
-	return config.DB.Model(&election).Updates(updates).Error
+	if err := tx.Model(&election).Updates(map[string]interface{}{
+		"status":              "finalized",
+		"result_finalized_at": now,
+	}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }
 
 // RunHeadAdminElection runs the head-admin vote among current admins and
@@ -291,11 +307,24 @@ func (s *ElectionService) FinalizeHeadAdminElection(electionID uuid.UUID) error 
 	winner := rows[0]
 	now := time.Now().UTC()
 
-	config.DB.Model(&models.UnitMembership{}).
-		Where("unit_id = ? AND is_head_admin = ?", election.UnitID, true).
-		Update("is_head_admin", false)
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
-	if err := config.DB.Model(&models.UnitMembership{}).
+	if err := tx.Model(&models.UnitMembership{}).
+		Where("unit_id = ? AND is_head_admin = ?", election.UnitID, true).
+		Update("is_head_admin", false).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Model(&models.UnitMembership{}).
 		Where("unit_id = ? AND user_id = ?", election.UnitID, winner.CandidateID).
 		Updates(map[string]interface{}{
 			"is_head_admin": true,
@@ -303,6 +332,7 @@ func (s *ElectionService) FinalizeHeadAdminElection(electionID uuid.UUID) error 
 			"term_start_at": election.TermStart,
 			"term_end_at":   election.TermEnd,
 		}).Error; err != nil {
+		tx.Rollback()
 		return err
 	}
 
@@ -317,14 +347,20 @@ func (s *ElectionService) FinalizeHeadAdminElection(electionID uuid.UUID) error 
 		Status:        "active",
 		ElectedAt:     now,
 	}
-	if err := config.DB.Create(&seat).Error; err != nil {
+	if err := tx.Create(&seat).Error; err != nil {
+		tx.Rollback()
 		return err
 	}
 
-	return config.DB.Model(&election).Updates(map[string]interface{}{
+	if err := tx.Model(&election).Updates(map[string]interface{}{
 		"status":              "finalized",
 		"result_finalized_at": now,
-	}).Error
+	}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }
 
 // sortSeatsByRotationGroup is a helper for stagger assignment (service-internal).

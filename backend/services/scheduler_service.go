@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -20,8 +21,42 @@ func NewSchedulerService() *SchedulerService {
 	}
 }
 
-// RunOnce performs one pass of all scheduled jobs. Safe to call repeatedly.
+// RunOnce acquires a Postgres advisory lock so only one backend instance
+// runs scheduled jobs at a time, then performs one pass of all jobs.
+// If the lock is held elsewhere, this call is a no-op.
 func (s *SchedulerService) RunOnce() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	sqlDB, err := config.DB.DB()
+	if err != nil {
+		log.Printf("scheduler: cannot get sql.DB: %v", err)
+		return
+	}
+
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		log.Printf("scheduler: cannot acquire connection: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// Advisory lock ID: any fixed int64. Pick one and never change it.
+	const schedulerLockID int64 = 8420194710293847
+
+	var got bool
+	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", schedulerLockID).Scan(&got); err != nil {
+		log.Printf("scheduler: advisory lock query failed: %v", err)
+		return
+	}
+	if !got {
+		// Another instance is running the scheduler right now.
+		return
+	}
+	defer func() {
+		_, _ = conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", schedulerLockID)
+	}()
+
 	s.CloseExpiredElections()
 	s.ExpireStaleInvites()
 	s.CleanupExpiredSessions()
@@ -79,4 +114,5 @@ func (s *SchedulerService) CleanupExpiredSessions() {
 	_ = NewSessionService().CleanupExpired()
 	_ = NewRefreshTokenService().CleanupExpired()
 	_ = NewTokenService().CleanupExpired()
+	_ = config.DB.Where("expires_at < ?", time.Now().UTC()).Delete(&models.IdempotencyRecord{}).Error
 }

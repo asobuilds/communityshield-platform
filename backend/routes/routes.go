@@ -61,9 +61,9 @@ func SetupRoutes(router *gin.Engine) {
 			units.GET("/:id", handlers.GetUnitByID)
 			units.POST("", middleware.AuthMiddleware(), handlers.CreateUnit)
 			units.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateUnit)
-		units.POST("/:unitId/elections", middleware.AuthMiddleware(), handlers.OpenAdminElection)
-		units.POST("/:unitId/head-admin-elections", middleware.AuthMiddleware(), handlers.OpenHeadAdminElection)
-		units.POST("/:unitId/revocations", middleware.AuthMiddleware(), handlers.OpenRevocationCycle)
+		units.POST("/:unitId/elections", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenAdminElection)
+		units.POST("/:unitId/head-admin-elections", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenHeadAdminElection)
+		units.POST("/:unitId/revocations", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenRevocationCycle)
 		units.GET("/:unitId/auth", middleware.AuthMiddleware(), handlers.GetUnitAuth)
 		units.PUT("/:unitId/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
 	}
@@ -105,7 +105,7 @@ func SetupRoutes(router *gin.Engine) {
 		cases.POST("/:id/timeline", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.AddCaseTimeline)
 		cases.GET("/:id/timeline", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetCaseTimeline)
 		cases.POST("/:id/feedback", middleware.AuthMiddleware(), handlers.SubmitCaseFeedback)
-		cases.POST("/:id/assign", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.AssignCase)
+		cases.POST("/:id/assign", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), middleware.CanAccessCase, handlers.AssignCase)
 		cases.GET("/:id/assignments", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetCaseAssignments)
 		cases.POST("/:id/dispatch", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.DispatchCase)
 		cases.POST("/:id/arrive", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.ArriveAtCase)
@@ -122,15 +122,15 @@ func SetupRoutes(router *gin.Engine) {
 		// Election routes
 		elections := api.Group("/elections")
 		{
-			elections.POST("/:id/vote", middleware.AuthMiddleware(), middleware.RateLimitVote(), handlers.CastAdminVote)
-			elections.POST("/:id/close", middleware.AuthMiddleware(), handlers.CloseAdminElection)
+			elections.POST("/:id/vote", middleware.AuthMiddleware(), middleware.RateLimitVote(), middleware.IdempotencyMiddleware(), handlers.CastAdminVote)
+			elections.POST("/:id/close", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.CloseAdminElection)
 			elections.GET("/:id/results", middleware.AuthMiddleware(), handlers.GetElectionResults)
 		}
 		// Revocation routes
 		revocations := api.Group("/revocations")
 		{
-			revocations.POST("/:id/vote", middleware.AuthMiddleware(), middleware.RateLimitVote(), handlers.CastRevocationVote)
-			revocations.POST("/:id/close", middleware.AuthMiddleware(), handlers.CloseRevocationCycle)
+			revocations.POST("/:id/vote", middleware.AuthMiddleware(), middleware.RateLimitVote(), middleware.IdempotencyMiddleware(), handlers.CastRevocationVote)
+			revocations.POST("/:id/close", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.CloseRevocationCycle)
 			revocations.GET("/:id", middleware.AuthMiddleware(), handlers.GetRevocationCycle)
 		}
 

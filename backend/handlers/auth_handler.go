@@ -278,18 +278,60 @@ func (h *AuthHandler) RevokeSession(c *gin.Context) {
 		return
 	}
 
-	svc := services.NewSessionService()
-	if err := svc.RevokeOne(userObj.ID, jti, "user_revoked_device"); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var session models.UserSession
+	if err := config.DB.Where("user_id = ? AND jti = ?", userObj.ID, jti).First(&session).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
 		return
 	}
 
-	// Also revoke the token itself so it stops working immediately
-	tokenSvc := services.NewTokenService()
-	var session models.UserSession
-	if err := config.DB.Where("user_id = ? AND jti = ?", userObj.ID, jti).First(&session).Error; err == nil {
-		_ = tokenSvc.Revoke(jti, userObj.ID, session.ExpiresAt, "user_revoked_device")
-		_ = services.NewRefreshTokenService().RevokeBySessionID(session.ID, "session_revoked")
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	now := time.Now().UTC()
+	reason := "user_revoked_device"
+
+	if err := tx.Model(&models.UserSession{}).
+		Where("id = ?", session.ID).
+		Updates(map[string]interface{}{
+			"revoked_at":     now,
+			"revoked_reason": reason,
+		}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke session"})
+		return
+	}
+
+	revokedToken := models.RevokedToken{
+		JTI:       jti,
+		UserID:    userObj.ID,
+		ExpiresAt: session.ExpiresAt,
+		Reason:    reason,
+	}
+	if err := tx.Create(&revokedToken).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke token"})
+		return
+	}
+
+	if err := tx.Model(&models.RefreshToken{}).
+		Where("session_id = ? AND revoked_at IS NULL", session.ID).
+		Update("revoked_at", now).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke refresh token"})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize session revocation"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Session revoked"})
@@ -307,14 +349,64 @@ func (h *AuthHandler) RevokeAllSessions(c *gin.Context) {
 		return
 	}
 
-	svc := services.NewSessionService()
-	if err := svc.RevokeAll(userObj.ID, "user_revoked_all"); err != nil {
+	now := time.Now().UTC()
+	reason := "user_revoked_all"
+
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var sessions []models.UserSession
+	if err := tx.Where("user_id = ? AND revoked_at IS NULL", userObj.ID).Find(&sessions).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sessions"})
+		return
+	}
+
+	if err := tx.Model(&models.UserSession{}).
+		Where("user_id = ? AND revoked_at IS NULL", userObj.ID).
+		Updates(map[string]interface{}{
+			"revoked_at":     now,
+			"revoked_reason": reason,
+		}).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke sessions"})
 		return
 	}
 
-	tokenSvc := services.NewTokenService()
-	_ = tokenSvc.RevokeAllForUser(userObj.ID, "user_revoked_all")
+	for _, s := range sessions {
+		revokedToken := models.RevokedToken{
+			JTI:       s.JTI,
+			UserID:    userObj.ID,
+			ExpiresAt: s.ExpiresAt,
+			Reason:    reason,
+		}
+		if err := tx.Create(&revokedToken).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke tokens"})
+			return
+		}
+	}
+
+	if err := tx.Model(&models.RefreshToken{}).
+		Where("user_id = ? AND revoked_at IS NULL", userObj.ID).
+		Update("revoked_at", now).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke refresh tokens"})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize revocation"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "All sessions revoked"})
 }

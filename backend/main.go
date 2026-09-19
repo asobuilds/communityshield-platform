@@ -20,6 +20,7 @@ func main() {
 		log.Println("No .env file found, using system environment variables")
 	}
 
+	config.EnforceRequiredEnv()
 	config.ConnectDatabase()
 	defer config.CloseDatabase()
 
