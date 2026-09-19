@@ -87,3 +87,4 @@ backend/*.zip
 # Local env
 backend/.env
 .env.local
+backend/storage/

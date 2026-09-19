@@ -53,6 +53,10 @@ type Evidence struct {
 	UploadedBy  uuid.UUID      `gorm:"type:uuid;not null" json:"uploadedBy"`
 	Type        string         `gorm:"not null" json:"type"`
 	FileURL     string         `gorm:"not null" json:"fileUrl"`
+	FilePath    string         `gorm:"type:varchar(255)" json:"filePath,omitempty"`
+	MimeType    string         `gorm:"type:varchar(120)" json:"mimeType,omitempty"`
+	SizeBytes   int64          `gorm:"default:0" json:"sizeBytes,omitempty"`
+	FileHash    string         `gorm:"type:varchar(64);index:idx_evidence_file_hash" json:"fileHash,omitempty"`
 	Description string         `json:"description"`
 	Latitude    float64        `json:"latitude"`
 	Longitude   float64        `json:"longitude"`
