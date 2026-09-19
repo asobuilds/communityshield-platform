@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,7 @@ import (
 	"security-solution/config"
 	"security-solution/middleware"
 	"security-solution/routes"
+	"security-solution/services"
 )
 
 func main() {
@@ -41,6 +43,10 @@ func main() {
 	}))
 
 	routes.SetupRoutes(router)
+
+	// Start background scheduler (elections, invites, expiry)
+	scheduler := services.NewSchedulerService()
+	scheduler.Start(1 * time.Hour)
 
 	port := os.Getenv("PORT")
 	if port == "" {
