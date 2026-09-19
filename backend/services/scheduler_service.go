@@ -24,6 +24,7 @@ func NewSchedulerService() *SchedulerService {
 func (s *SchedulerService) RunOnce() {
 	s.CloseExpiredElections()
 	s.ExpireStaleInvites()
+	s.CleanupExpiredSessions()
 }
 
 // CloseExpiredElections finalizes any open UnitAdminElection whose voting window has passed.
@@ -72,4 +73,10 @@ func (s *SchedulerService) Start(interval time.Duration) {
 			s.RunOnce()
 		}
 	}()
+}
+
+func (s *SchedulerService) CleanupExpiredSessions() {
+	_ = NewSessionService().CleanupExpired()
+	_ = NewRefreshTokenService().CleanupExpired()
+	_ = NewTokenService().CleanupExpired()
 }

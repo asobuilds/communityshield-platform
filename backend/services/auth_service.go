@@ -44,32 +44,37 @@ func (s *AuthService) Register(user *models.User) (*models.User, error) {
 	return user, nil
 }
 
-func (s *AuthService) Login(email, password string) (string, *models.User, error) {
+func (s *AuthService) Login(email, password string) (string, string, *models.User, error) {
 	var user models.User
 
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", nil, errors.New("invalid credentials")
+			return "", "", nil, errors.New("invalid credentials")
 		}
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.Password),
 		[]byte(password),
 	); err != nil {
-		return "", nil, errors.New("invalid credentials")
+		return "", "", nil, errors.New("invalid credentials")
 	}
 
-	token, err := s.generateJWT(&user)
+	token, jti, err := s.generateJWTWithJTI(&user)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
-	return token, &user, nil
+	return token, jti, &user, nil
 }
 
 func (s *AuthService) generateJWT(user *models.User) (string, error) {
+	token, _, err := s.generateJWTWithJTI(user)
+	return token, err
+}
+
+func (s *AuthService) generateJWTWithJTI(user *models.User) (string, string, error) {
 	secret := os.Getenv("JWT_SECRET")
 
 	if secret == "" {
@@ -88,7 +93,12 @@ func (s *AuthService) generateJWT(user *models.User) (string, error) {
 		"exp":     now.Add(24 * time.Hour).Unix(),
 	})
 
-	return token.SignedString([]byte(secret))
+	signed, err := token.SignedString([]byte(secret))
+	if err != nil {
+		return "", "", err
+	}
+
+	return signed, jti, nil
 }
 
 func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {

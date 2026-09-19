@@ -78,6 +78,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		if jti, ok := claims["jti"].(string); ok {
 			c.Set("jti", jti)
+			services.NewSessionService().Touch(jti)
 		}
 		if expVal, ok := claims["exp"].(float64); ok {
 			c.Set("token_exp", expVal)
