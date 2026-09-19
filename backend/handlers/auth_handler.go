@@ -76,14 +76,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, user, err := h.authService.Login(input.Email, input.Password)
+	token, jti, user, err := h.authService.Login(input.Email, input.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
+	expiresAt := time.Now().UTC().Add(24 * time.Hour)
+	sessionSvc := services.NewSessionService()
+	session, err := sessionSvc.Create(
+		user.ID,
+		jti,
+		"",
+		c.GetHeader("User-Agent"),
+		c.ClientIP(),
+		expiresAt,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+		return
+	}
+
 	refreshSvc := services.NewRefreshTokenService()
-	refreshRaw, _, err := refreshSvc.Issue(user.ID)
+	refreshRaw, _, err := refreshSvc.Issue(user.ID, &session.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to issue refresh token"})
 		return
@@ -221,4 +236,85 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		"token":        newAccess,
 		"refreshToken": newRaw,
 	})
+}
+
+func (h *AuthHandler) ListSessions(c *gin.Context) {
+	userInterface, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj, ok := userInterface.(*models.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user"})
+		return
+	}
+
+	svc := services.NewSessionService()
+	sessions, err := svc.ListActive(userObj.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sessions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"sessions": sessions})
+}
+
+func (h *AuthHandler) RevokeSession(c *gin.Context) {
+	userInterface, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj, ok := userInterface.(*models.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user"})
+		return
+	}
+
+	jti := c.Param("jti")
+	if jti == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "jti is required"})
+		return
+	}
+
+	svc := services.NewSessionService()
+	if err := svc.RevokeOne(userObj.ID, jti, "user_revoked_device"); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Also revoke the token itself so it stops working immediately
+	tokenSvc := services.NewTokenService()
+	var session models.UserSession
+	if err := config.DB.Where("user_id = ? AND jti = ?", userObj.ID, jti).First(&session).Error; err == nil {
+		_ = tokenSvc.Revoke(jti, userObj.ID, session.ExpiresAt, "user_revoked_device")
+		_ = services.NewRefreshTokenService().RevokeBySessionID(session.ID, "session_revoked")
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Session revoked"})
+}
+
+func (h *AuthHandler) RevokeAllSessions(c *gin.Context) {
+	userInterface, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj, ok := userInterface.(*models.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user"})
+		return
+	}
+
+	svc := services.NewSessionService()
+	if err := svc.RevokeAll(userObj.ID, "user_revoked_all"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke sessions"})
+		return
+	}
+
+	tokenSvc := services.NewTokenService()
+	_ = tokenSvc.RevokeAllForUser(userObj.ID, "user_revoked_all")
+
+	c.JSON(http.StatusOK, gin.H{"message": "All sessions revoked"})
 }

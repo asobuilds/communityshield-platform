@@ -24,7 +24,7 @@ func hashToken(raw string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (s *RefreshTokenService) Issue(userID uuid.UUID) (string, *models.RefreshToken, error) {
+func (s *RefreshTokenService) Issue(userID uuid.UUID, sessionID *uuid.UUID) (string, *models.RefreshToken, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", nil, err
@@ -33,6 +33,7 @@ func (s *RefreshTokenService) Issue(userID uuid.UUID) (string, *models.RefreshTo
 
 	record := models.RefreshToken{
 		UserID:    userID,
+		SessionID: sessionID,
 		TokenHash: hashToken(tokenRaw),
 		ExpiresAt: time.Now().UTC().AddDate(0, 0, 30),
 	}
@@ -54,7 +55,7 @@ func (s *RefreshTokenService) Rotate(oldRaw string) (string, *models.RefreshToke
 		return "", nil, errors.New("refresh token has expired")
 	}
 
-	newRaw, newRecord, err := s.Issue(existing.UserID)
+	newRaw, newRecord, err := s.Issue(existing.UserID, existing.SessionID)
 	if err != nil {
 		return "", nil, err
 	}
@@ -80,4 +81,11 @@ func (s *RefreshTokenService) CleanupExpired() error {
 	return config.DB.
 		Where("expires_at < ?", time.Now().UTC()).
 		Delete(&models.RefreshToken{}).Error
+}
+
+func (s *RefreshTokenService) RevokeBySessionID(sessionID uuid.UUID, reason string) error {
+	now := time.Now().UTC()
+	return config.DB.Model(&models.RefreshToken{}).
+		Where("session_id = ? AND revoked_at IS NULL", sessionID).
+		Update("revoked_at", now).Error
 }

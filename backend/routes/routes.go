@@ -34,6 +34,9 @@ func SetupRoutes(router *gin.Engine) {
 			auth.GET("/profile", middleware.AuthMiddleware(), authHandler.GetProfile)
 			auth.POST("/change-password", middleware.RateLimitAuth(), middleware.AuthMiddleware(), authHandler.ChangePassword)
 			auth.POST("/refresh", middleware.RateLimitAuth(), authHandler.Refresh)
+			auth.GET("/sessions", middleware.AuthMiddleware(), authHandler.ListSessions)
+			auth.DELETE("/sessions/:jti", middleware.AuthMiddleware(), authHandler.RevokeSession)
+			auth.DELETE("/sessions", middleware.AuthMiddleware(), authHandler.RevokeAllSessions)
 		}
 
 		// OTP routes
