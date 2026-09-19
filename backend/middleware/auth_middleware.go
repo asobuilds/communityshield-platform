@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"security-solution/services"
+	"time"
 )
 
 func AuthMiddleware() gin.HandlerFunc {
@@ -74,6 +75,33 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Set("user", user)
 		c.Set("user_id", userID)
 		c.Set("role", user.Role)
+
+		if jti, ok := claims["jti"].(string); ok {
+			c.Set("jti", jti)
+		}
+		if expVal, ok := claims["exp"].(float64); ok {
+			c.Set("token_exp", expVal)
+		}
+
+		// JWT revocation check
+		tokenSvc := services.NewTokenService()
+
+		if jti, ok := claims["jti"].(string); ok && jti != "" {
+			if tokenSvc.IsRevoked(jti) {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has been revoked"})
+				c.Abort()
+				return
+			}
+		}
+
+		if iatFloat, ok := claims["iat"].(float64); ok {
+			issuedAt := time.Unix(int64(iatFloat), 0).UTC()
+			if tokenSvc.IsUserRevokedAfter(user.ID, issuedAt) {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has been revoked"})
+				c.Abort()
+				return
+			}
+		}
 
 		c.Next()
 	}

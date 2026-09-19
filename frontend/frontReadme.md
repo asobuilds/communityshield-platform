@@ -1,6 +1,6 @@
-# CommunityShield — Frontend Feature & Build Specification
+# WardGuard — Frontend Feature & Build Specification
 
-> **This is the build contract for the CommunityShield frontend.**
+> **This is the build contract for the WardGuard frontend.**
 > It lists every feature, screen, state, and API mapping needed to ship the product.
 > Pair it with [`frontagent.md`](./frontagent.md) — the design agent that governs *how* the UI
 > should look and feel. `frontReadme` says **what to build**; `frontagent` says **how to make it
@@ -75,7 +75,7 @@ case tracking, officer operations, and unit-admin triage and assignment.
 
 **Run it:** `cd frontend && npm install && npm run dev` — mocks are on by default
 (`.env.development`), so every screen below works with **no backend**. Sign in with any demo
-account: `officer@shield.ng`, `admin@shield.ng`, `citizen@shield.ng`, `super@shield.ng`
+account: `officer@wardguard.ng`, `admin@wardguard.ng`, `citizen@wardguard.ng`, `super@wardguard.ng`
 (password `password`).
 
 | Route | Screen | State |
@@ -197,8 +197,8 @@ to withhold from, so subset-by-omission does not apply and sharing is the safer 
 | **`POST /cases` accepts a `unitId` that attaches nothing**, and `models.Case.UnitID` is `not null`, so a case whose unit does not parse is stored against the zero UUID. `GetAllCases` scopes officers and unit admins by `unit_id`, so **that case is returned to nobody but its reporter and a super admin** — no unit's queue shows it, and no admin can triage it | The wizard requires a unit (and a location pin) before it will submit, and says why: the endpoint allows omitting both, but a report no unit can see is not a feature. If the backend ever grows a triage pool for unattached cases, the requirement can be relaxed — not before |
 | **`GET /cases/:id` returns a reporter more than they should read** — the progress feed, the evidence list, and timeline `description` strings that name officers and administrators ("Assigned to Officer Tunde Balogun.") | The citizen view curates by **omission**: it does not fetch progress or evidence, and `lib/caseLog.ts` renders an actor *role* instead of a name. This is presentation, not enforcement — the same token gets the rest with `curl`. **A real boundary means the backend stops sending it**; until then, do not describe the citizen view as private |
 
-**Prerequisite still open:** the Go backend does not build from this repo (`go.sum` is git-ignored),
-so `VITE_USE_MOCKS=false` has nothing to talk to yet.
+**Backend readiness:** the Go backend now builds clean (`go build ./...` and `go vet ./...` pass;
+`go.sum` is tracked). `VITE_USE_MOCKS=false` can point at a running local backend.
 
 ### 0.4 Lifecycle drift — the backend changed the case workflow under this frontend
 
@@ -343,7 +343,7 @@ cached officer view into a citizen view.
 
 ## 1. Product intent & engagement goals
 
-CommunityShield must be **chosen** by communities, not mandated. That only happens if the
+WardGuard must be **chosen** by communities, not mandated. That only happens if the
 experience is trustworthy, fast, and human. Engagement is a design output, not a growth hack.
 
 **Engagement goals**
@@ -417,10 +417,12 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 - [ ] Medical info intake (explicitly optional, privacy notice)
 - [ ] Profile completion + onboarding checklist
 - [x] Session: JWT storage, session restore on boot, logout, 401 → login
-      *(no silent refresh — the backend issues no refresh token)*
+- [ ] Refresh token flow — backend now issues refresh tokens
+      (`POST /auth/refresh`, one-time-use rotation). Wire it.
 
 **States:** idle · loading · invalid credentials · OTP expired · rate-limited · pending verification
-**APIs:** `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/profile`,
+**APIs:** `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`,
+`POST /auth/refresh`, `POST /auth/change-password`, `GET /auth/profile`,
 `POST /otp/send|verify|resend`, `GET /units/nearby`, `POST /units/apply`,
 `POST /units/government-id`, `GET|PUT /settings/onboarding`
 
@@ -1001,3 +1003,121 @@ If you are working on files that predate this rebuild, note that stale Vite entr
 (`src/App.jsx`, `src/main.jsx`, `src/App.css`, `vite.config.js`, `src/assets/`) must **not** exist:
 Vite resolves `.jsx` before `.tsx`, so they would shadow the current app. Delete them if they
 reappear.
+
+
+---
+
+## Appendix A — What's new since M4.5
+
+This appendix records every change made to the platform after the M4.5 milestone
+was written. The catalogue above reflects the state at M4.5; this section tracks
+what shipped after it.
+
+### A1 — Rebrand
+
+Platform renamed **CommunityShield → WardGuard**.
+Logo, favicon, and wordmark shipped in `frontend/public/logo.svg` and `favicon.svg`.
+Backend display strings, email templates, SMS copy, and AI prompts all say WardGuard.
+
+### A2 — Authentication & session hardening
+
+Backend changes that the frontend will need to wire:
+
+| Feature | Endpoint | Status |
+|---|---|---|
+| Rate limiting on auth | (middleware — no endpoint change) | ✅ live |
+| JWT revocation on logout | `POST /auth/logout` (unchanged, now actually revokes) | ✅ live |
+| Password change revokes all sessions | `POST /auth/change-password` | ✅ live |
+| Refresh token issuance | `POST /auth/login` returns `refreshToken` alongside `token` | ✅ live |
+| Refresh endpoint with rotation | `POST /auth/refresh` | ✅ live |
+| Rate limiting on OTP | (middleware) | ✅ live |
+| Rate limiting on vote | (middleware) | ✅ live |
+| Rate limiting on invite | (middleware) | ✅ live |
+
+**What the frontend must do:** store the refresh token, call `/auth/refresh` when the
+access token expires, and treat a revoked-token 401 as a hard logout. See F1 above.
+
+### A3 — Case authorization hardening
+
+Backend now enforces the core rule **unit access is NOT case access**:
+
+- Officers only see cases they are assigned to (as `primary` or `paired`)
+- Support officers see a limited view
+- Admins only see cases submitted to them via `CaseAdminAssignment`
+- Head Admin sees all cases in their unit
+- Reporter sees public-safe fields only (`GetCaseByID` returns a curated DTO for them)
+- Direct officer `CloseCase` is blocked; closure requires admin review
+
+**What the frontend must do:** if a screen calls `GET /cases/:id` for a reporter, expect
+the public-safe DTO (no evidence list, no progress list, no officer identity). The
+existing citizen case page already renders a subset — no code change required, but the
+data returned is now also safe by contract, not just by UI curation.
+
+### A4 — Governance UI (backend live, frontend pending)
+
+The full governance layer is now live in the backend. No frontend screens exist yet.
+
+| Feature | Endpoints | UI status |
+|---|---|---|
+| Admin elections | `POST /units/:unitId/elections`, `POST /elections/:id/vote`, `POST /elections/:id/close`, `GET /elections/:id/results` | ❌ not built |
+| Head-admin elections | `POST /units/:unitId/head-admin-elections` | ❌ not built |
+| Revocation cycles | `POST /units/:unitId/revocations`, `POST /revocations/:id/vote`, `POST /revocations/:id/close`, `GET /revocations/:id` | ❌ not built |
+| UnitAuth policy | `GET /units/:unitId/auth`, `PUT /units/:unitId/auth` | ❌ not built |
+
+**New UI work needed** (added to feature catalogue as **F7 — Governance UI**):
+
+- Election list per unit
+- Voting interface (one vote per verified member)
+- Head-admin election interface (admins only)
+- Revocation cycle interface (open cycle, vote, view tally)
+- UnitAuth policy editor (head admin / admin only)
+- Term and cooling-off status per admin
+
+### A5 — Suspect self-view (backend live, frontend pending)
+
+A citizen linked as a suspect via `SuspectCase` can fetch their own case list:
+
+| Endpoint | Returns |
+|---|---|
+| `GET /suspects/me/cases` | `{ active: [...], history: [...] }` — case ID, tracking ID, title, category, status, role, timestamps, last progress. **No officer identity, no evidence, no admin notes, no other suspects.** |
+
+Resolved cases move from `active` to `history`. The citizen never sees the case as an
+investigative record — only as a status.
+
+**Frontend work:** add a "Suspect cases" tab to the citizen profile that renders the
+two lists. Presumed-innocence framing — "you are linked to this case" — not "you are
+accused".
+
+### A6 — Invite scoping
+
+Two invite types now exist:
+
+| Scope | Who creates | Purpose |
+|---|---|---|
+| `platform` | Any registered user | Invite a new person to register on WardGuard (no unit) |
+| `unit` | Admin / Head Admin, post-verification | Invite a citizen to join a specific unit |
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /invites` | Create an invite (scope in body) — returns the raw code once |
+| `POST /invites/validate` | Public — checks code, returns safe metadata (scope, unit name if applicable) |
+
+**Frontend work:** invitation generator UI + a public registration landing page that
+uses `/invites/validate` to show the join-or-stay-citizen choice.
+
+### A7 — What remains open from M4.5
+
+- `on_scene → investigating` — still no registered route (backend gap, not frontend)
+- `PUT /cases/:id` — still performs zero status validation (authorization hole,
+  tracked for Wave 4b of the backend roadmap)
+- `CaseReviewDecisionDeescalate` — still no route records it
+- `GetCaseAccountability` — still unrouted
+- `GetOfficersByUnit` — still unrouted
+
+### A8 — Outstanding frontend gaps
+
+- `npm install` must be run once — `node_modules/` is required for `npm run build`
+- No component tests, only pure-function tests
+- Map clustering not yet built
+- SOS flow (F2) still entirely unbuilt
+- Feedback submission form still unbuilt

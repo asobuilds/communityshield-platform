@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -81,8 +82,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	refreshSvc := services.NewRefreshTokenService()
+	refreshRaw, _, err := refreshSvc.Issue(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to issue refresh token"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"token": token,
+		"token":        token,
+		"refreshToken": refreshRaw,
 		"user": gin.H{
 			"id":        user.ID,
 			"email":     user.Email,
@@ -94,6 +103,22 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
+	userInterface, userExists := c.Get("user")
+	jtiVal, jtiExists := c.Get("jti")
+	expVal, expExists := c.Get("token_exp")
+
+	if userExists && jtiExists && expExists {
+		userObj, userOk := userInterface.(*models.User)
+		jti, jtiOk := jtiVal.(string)
+		expFloat, expOk := expVal.(float64)
+
+		if userOk && jtiOk && expOk && jti != "" && expFloat > 0 {
+			tokenSvc := services.NewTokenService()
+			expiresAt := time.Unix(int64(expFloat), 0).UTC()
+			_ = tokenSvc.Revoke(jti, userObj.ID, expiresAt, "logout")
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Logged out successfully",
 	})
@@ -130,5 +155,70 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 			"createdAt": freshUser.CreatedAt,
 			"updatedAt": freshUser.UpdatedAt,
 		},
+	})
+}
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	userInterface, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj, ok := userInterface.(*models.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user"})
+		return
+	}
+
+	var input struct {
+		OldPassword string `json:"oldPassword" binding:"required"`
+		NewPassword string `json:"newPassword" binding:"required,min=8"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.authService.ChangePassword(userObj.ID, input.OldPassword, input.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Password changed. All existing sessions have been revoked.",
+	})
+}
+
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var input struct {
+		RefreshToken string `json:"refreshToken" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	svc := services.NewRefreshTokenService()
+	newRaw, record, err := svc.Rotate(input.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, err := h.authService.GetUserByID(record.UserID.String())
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	newAccess, err := h.authService.GenerateJWT(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to issue access token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token":        newAccess,
+		"refreshToken": newRaw,
 	})
 }

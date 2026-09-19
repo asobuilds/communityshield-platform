@@ -105,7 +105,7 @@ func TestNotification(c *gin.Context) {
 		notification := models.Notification{
 			UserID:  userObj.ID,
 			Title:   "🔔 Test Notification",
-			Message: "Your device is connected to CommunityShield!",
+			Message: "Your device is connected to WardGuard!",
 			Type:    "test",
 			Status:  "sent",
 		}

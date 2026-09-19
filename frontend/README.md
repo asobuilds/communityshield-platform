@@ -1,16 +1,41 @@
-# React + Vite
+# WardGuard — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite + TypeScript client for WardGuard. See the repository root `README.md` for the full project overview and `frontReadme.md` / `frontagent.md` in this directory for the frontend feature map and design contract.
 
-Currently, two official plugins are available:
+## Quick start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+    npm install
+    npm run dev
 
-## React Compiler
+Mocks are on by default — every screen works with no backend required.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Demo accounts
 
-## Expanding the ESLint configuration
+Sign in with any of these (password: `password`):
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- `citizen@wardguard.ng`
+- `officer@wardguard.ng`
+- `admin@wardguard.ng`
+- `super@wardguard.ng`
+
+## Build
+
+    npm run build
+
+Requires Node 20+. The build runs `tsc --noEmit` followed by `vite build`.
+
+## Structure
+
+- `src/` — application source
+- `src/components/` — UI primitives, layout, case, map, admin
+- `src/hooks/` — React Query data hooks
+- `src/lib/` — pure utilities and API client
+- `src/mocks/` — in-browser mock API for offline development
+- `src/types/` — hand-written API contract matching the Go handlers
+
+## Environment
+
+`.env.development` sets `VITE_USE_MOCKS=true` by default. To develop against the real backend, create `.env.local`:
+
+    VITE_USE_MOCKS=false
+    VITE_API_URL=http://localhost:8080

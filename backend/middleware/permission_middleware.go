@@ -33,7 +33,7 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 	}
 }
 
-// CanAccessCase enforces the CommunityShield core rule: unit access is NOT case access.
+// CanAccessCase enforces the WardGuard core rule: unit access is NOT case access.
 //
 // Access levels (stored in context as "case_access_level"):
 //   - super_admin:     all cases

@@ -365,7 +365,7 @@ func StartCaseAccountabilityWorker() {
 		}
 	}()
 
-	log.Println("CommunityShield case accountability worker started")
+	log.Println("WardGuard case accountability worker started")
 }
 
 func GetCaseAccountability(caseID uuid.UUID) (*CaseAccountability, error) {
