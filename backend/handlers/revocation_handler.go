@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -173,23 +174,67 @@ func GetRevocationCycle(c *gin.Context) {
 		return
 	}
 
+	isSuperAdmin := userObj.IsSuperAdmin || userObj.Role == "super_admin"
+
 	var membership models.UnitMembership
-	if err := config.DB.
-		Where("unit_id = ? AND user_id = ? AND status = ?", cycle.UnitID, userObj.ID, models.MembershipActive).
-		First(&membership).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You are not a member of this unit"})
-		return
+	hasMembership := false
+	if !isSuperAdmin {
+		if err := config.DB.
+			Where("unit_id = ? AND user_id = ? AND status = ?", cycle.UnitID, userObj.ID, models.MembershipActive).
+			First(&membership).Error; err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not a member of this unit"})
+			return
+		}
+		hasMembership = true
 	}
-	if !membership.IsHeadAdmin && membership.Role != models.UnitRoleAdmin {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only head admin or admins can view cycle details"})
-		return
-	}
+
+	isAdmin := isSuperAdmin || (hasMembership && (membership.IsHeadAdmin || membership.Role == models.UnitRoleAdmin))
 
 	var votes []models.RevocationVote
 	config.DB.Where("cycle_id = ?", cycleID).Order("created_at ASC").Find(&votes)
 
+	// Secret ballot: aggregate tally is public to unit members; the identity of
+	// each voter is only visible to admins of the unit and super admin.
+	// The target of the cycle never sees who voted.
+	var myVote *string
+	for _, v := range votes {
+		if v.ActorUserID == userObj.ID {
+			choice := v.Choice
+			myVote = &choice
+			break
+		}
+	}
+
+	type PublicVote struct {
+		Choice    string    `json:"choice"`
+		Action    string    `json:"action"`
+		CreatedAt time.Time `json:"createdAt"`
+	}
+
+	tally := gin.H{
+		"for":      cycle.ForVotes,
+		"against":  cycle.AgainstVotes,
+		"abstain":  cycle.AbstainVotes,
+		"total":    cycle.TotalVotes,
+		"required": cycle.RequiredVotes,
+		"quorum":   cycle.QuorumRequired,
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"cycle": cycle,
-		"votes": votes,
+		"cycle":  cycle,
+		"tally":  tally,
+		"myVote": myVote,
+		"votes":  []PublicVote{},
 	})
+
+	// Admins get full vote records (with actor identity) for audit.
+	if isAdmin {
+		c.JSON(http.StatusOK, gin.H{
+			"cycle":  cycle,
+			"tally":  tally,
+			"myVote": myVote,
+			"votes":  votes,
+		})
+		return
+	}
 }

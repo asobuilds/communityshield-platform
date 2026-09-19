@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -23,12 +24,13 @@ func NewAuthHandler() *AuthHandler {
 
 func (h *AuthHandler) Register(c *gin.Context) {
 	var input struct {
-		Email     string `json:"email" binding:"required,email"`
-		Phone     string `json:"phone"`
-		FirstName string `json:"firstName" binding:"required"`
-		LastName  string `json:"lastName" binding:"required"`
-		Password  string `json:"password" binding:"required,min=6"`
-		Role      string `json:"role"`
+		Email         string `json:"email" binding:"required,email"`
+		Phone         string `json:"phone"`
+		FirstName     string `json:"firstName" binding:"required"`
+		LastName      string `json:"lastName" binding:"required"`
+		Password      string `json:"password" binding:"required,min=6"`
+		Role          string `json:"role"`
+		DateOfBirth   string `json:"dateOfBirth" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -36,15 +38,23 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	parsedDOB, minorStatus, err := validateDOB(input.DateOfBirth)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	// Public registration must always create citizens.
 	// Privileged roles should be assigned by an administrator.
 	user := &models.User{
-		Email:     input.Email,
-		Phone:     input.Phone,
-		FirstName: input.FirstName,
-		LastName:  input.LastName,
-		Password:  input.Password,
-		Role:      "citizen",
+		Email:       input.Email,
+		Phone:       input.Phone,
+		FirstName:   input.FirstName,
+		LastName:    input.LastName,
+		Password:    input.Password,
+		Role:        "citizen",
+		DateOfBirth: &parsedDOB,
+		MinorStatus: minorStatus,
 	}
 
 	createdUser, err := h.authService.Register(user)
@@ -115,6 +125,40 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"role":      user.Role,
 		},
 	})
+}
+
+// validateDOB parses and validates the registration date-of-birth, reporting
+// the exact age-threshold errors required by the age gate. Returns the parsed
+// time, the computed minorStatus ("minor" | "adult"), and an error.
+func validateDOB(dobStr string) (time.Time, string, error) {
+	parsed, err := time.Parse("2006-01-02", dobStr)
+	if err != nil {
+		return time.Time{}, "", errors.New("Invalid date of birth")
+	}
+	now := time.Now().UTC()
+	if parsed.After(now) {
+		return time.Time{}, "", errors.New("Date of birth cannot be in the future")
+	}
+	age := yearsBetween(parsed, now)
+	if age > 120 {
+		return time.Time{}, "", errors.New("Date of birth is not valid")
+	}
+	if age < 16 {
+		return time.Time{}, "", errors.New("Registration refused: users under 16 are not permitted")
+	}
+	minorStatus := "adult"
+	if age < 18 {
+		minorStatus = "minor"
+	}
+	return parsed, minorStatus, nil
+}
+
+func yearsBetween(dob, now time.Time) int {
+	age := now.Year() - dob.Year()
+	if now.Month() < dob.Month() || (now.Month() == dob.Month() && now.Day() < dob.Day()) {
+		age--
+	}
+	return age
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {

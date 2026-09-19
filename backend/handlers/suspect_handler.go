@@ -11,6 +11,24 @@ import (
 	"security-solution/models"
 )
 
+// maskIfExpunged blanks PII on a suspect when ExpungedAt is set, preserving
+// the audit row while hiding name, id number, photo, phone, email, and
+// address from officer search. Status is set to "expunged" consistently.
+func maskIfExpunged(s *models.Suspect) {
+	if s.ExpungedAt == nil {
+		return
+	}
+	s.FirstName = ""
+	s.LastName = ""
+	s.Alias = ""
+	s.IDNumber = ""
+	s.PhotoURL = ""
+	s.Phone = ""
+	s.Email = ""
+	s.Address = ""
+	s.Status = "expunged"
+}
+
 // checkSuspectAccess checks if user has access to this suspect
 func checkSuspectAccess(user *models.User, suspect *models.Suspect) bool {
 	if user.Role == "super_admin" {
@@ -47,8 +65,35 @@ func checkAdminAccess(user *models.User) bool {
 	return user.Role == "super_admin" || user.Role == "unit_admin"
 }
 
+// requireMinorApproved allows an action unless the caller is a minor without a
+// super-admin-granted minor exception. On denial it writes 403 and aborts the
+// request. Must be called after AuthMiddleware has populated the "user".
+func requireMinorApproved(c *gin.Context) bool {
+	userValue, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Minor access restriction applies"})
+		c.Abort()
+		return false
+	}
+	userObj, ok := userValue.(*models.User)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Minor access restriction applies"})
+		c.Abort()
+		return false
+	}
+	if userObj.MinorStatus == "minor" && !userObj.MinorExceptionGranted {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Minors need a verified guardian or a super-admin exception to perform this action"})
+		c.Abort()
+		return false
+	}
+	return true
+}
+
 // CreateSuspect - Enhanced with categories and risk score
 func CreateSuspect(c *gin.Context) {
+	if !requireMinorApproved(c) {
+		return
+	}
 	var input struct {
 		FirstName   string `json:"firstName" binding:"required"`
 		LastName    string `json:"lastName" binding:"required"`
@@ -190,6 +235,10 @@ func GetAllSuspects(c *gin.Context) {
 		return
 	}
 
+	for i := range suspects {
+		maskIfExpunged(&suspects[i])
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"suspects": suspects,
 	})
@@ -221,6 +270,8 @@ func GetSuspectByID(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view this suspect"})
 		return
 	}
+
+	maskIfExpunged(&suspect)
 
 	c.JSON(http.StatusOK, gin.H{
 		"suspect": suspect,

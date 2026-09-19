@@ -28,6 +28,9 @@ func categoryFromMime(mime string) string {
 // UploadEvidenceFile accepts a multipart file and attaches it as evidence.
 // Requires :caseId param. Access is gated by CanAccessCase middleware.
 func UploadEvidenceFile(c *gin.Context) {
+	if !requireMinorApproved(c) {
+		return
+	}
 	caseID, err := uuid.Parse(c.Param("caseId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid case ID"})

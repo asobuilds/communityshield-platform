@@ -171,10 +171,54 @@ func (s *RatingService) FlagRating(ratingID uuid.UUID, flaggedByID uuid.UUID, re
 	if rating.Status != "active" {
 		return errors.New("rating is not active")
 	}
+
+	// Authorization: only the rated officer, the unit head admin of that
+	// officer's (or unit)'s unit, or a super admin may flag a rating.
+	if err := s.canFlag(flaggedByID, &rating); err != nil {
+		return err
+	}
+
 	now := time.Now().UTC()
 	rating.Status = "flagged"
 	rating.FlaggedByID = &flaggedByID
 	rating.FlaggedReason = reason
 	rating.FlaggedAt = &now
 	return config.DB.Save(&rating).Error
+}
+
+// canFlag enforces who may flag a rating.
+func (s *RatingService) canFlag(actorID uuid.UUID, r *models.Rating) error {
+	var actor models.User
+	if config.DB.First(&actor, "id = ?", actorID).Error == nil {
+		if actor.IsSuperAdmin || actor.Role == "super_admin" {
+			return nil
+		}
+	}
+
+	// The rated officer may flag their own rating.
+	if r.TargetType == "officer" && r.TargetID == actorID {
+		return nil
+	}
+
+	// Resolve the unit that owns the rating's target.
+	var unitID uuid.UUID
+	if r.TargetType == "officer" {
+		var officer models.Officer
+		if err := config.DB.First(&officer, "id = ?", r.TargetID).Error; err != nil {
+			return errors.New("rating target officer not found")
+		}
+		unitID = officer.UnitID
+	} else {
+		unitID = r.TargetID
+	}
+
+	// Head admin of that unit may flag.
+	var membership models.UnitMembership
+	if config.DB.
+		Where("unit_id = ? AND user_id = ? AND status = ?", unitID, actorID, models.MembershipActive).
+		First(&membership).Error == nil && membership.IsHeadAdmin {
+		return nil
+	}
+
+	return errors.New("only the rated officer, their unit head admin, or a super admin may flag a rating")
 }

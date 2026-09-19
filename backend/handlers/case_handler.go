@@ -21,6 +21,9 @@ func generateTrackingID() string {
 
 // CreateCase - Enhanced with automation
 func CreateCase(c *gin.Context) {
+	if !requireMinorApproved(c) {
+		return
+	}
 	var input struct {
 		UnitID      string  `json:"unitId"`
 		Title       string  `json:"title" binding:"required"`

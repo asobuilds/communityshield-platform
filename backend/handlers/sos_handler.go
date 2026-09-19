@@ -15,6 +15,9 @@ import (
 
 // SendSOSAlert - Enhanced with emergency contacts and escalation
 func SendSOSAlert(c *gin.Context) {
+	if !requireMinorApproved(c) {
+		return
+	}
 	var input struct {
 		Latitude          float64  `json:"latitude" binding:"required"`
 		Longitude         float64  `json:"longitude" binding:"required"`
