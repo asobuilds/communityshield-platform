@@ -8,15 +8,15 @@ import (
 )
 
 func isUnitAdmin(userID uuid.UUID, unitID uuid.UUID) bool {
-	var member models.UnitMember
+	var member models.UnitMembership
 
 	err := config.DB.
 		Where(
 			"user_id = ? AND unit_id = ? AND role = ? AND status = ?",
 			userID,
 			unitID,
-			"admin",
-			"active",
+			models.UnitRoleAdmin,
+			models.MembershipActive,
 		).
 		First(&member).Error
 
