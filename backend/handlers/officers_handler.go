@@ -10,8 +10,64 @@ import (
 	"security-solution/models"
 )
 
-// CreateOfficer creates a new officer
+// canManageOfficersInUnit returns true if the caller may create, update,
+// or delete officers in the given unit.
+func canManageOfficersInUnit(user *models.User, unitID uuid.UUID) bool {
+	if user == nil {
+		return false
+	}
+	if user.IsSuperAdmin || user.Role == "super_admin" {
+		return true
+	}
+	var membership models.UnitMembership
+	err := config.DB.
+		Where("unit_id = ? AND user_id = ? AND status = ?",
+			unitID, user.ID, models.MembershipActive).
+		First(&membership).Error
+	if err != nil {
+		return false
+	}
+	return membership.IsHeadAdmin || membership.Role == models.UnitRoleAdmin
+}
+
+// canViewOfficersInUnit returns true if the caller may read the officer
+// roster of the given unit.
+func canViewOfficersInUnit(user *models.User, unitID uuid.UUID) bool {
+	if user == nil {
+		return false
+	}
+	if user.IsSuperAdmin || user.Role == "super_admin" {
+		return true
+	}
+	var membership models.UnitMembership
+	err := config.DB.
+		Where("unit_id = ? AND user_id = ? AND status = ?",
+			unitID, user.ID, models.MembershipActive).
+		First(&membership).Error
+	return err == nil
+}
+
+func callerUser(c *gin.Context) (*models.User, bool) {
+	value, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return nil, false
+	}
+	u, ok := value.(*models.User)
+	if !ok || u == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user"})
+		return nil, false
+	}
+	return u, true
+}
+
+// CreateOfficer creates a new officer.
 func CreateOfficer(c *gin.Context) {
+	user, ok := callerUser(c)
+	if !ok {
+		return
+	}
+
 	var input struct {
 		UnitID      string `json:"unitId" binding:"required"`
 		Name        string `json:"name" binding:"required"`
@@ -30,6 +86,11 @@ func CreateOfficer(c *gin.Context) {
 	unitID, err := uuid.Parse(input.UnitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
+		return
+	}
+
+	if !canManageOfficersInUnit(user, unitID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins of this unit may create officers"})
 		return
 	}
 
@@ -55,23 +116,34 @@ func CreateOfficer(c *gin.Context) {
 	})
 }
 
-// GetAllOfficers gets all officers
+// GetAllOfficers gets all officers (super admin only).
 func GetAllOfficers(c *gin.Context) {
+	user, ok := callerUser(c)
+	if !ok {
+		return
+	}
+	if !user.IsSuperAdmin && user.Role != "super_admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Super admin access required"})
+		return
+	}
+
 	var officers []models.Officer
 	if err := config.DB.Find(&officers).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch officers"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"officers": officers,
-	})
+	c.JSON(http.StatusOK, gin.H{"officers": officers})
 }
 
-// GetOfficerByID gets a specific officer
+// GetOfficerByID gets a specific officer.
 func GetOfficerByID(c *gin.Context) {
-	id := c.Param("id")
-	officerID, err := uuid.Parse(id)
+	user, ok := callerUser(c)
+	if !ok {
+		return
+	}
+
+	officerID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid officer ID"})
 		return
@@ -83,15 +155,22 @@ func GetOfficerByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"officer": officer,
-	})
+	if !canViewOfficersInUnit(user, officer.UnitID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have access to this officer"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"officer": officer})
 }
 
-// UpdateOfficer updates an officer
+// UpdateOfficer updates an officer.
 func UpdateOfficer(c *gin.Context) {
-	id := c.Param("id")
-	officerID, err := uuid.Parse(id)
+	user, ok := callerUser(c)
+	if !ok {
+		return
+	}
+
+	officerID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid officer ID"})
 		return
@@ -114,6 +193,11 @@ func UpdateOfficer(c *gin.Context) {
 	var officer models.Officer
 	if err := config.DB.First(&officer, "id = ?", officerID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Officer not found"})
+		return
+	}
+
+	if !canManageOfficersInUnit(user, officer.UnitID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins of this unit may update officers"})
 		return
 	}
 
@@ -147,41 +231,61 @@ func UpdateOfficer(c *gin.Context) {
 	})
 }
 
-// DeleteOfficer deletes an officer
+// DeleteOfficer deletes an officer.
 func DeleteOfficer(c *gin.Context) {
-	id := c.Param("id")
-	officerID, err := uuid.Parse(id)
+	user, ok := callerUser(c)
+	if !ok {
+		return
+	}
+
+	officerID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid officer ID"})
 		return
 	}
 
-	if err := config.DB.Delete(&models.Officer{}, "id = ?", officerID).Error; err != nil {
+	var officer models.Officer
+	if err := config.DB.First(&officer, "id = ?", officerID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Officer not found"})
+		return
+	}
+
+	if !canManageOfficersInUnit(user, officer.UnitID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins of this unit may delete officers"})
+		return
+	}
+
+	if err := config.DB.Delete(&officer).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete officer"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Officer deleted successfully",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Officer deleted successfully"})
 }
 
-// GetOfficersByUnit gets officers for a specific unit
+// GetOfficersByUnit gets officers for a specific unit.
 func GetOfficersByUnit(c *gin.Context) {
-	unitID := c.Param("unitId")
-	id, err := uuid.Parse(unitID)
+	user, ok := callerUser(c)
+	if !ok {
+		return
+	}
+
+	unitID, err := uuid.Parse(c.Param("unitId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
 		return
 	}
 
+	if !canViewOfficersInUnit(user, unitID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have access to this unit's roster"})
+		return
+	}
+
 	var officers []models.Officer
-	if err := config.DB.Where("unit_id = ?", id).Find(&officers).Error; err != nil {
+	if err := config.DB.Where("unit_id = ?", unitID).Find(&officers).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch officers"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"officers": officers,
-	})
+	c.JSON(http.StatusOK, gin.H{"officers": officers})
 }

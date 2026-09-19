@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -39,34 +40,134 @@ func getAuthenticatedUserID(c *gin.Context) (uuid.UUID, bool) {
 	return id, true
 }
 
-func userCanAccessCase(userID uuid.UUID, caseRecord *models.Case) bool {
-	if caseRecord.ReportedBy == userID {
+// canAccessCase enforces the core rule: unit access is NOT case access.
+// A user can see a case if they are one of:
+//   - super_admin (any case)
+//   - the reporter
+//   - primary officer via Case.AssignedTo
+//   - Head Admin of the case's unit
+//   - Regular admin of the unit AND explicitly submitted (CaseAdminAssignment)
+//   - primary or paired officer on the case (CaseOfficer)
+// Support-tier officers do NOT get evidence access.
+func canAccessCase(user *models.User, caseRecord *models.Case) bool {
+	if user == nil || caseRecord == nil {
+		return false
+	}
+	if user.IsSuperAdmin || user.Role == "super_admin" {
+		return true
+	}
+	if caseRecord.ReportedBy == user.ID {
+		return true
+	}
+	if caseRecord.AssignedTo != nil && *caseRecord.AssignedTo == user.ID {
 		return true
 	}
 
-	if caseRecord.AssignedTo != nil && *caseRecord.AssignedTo == userID {
+	var membership models.UnitMembership
+	if err := config.DB.
+		Where("unit_id = ? AND user_id = ? AND status = ?",
+			caseRecord.UnitID, user.ID, models.MembershipActive).
+		First(&membership).Error; err != nil {
+		return false
+	}
+
+	if membership.IsHeadAdmin {
 		return true
 	}
 
-	var officer models.Officer
-	if err := config.DB.First(&officer, "id = ?", userID).Error; err == nil {
-		return officer.UnitID == caseRecord.UnitID
+	if membership.Role == models.UnitRoleAdmin {
+		var assignment models.CaseAdminAssignment
+		if config.DB.
+			Where("case_id = ? AND admin_id = ? AND status IN ?",
+				caseRecord.ID, user.ID, []string{"pending", "approved"}).
+			First(&assignment).Error == nil {
+			return true
+		}
+	}
+
+	if membership.Role == models.UnitRoleOfficer {
+		var caseOfficer models.CaseOfficer
+		if config.DB.
+			Where("case_id = ? AND officer_id = ?", caseRecord.ID, user.ID).
+			First(&caseOfficer).Error == nil {
+			role := strings.ToLower(caseOfficer.Role)
+			if role == "primary" || role == "paired" {
+				return true
+			}
+		}
 	}
 
 	return false
 }
 
-func officerCanManageCaseEvidence(userID uuid.UUID, caseRecord *models.Case) bool {
-	if caseRecord.AssignedTo != nil && *caseRecord.AssignedTo == userID {
+// canManageEvidence is like canAccessCase but excludes the reporter.
+// Only officers/admins with investigative authority may verify or delete evidence.
+func canManageEvidence(user *models.User, caseRecord *models.Case) bool {
+	if user == nil || caseRecord == nil {
+		return false
+	}
+	if user.IsSuperAdmin || user.Role == "super_admin" {
+		return true
+	}
+	if caseRecord.AssignedTo != nil && *caseRecord.AssignedTo == user.ID {
 		return true
 	}
 
-	var officer models.Officer
-	if err := config.DB.First(&officer, "id = ?", userID).Error; err != nil {
+	var membership models.UnitMembership
+	if err := config.DB.
+		Where("unit_id = ? AND user_id = ? AND status = ?",
+			caseRecord.UnitID, user.ID, models.MembershipActive).
+		First(&membership).Error; err != nil {
 		return false
 	}
 
-	return officer.UnitID == caseRecord.UnitID
+	if membership.IsHeadAdmin {
+		return true
+	}
+
+	if membership.Role == models.UnitRoleAdmin {
+		var assignment models.CaseAdminAssignment
+		if config.DB.
+			Where("case_id = ? AND admin_id = ? AND status IN ?",
+				caseRecord.ID, user.ID, []string{"pending", "approved"}).
+			First(&assignment).Error == nil {
+			return true
+		}
+	}
+
+	if membership.Role == models.UnitRoleOfficer {
+		var caseOfficer models.CaseOfficer
+		if config.DB.
+			Where("case_id = ? AND officer_id = ?", caseRecord.ID, user.ID).
+			First(&caseOfficer).Error == nil {
+			role := strings.ToLower(caseOfficer.Role)
+			if role == "primary" || role == "paired" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// userCanAccessCase is a legacy helper kept for existing callers.
+// It resolves the user record and delegates to canAccessCase.
+func userCanAccessCase(userID uuid.UUID, caseRecord *models.Case) bool {
+	var user models.User
+	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
+		return false
+	}
+	return canAccessCase(&user, caseRecord)
+}
+
+// officerCanManageCaseEvidence is a legacy helper kept for existing callers.
+// It resolves the user record and delegates to canManageEvidence.
+func officerCanManageCaseEvidence(userID uuid.UUID, caseRecord *models.Case) bool {
+	var user models.User
+	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
+		return false
+	}
+	return canManageEvidence(&user, caseRecord)
 }
 
 // UploadEvidence uploads evidence for a case.

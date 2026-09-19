@@ -13,6 +13,33 @@ import (
 	"security-solution/services"
 )
 
+// isHeadAdminOfAnyUnit returns true if the user is head admin of at least one unit.
+func isHeadAdminOfAnyUnit(user *models.User) bool {
+	if user == nil {
+		return false
+	}
+	var count int64
+	config.DB.Model(&models.UnitMembership{}).
+		Where("user_id = ? AND status = ? AND is_head_admin = ?",
+			user.ID, models.MembershipActive, true).
+		Count(&count)
+	return count > 0
+}
+
+// canManageNews returns true if the caller may create or manage news.
+// Restricted to super admins and head admins. The AI system writes news
+// through internal service calls, not this HTTP handler, so no role is
+// required for the automated path.
+func canManageNews(user *models.User) bool {
+	if user == nil {
+		return false
+	}
+	if user.IsSuperAdmin || user.Role == "super_admin" {
+		return true
+	}
+	return isHeadAdminOfAnyUnit(user)
+}
+
 // CreateNews creates news with AI sentiment analysis
 func CreateNews(c *gin.Context) {
 	var input struct {
@@ -36,8 +63,8 @@ func CreateNews(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can create news"})
+	if !canManageNews(userObj) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only super admins and head admins can create news"})
 		return
 	}
 
@@ -215,8 +242,8 @@ func AIGenerateNewsSummary(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
-	if userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can generate AI news summaries"})
+	if !canManageNews(userObj) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only super admins and head admins can generate AI news summaries"})
 		return
 	}
 

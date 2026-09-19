@@ -9,6 +9,7 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
 )
 
 // AddBankAccount adds a bank account for a unit
@@ -345,6 +346,21 @@ func RecordDonation(c *gin.Context) {
 		}
 		config.DB.Create(&transaction)
 
+		// Stamp the immutable ledger
+		ledgerSvc := services.NewLedgerService()
+		donationID := donation.ID
+		_, _ = ledgerSvc.Append(services.LedgerEntryInput{
+			UnitID:       unitID,
+			Direction:    "in",
+			EntryType:    "donation",
+			Amount:       input.Amount,
+			Counterparty: input.DonorName,
+			Description:  "Donation from " + input.DonorName,
+			SourceType:   "donation",
+			SourceID:     &donationID,
+			CreatedBy:    userObj.ID,
+		})
+
 		c.JSON(http.StatusCreated, gin.H{
 			"message":  "Donation recorded and confirmed",
 			"donation": donation,
@@ -424,6 +440,21 @@ func ConfirmDonation(c *gin.Context) {
 		ReferenceID:       donation.Reference,
 	}
 	config.DB.Create(&transaction)
+
+	// Stamp the immutable ledger
+	ledgerSvc := services.NewLedgerService()
+	donationID = donation.ID
+	_, _ = ledgerSvc.Append(services.LedgerEntryInput{
+		UnitID:       donation.UnitID,
+		Direction:    "in",
+		EntryType:    "donation",
+		Amount:       donation.Amount,
+		Counterparty: donation.DonorName,
+		Description:  "Donation from " + donation.DonorName,
+		SourceType:   "donation",
+		SourceID:     &donationID,
+		CreatedBy:    userObj.ID,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":     "Donation confirmed successfully",

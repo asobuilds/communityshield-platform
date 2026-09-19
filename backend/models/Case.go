@@ -32,6 +32,7 @@ type Case struct {
 	ArrivedAt     *time.Time `json:"arrivedAt,omitempty"`
 	ClosedAt      *time.Time `json:"closedAt,omitempty"`
 	ClosedBy      *uuid.UUID `gorm:"type:uuid" json:"closedBy,omitempty"`
+	ClosedViaPlatform bool `gorm:"default:false;index:idx_case_closed_via_platform" json:"closedViaPlatform"`
 	ApprovedBy    *uuid.UUID `gorm:"type:uuid" json:"approvedBy,omitempty"`
 	FinalReport   string     `gorm:"type:text" json:"finalReport"`
 

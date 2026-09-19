@@ -370,6 +370,23 @@ func ApproveCaseClosure(c *gin.Context) {
 		return
 	}
 
+	// Mark the case as closed via platform (counts toward unit ranking).
+	config.DB.Model(&models.Case{}).
+		Where("id = ?", caseRecord.ID).
+		Update("closed_via_platform", true)
+
+	// Notify the reporter they can now rate the officer and unit.
+	if caseRecord.ReportedBy != uuid.Nil {
+		notification := models.Notification{
+			UserID:  caseRecord.ReportedBy,
+			Title:   "Case closed — rate your experience",
+			Message: "Your case has been closed. You can now rate the officer and unit that handled it.",
+			Type:    "case_closed_rate",
+			Status:  "unread",
+		}
+		config.DB.Create(&notification)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Case approved and closed",
 		"review":   review,
