@@ -9,7 +9,7 @@ import (
 // BankAccount represents a unit's bank account for receiving funds
 type BankAccount struct {
 	ID            uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UnitID        uuid.UUID      `gorm:"type:uuid;not null;unique" json:"unitId"`
+	UnitID        uuid.UUID      `gorm:"type:uuid;not null;index:idx_bank_account_unit" json:"unitId"`
 	BankName      string         `gorm:"not null" json:"bankName"`
 	AccountNumber string         `gorm:"not null" json:"accountNumber"`
 	AccountName   string         `gorm:"not null" json:"accountName"`
@@ -18,6 +18,8 @@ type BankAccount struct {
 	SwiftCode     string         `json:"swiftCode"`
 	IsVerified    bool           `gorm:"default:false" json:"isVerified"`
 	IsDefault     bool           `gorm:"default:false" json:"isDefault"`
+	IsPublic     bool           `gorm:"default:false;index:idx_bank_account_public" json:"isPublic"`
+	DisplayOrder int            `gorm:"default:0" json:"displayOrder"`
 	Status        string         `gorm:"default:active" json:"status"`
 	Notes         string         `json:"notes"`
 	CreatedBy     uuid.UUID      `gorm:"type:uuid;not null" json:"createdBy"`

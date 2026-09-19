@@ -22,6 +22,13 @@ func SetupRoutes(router *gin.Engine) {
 		// Public routes (no authentication required)
 		api.GET("/public/cases", handlers.GetPublicCases)
 		api.GET("/public/units", handlers.GetPublicUnits)
+		api.GET("/public/units/:unitId/bank-accounts", handlers.GetPublicBankAccounts)
+		api.GET("/public/units/:unitId/ledger", handlers.GetPublicUnitLedger)
+		api.GET("/public/units/:unitId/financial-years", handlers.GetPublicFinancialYears)
+		api.GET("/public/units/:unitId/financial-summary", handlers.GetCurrentYearSummary)
+		api.GET("/public/platform/donation-info", handlers.GetPlatformDonationInfo)
+		api.POST("/public/platform/donations", handlers.CreatePlatformDonation)
+		api.GET("/public/platform/supporters", handlers.ListPublicSupporters)
 		api.POST("/invites/validate", middleware.RateLimitAuth(), handlers.ValidateInvite)
 
 		// Auth routes
@@ -220,6 +227,8 @@ func SetupRoutes(router *gin.Engine) {
 			bank.GET("/:unitId/accounts", middleware.AuthMiddleware(), handlers.GetBankAccounts)
 			bank.PUT("/accounts/:id", middleware.AuthMiddleware(), handlers.UpdateBankAccount)
 			bank.DELETE("/accounts/:id", middleware.AuthMiddleware(), handlers.DeleteBankAccount)
+			bank.PATCH("/accounts/:id/public", middleware.AuthMiddleware(), handlers.ToggleBankAccountPublic)
+			bank.GET("/units/:unitId/ledger", middleware.AuthMiddleware(), handlers.GetUnitLedger)
 			bank.POST("/donations", middleware.AuthMiddleware(), handlers.RecordDonation)
 			bank.POST("/donations/:id/confirm", middleware.AuthMiddleware(), handlers.ConfirmDonation)
 			bank.GET("/:unitId/donations", middleware.AuthMiddleware(), handlers.GetDonations)
@@ -340,8 +349,8 @@ func SetupRoutes(router *gin.Engine) {
 		// SMS routes
 		sms := api.Group("/sms")
 		{
-			sms.POST("/incoming", handlers.HandleIncomingSMS)
-			sms.POST("/ussd", handlers.HandleUSSD)
+			sms.POST("/incoming", middleware.SMSWebhookSignature(), handlers.HandleIncomingSMS)
+			sms.POST("/ussd", middleware.SMSWebhookSignature(), handlers.HandleUSSD)
 		}
 
 		// Peacebuilding routes
@@ -370,6 +379,8 @@ func SetupRoutes(router *gin.Engine) {
 			superAdmin.POST("/users/:id/impersonate", handlers.ImpersonateUser)
 			superAdmin.POST("/stop-impersonate", handlers.StopImpersonation)
 			superAdmin.GET("/stats", handlers.GetSystemStats)
+			superAdmin.GET("/platform-donations", handlers.ListPlatformDonations)
+			superAdmin.POST("/platform-donations/:id/confirm", handlers.ConfirmPlatformDonation)
 		}
 	}
 

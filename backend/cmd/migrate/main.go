@@ -128,6 +128,15 @@ func main() {
 		&models.CaseAdminAssignment{},
 		&models.RevocationCycle{},
 		&models.RevocationVote{},
+
+		&models.RevokedToken{},
+		&models.RefreshToken{},
+		&models.UserSession{},
+		&models.IdempotencyRecord{},
+
+		&models.FinancialLedger{},
+		&models.UnitFinancialYear{},
+		&models.PlatformDonation{},
 	)
 
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
 )
 
 // CreateTransaction creates a new transaction with multi-signature approval
@@ -193,6 +194,20 @@ func ApproveTransaction(c *gin.Context) {
 				config.DB.Save(&budget)
 			}
 		}
+
+		ledgerSvc := services.NewLedgerService()
+		txID := transaction.ID
+		_, _ = ledgerSvc.Append(services.LedgerEntryInput{
+			UnitID:       transaction.UnitID,
+			Direction:    "out",
+			EntryType:    transaction.Type,
+			Amount:       transaction.Amount,
+			Counterparty: transaction.Description,
+			Description:  transaction.Description,
+			SourceType:   "transaction",
+			SourceID:     &txID,
+			CreatedBy:    userObj.ID,
+		})
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":           "Transaction fully approved!",

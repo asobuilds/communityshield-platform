@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"log"
 	"time"
 
@@ -60,6 +61,7 @@ func (s *SchedulerService) RunOnce() {
 	s.CloseExpiredElections()
 	s.ExpireStaleInvites()
 	s.CleanupExpiredSessions()
+	s.CloseFinishedFinancialYears()
 }
 
 // CloseExpiredElections finalizes any open UnitAdminElection whose voting window has passed.
@@ -115,4 +117,31 @@ func (s *SchedulerService) CleanupExpiredSessions() {
 	_ = NewRefreshTokenService().CleanupExpired()
 	_ = NewTokenService().CleanupExpired()
 	_ = config.DB.Where("expires_at < ?", time.Now().UTC()).Delete(&models.IdempotencyRecord{}).Error
+}
+
+// CloseFinishedFinancialYears closes the previous calendar year for every
+// unit that has ledger activity but no UnitFinancialYear record yet.
+// Runs daily; idempotent — running twice in one day is harmless.
+func (s *SchedulerService) CloseFinishedFinancialYears() {
+	currentYear := time.Now().UTC().Year()
+	prevYear := currentYear - 1
+
+	type unitRow struct {
+		UnitID uuid.UUID
+	}
+	var units []unitRow
+	config.DB.Model(&models.FinancialLedger{}).
+		Select("DISTINCT unit_id").
+		Where("year = ?", prevYear).
+		Scan(&units)
+
+	ledgerSvc := NewLedgerService()
+	for _, u := range units {
+		var existing models.UnitFinancialYear
+		if err := config.DB.Where("unit_id = ? AND year = ?", u.UnitID, prevYear).
+			First(&existing).Error; err == nil {
+			continue
+		}
+		_, _ = ledgerSvc.CloseYear(u.UnitID, prevYear, uuid.Nil)
+	}
 }
