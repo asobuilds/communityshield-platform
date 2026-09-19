@@ -22,6 +22,7 @@ func SetupRoutes(router *gin.Engine) {
 		// Public routes (no authentication required)
 		api.GET("/public/cases", handlers.GetPublicCases)
 		api.GET("/public/units", handlers.GetPublicUnits)
+		api.POST("/invites/validate", handlers.ValidateInvite)
 
 		// Auth routes
 		authHandler := handlers.NewAuthHandler()
@@ -55,6 +56,11 @@ func SetupRoutes(router *gin.Engine) {
 			units.GET("/:id", handlers.GetUnitByID)
 			units.POST("", middleware.AuthMiddleware(), handlers.CreateUnit)
 			units.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateUnit)
+		}
+
+		invites := api.Group("/invites")
+		{
+			invites.POST("", middleware.AuthMiddleware(), handlers.CreateInvite)
 		}
 
 		// Push notification routes
@@ -125,7 +131,8 @@ func SetupRoutes(router *gin.Engine) {
 		// Suspect routes
 		suspects := api.Group("/suspects")
 		{
-			suspects.POST("", middleware.AuthMiddleware(), handlers.CreateSuspect)
+			suspects.GET("/me/cases", middleware.AuthMiddleware(), handlers.GetMySuspectCases)
+		suspects.POST("", middleware.AuthMiddleware(), handlers.CreateSuspect)
 			suspects.GET("", middleware.AuthMiddleware(), handlers.GetAllSuspects)
 			suspects.GET("/:id", middleware.AuthMiddleware(), handlers.GetSuspectByID)
 			suspects.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateSuspect)
