@@ -11,7 +11,7 @@ func SetupRoutes(router *gin.Engine) {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status":  "ok",
-			"message": "CommunityShield API is running",
+			"message": "WardGuard API is running",
 			"version": "1.0.0",
 		})
 	})
@@ -22,24 +22,26 @@ func SetupRoutes(router *gin.Engine) {
 		// Public routes (no authentication required)
 		api.GET("/public/cases", handlers.GetPublicCases)
 		api.GET("/public/units", handlers.GetPublicUnits)
-		api.POST("/invites/validate", handlers.ValidateInvite)
+		api.POST("/invites/validate", middleware.RateLimitAuth(), handlers.ValidateInvite)
 
 		// Auth routes
 		authHandler := handlers.NewAuthHandler()
 		auth := api.Group("/auth")
 		{
-			auth.POST("/register", authHandler.Register)
-			auth.POST("/login", authHandler.Login)
-			auth.POST("/logout", authHandler.Logout)
+			auth.POST("/register", middleware.RateLimitAuth(), authHandler.Register)
+			auth.POST("/login", middleware.RateLimitAuth(), authHandler.Login)
+			auth.POST("/logout", middleware.RateLimitAuth(), middleware.AuthMiddleware(), authHandler.Logout)
 			auth.GET("/profile", middleware.AuthMiddleware(), authHandler.GetProfile)
+			auth.POST("/change-password", middleware.RateLimitAuth(), middleware.AuthMiddleware(), authHandler.ChangePassword)
+			auth.POST("/refresh", middleware.RateLimitAuth(), authHandler.Refresh)
 		}
 
 		// OTP routes
 		otp := api.Group("/otp")
 		{
-			otp.POST("/send", handlers.SendOTP)
-			otp.POST("/verify", handlers.VerifyOTP)
-			otp.POST("/resend", handlers.ResendOTP)
+			otp.POST("/send", middleware.RateLimitOTP(), handlers.SendOTP)
+			otp.POST("/verify", middleware.RateLimitOTP(), handlers.VerifyOTP)
+			otp.POST("/resend", middleware.RateLimitOTP(), handlers.ResendOTP)
 		}
 
 		// Unit routes
@@ -65,7 +67,7 @@ func SetupRoutes(router *gin.Engine) {
 
 		invites := api.Group("/invites")
 		{
-			invites.POST("", middleware.AuthMiddleware(), handlers.CreateInvite)
+			invites.POST("", middleware.AuthMiddleware(), middleware.RateLimitInvite(), handlers.CreateInvite)
 		}
 
 		// Push notification routes
@@ -104,14 +106,14 @@ func SetupRoutes(router *gin.Engine) {
 		// Election routes
 		elections := api.Group("/elections")
 		{
-			elections.POST("/:id/vote", middleware.AuthMiddleware(), handlers.CastAdminVote)
+			elections.POST("/:id/vote", middleware.AuthMiddleware(), middleware.RateLimitVote(), handlers.CastAdminVote)
 			elections.POST("/:id/close", middleware.AuthMiddleware(), handlers.CloseAdminElection)
 			elections.GET("/:id/results", middleware.AuthMiddleware(), handlers.GetElectionResults)
 		}
 		// Revocation routes
 		revocations := api.Group("/revocations")
 		{
-			revocations.POST("/:id/vote", middleware.AuthMiddleware(), handlers.CastRevocationVote)
+			revocations.POST("/:id/vote", middleware.AuthMiddleware(), middleware.RateLimitVote(), handlers.CastRevocationVote)
 			revocations.POST("/:id/close", middleware.AuthMiddleware(), handlers.CloseRevocationCycle)
 			revocations.GET("/:id", middleware.AuthMiddleware(), handlers.GetRevocationCycle)
 		}

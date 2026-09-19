@@ -75,3 +75,15 @@ h origin mai
 *.stage3.tsx
 
 .aider*
+
+# Uploaded user content
+backend/uploads/
+
+# Backups and dumps
+*.bak
+*.dump
+backend/*.zip
+
+# Local env
+backend/.env
+.env.local

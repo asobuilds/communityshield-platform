@@ -51,7 +51,6 @@ func (s *AuthService) Login(email, password string) (string, *models.User, error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", nil, errors.New("invalid credentials")
 		}
-
 		return "", nil, err
 	}
 
@@ -77,11 +76,16 @@ func (s *AuthService) generateJWT(user *models.User) (string, error) {
 		secret = "your-secret-key-change-in-production"
 	}
 
+	now := time.Now()
+	jti := uuid.NewString()
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": user.ID.String(),
 		"email":   user.Email,
 		"role":    user.Role,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		"jti":     jti,
+		"iat":     now.Unix(),
+		"exp":     now.Add(24 * time.Hour).Unix(),
 	})
 
 	return token.SignedString([]byte(secret))
@@ -116,4 +120,31 @@ func (s *AuthService) GetUserByID(id string) (*models.User, error) {
 	}
 
 	return &user, nil
+}
+
+func (s *AuthService) ChangePassword(userID uuid.UUID, oldPassword string, newPassword string) error {
+	var user models.User
+	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
+		return errors.New("current password is incorrect")
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	user.Password = string(hashed)
+	if err := config.DB.Save(&user).Error; err != nil {
+		return err
+	}
+
+	tokenSvc := NewTokenService()
+	_ = tokenSvc.RevokeAllForUser(userID, "password_change")
+	_ = NewRefreshTokenService().RevokeAllForUser(userID)
+
+	return nil
 }

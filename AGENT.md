@@ -1,979 +1,191 @@
-# CommunityShield — AGENT.md
+# AGENT.md � WardGuard
 
-## Master Architecture, Product Blueprint, Engineering State & Execution Plan
-
-> Durable blueprint for the CommunityShield project. Update Current State, Next Actions, and Decision Log at major milestones.
-
-## 1. Product Identity
-
-**CommunityShield** is a community-centered public-safety and security operations platform connecting grassroots residents, community structures, security units/officers, and administrators through a common digital workflow.
-
-### Problem
-
-Grassroots security information is often fragmented across calls, messaging apps, social media, paper records, informal networks, and disconnected agency workflows. This can cause delayed reporting/response, weak case visibility, poor evidence continuity, weak accountability, poor coordination, limited location intelligence, and loss of institutional memory.
-
-### Core outcome
-
-```text
-Community signal
- -> secure intake
- -> triage/prioritization
- -> unit routing
- -> officer assignment
- -> dispatch
- -> arrival
- -> investigation/progress
- -> evidence
- -> resolution/closure
- -> audit/analytics
- -> prevention feedback
-```
-
-CommunityShield should improve coordination without replacing lawful security institutions or encouraging vigilantism.
-
-## 2. Product Principles
-
-1. Grassroots-first: communities are an intelligence and prevention layer.
-2. Institutional workflow: reports become structured, trackable cases.
-3. Accountability by design: actions are attributable to authenticated users.
-4. Evidence integrity: evidence remains linked to cases and actors.
-5. Least privilege: citizens, officers, unit admins and super admins have different powers.
-6. Location-aware operations.
-7. Explicit assignment/dispatch/arrival lifecycle.
-8. Human-in-the-loop AI.
-9. Privacy and safety by default.
-10. Auditability.
-11. Local adaptability.
-12. Mobile-first field operation.
-
-## 3. Positioning and Novelty
-
-Do **not** claim that CommunityShield invented digital crime reporting, GIS, evidence management, or case management. Existing products and research already demonstrate those capabilities.
-
-The defensible differentiation is the integrated, grassroots-to-operational architecture:
-
-- community-originated reports;
-- security-unit ownership;
-- officer assignment;
-- dispatch/arrival lifecycle;
-- progress timeline;
-- case-linked evidence;
-- location intelligence;
-- controlled community visibility;
-- role/unit/resource authorization;
-- operational analytics;
-- future AI-assisted triage and pattern analysis;
-- adaptation to Nigerian grassroots structures.
-
-The novelty is therefore primarily **system integration, workflow design, local context, governance, and deployment approach**.
-
-## 4. Research Context
-
-Research and current systems show that this is an active field:
-
-- The Nigeria Police Force has maintained community-policing structures and describes community policing as an established strategy.
-- Nigerian policy statements continue to emphasize local participation and grassroots ownership.
-- Nigerian research identifies police-public trust, responsiveness, technology and digital engagement as important factors.
-- The Nigeria Police National Cybercrime Centre already provides a guided e-reporting portal with case tracking.
-- African commercial systems already combine incident/case management, evidence, GIS, community reporting and field-officer workflows.
-- Academic prototypes also combine mobile reporting, GPS, multimedia evidence, notifications and crime mapping.
-
-Implication: CommunityShield should differentiate through workflow quality, local usability, interoperability, trust, accountability and governance rather than simply feature count.
-
-## 5. System Actors
-
-### Citizen / Community User
-Registration, reporting, location/description submission, permitted evidence submission, permitted case tracking, notifications, feedback, SOS.
-
-### Officer
-Assigned-case access, operational actions, dispatch, arrival, progress, evidence actions and team participation according to permissions.
-
-### Unit Administrator
-Unit officers, allocation, operational oversight, local analytics, verification and unit configuration.
-
-### Super Administrator
-Platform-wide governance, units, permissions, verification, exceptional administration and system-wide analytics.
-
-## 6. Backend Architecture
-
-```text
-backend/
-├── cmd/migrate/
-├── config/
-├── handlers/
-├── middleware/
-├── models/
-├── routes/
-├── services/
-└── websocket/
-```
-
-### models/
-GORM domain/database models.
-
-Important current models:
-- User
-- Officer
-- Case
-- Evidence
-- Progress
-- CaseOfficer
-- SecurityUnit and related unit structures
-
-### handlers/
-HTTP request/response layer.
-
-Current important case handlers:
-- AssignCase
-- GetCaseAssignments
-- UpdateCaseStatus
-- DispatchCase
-- ArriveAtCase
-- AddCaseProgress
-- GetCaseProgress
-
-Evidence handlers:
-- UploadEvidence
-- GetEvidenceByCase
-- VerifyEvidence
-- DeleteEvidence
-
-### middleware/
-Actual authentication file:
-
-```text
-middleware/auth_middleware.go
-```
-
-It:
-- reads Bearer JWT;
-- validates token;
-- resolves database user;
-- stores `user`, `user_id`, `role` in Gin context;
-- provides RoleMiddleware.
-
-Do not refer to `middleware/auth.go`.
-
-### routes/
-Central API registration.
-
-Current case workflow routes:
-
-```text
-GET    /cases
-POST   /cases
-GET    /cases/analytics
-GET    /cases/:id
-PUT    /cases/:id
-POST   /cases/:id/timeline
-GET    /cases/:id/timeline
-POST   /cases/:id/feedback
-POST   /cases/:id/assign
-GET    /cases/:id/assignments
-POST   /cases/:id/dispatch
-POST   /cases/:id/arrive
-POST   /cases/:id/progress
-GET    /cases/:id/progress
-```
-
-Evidence routes should be:
-
-```text
-POST   /evidence/upload
-GET    /evidence/case/:caseId
-DELETE /evidence/:id
-PATCH  /evidence/:id/verify
-```
-
-## 7. Core Data Model
-
-### User
-UUID, Email, Phone, FirstName, LastName, Password, Role, UnitID, Status, IsSuperAdmin, Impersonating, MedicalInfo, LastLogin, timestamps, soft delete.
-
-### Officer
-UUID, UnitID, Name, Rank, BadgeNumber, Role, Phone, Email, JoinedDate, Status, timestamps, soft delete, Unit relationship.
-
-### Case
-Important fields:
-- ID
-- UnitID
-- ReportedBy
-- AssignedTo
-- Title
-- Description
-- IncidentDate
-- Location
-- Latitude/Longitude
-- Status
-- Priority
-- TransferDetails
-- IsPublic
-- TrackingID
-- PriorityLevel
-- GISLatitude/GISLongitude
-- AssignedAt
-- DispatchedAt
-- ArrivedAt
-- ClosedAt
-- ClosedBy
-- ApprovedBy
-- FinalReport
-- timestamps
-- Evidence relationship
-- Progress relationship
-
-### Evidence
-Current fields:
-- ID
-- CaseID
-- UploadedBy
-- Type
-- FileURL
-- Description
-- Latitude
-- Longitude
-- IsVerified
-- UploadedAt
-- timestamps
-- soft delete
-
-### Progress
-Current fields:
-- ID
-- CaseID
-- OfficerID
-- Action
-- Description
-- timestamps
-- soft delete
-
-### CaseOfficer
-Supports multiple officers on a case:
-- ID
-- CaseID
-- OfficerID
-- Role
-- timestamps
-- soft delete
-
-Roles: primary, investigator, support.
-
-## 8. Canonical Case Lifecycle
-
-```text
-REPORTED
-  -> PENDING / TRIAGE
-  -> ASSIGNED
-  -> DISPATCHED
-  -> ARRIVED
-  -> INVESTIGATING / IN_PROGRESS
-  -> EVIDENCE + PROGRESS
-  -> RESOLVED
-  -> CLOSED
-  -> APPROVED / ARCHIVED
-```
-
-Important timestamps:
-- AssignedAt
-- DispatchedAt
-- ArrivedAt
-- ClosedAt
-
-These enable response-time metrics.
-
-## 9. Assignment Architecture
-
-`Case.AssignedTo` = primary officer.
-
-`CaseOfficer` = complete operational team.
-
-Future assignment rules:
-1. Case exists.
-2. Officer exists.
-3. Officer is active.
-4. Officer belongs to relevant unit where required.
-5. Requester has authority.
-6. Assignment timestamp is recorded.
-7. Assignment is auditable.
-
-## 10. Evidence Architecture
-
-```text
-UPLOAD
- -> STORE FILE REFERENCE
- -> ATTACH TO CASE
- -> OPTIONAL GEOLOCATION
- -> VERIFY
- -> USE IN INVESTIGATION
- -> RETAIN / ARCHIVE
-```
-
-Current handler is functional but requires hardening:
-- authenticate uploader;
-- verify uploader has case access;
-- validate evidence type;
-- validate storage reference;
-- eventually use controlled object storage instead of arbitrary file URLs;
-- enforce size/type restrictions;
-- restrict verification;
-- restrict deletion;
-- record verifier and timestamp;
-- eventually add cryptographic hash metadata;
-- never expose sensitive evidence through public endpoints.
-
-## 11. Progress Timeline
-
-Progress records represent operational activity such as:
-- investigation_started
-- interview_conducted
-- evidence_collected
-- suspect_identified
-- follow_up_required
-- unit_notified
-- case_resolved
-
-Each event should contain case, officer, action, description and timestamp.
-
-The progress duplicate-handler issue was resolved and the backend subsequently passed `go test ./...` and `go vet ./...`.
-
-## 12. Authorization
-
-Current authentication is JWT-based.
-
-Target authorization model:
-
-```text
-Authentication
- -> Identity
- -> Role
- -> Unit membership
- -> Resource access
- -> Action permission
-```
-
-Role alone must not automatically grant access to every case.
-
-## 13. GIS
-
-Cases already support textual and coordinate fields.
-
-Future GIS:
-- incident maps;
-- unit coverage;
-- lawful responder location;
-- clustering/hotspots;
-- response-time geography;
-- community risk patterns.
-
-GIS must support prevention/resource allocation, not profiling individuals.
-
-## 14. Realtime
-
-Existing WebSocket infrastructure should eventually publish permission-aware events:
-
-```text
-case.created
-case.assigned
-case.dispatched
-case.arrived
-case.progress_added
-evidence.uploaded
-evidence.verified
-case.status_changed
-sos.created
-alert.created
-notification.created
-```
-
-## 15. Notifications
-
-Channels:
-- in-app
-- push
-- SMS
-- email
-- future approved messaging integrations
-
-Use background processing/queues as scale requires.
-
-## 16. SOS
-
-SOS is an emergency workflow:
-
-```text
-SOS
- -> validation/rate control
- -> priority escalation
- -> appropriate unit
- -> realtime notification
- -> dispatch
- -> arrival
- -> resolution
-```
-
-Must include abuse controls, escalation, location handling and audit.
-
-## 17. Analytics
-
-Operational:
-- reports by period
-- open/closed cases
-- response time
-- dispatch time
-- arrival time
-- resolution time
-- officer workload
-- unit workload
-
-Community:
-- reporting volume
-- recurring areas
-- issue categories
-- satisfaction
-- unresolved concerns
-
-Prevention:
-- recurring locations
-- trends
-- hotspot changes
-- intervention outcomes
-
-Do not interpret correlations as proof of criminality.
-
-## 18. AI
-
-AI is downstream of trustworthy data.
-
-Potential uses:
-- incident classification;
-- priority recommendation;
-- duplicate detection;
-- summarization;
-- trend detection;
-- GIS pattern analysis;
-- anomaly detection;
-- metadata extraction;
-- operator assistance.
-
-AI must not autonomously declare guilt, authorize force, make irreversible enforcement decisions, or expose protected information.
-
-## 19. Frontend
-
-React/TypeScript frontend includes routing, AppLayout, providers, map functionality, dashboards, case/incident views and citizen/operational UI.
-
-Temporary map recovery files should remain untracked unless deliberately promoted:
-
-```text
-IncidentMap.stage1.tsx
-IncidentMap.stage3.tsx
-IncidentMap.tsx.SAFE-BACKUP.tsx
-```
-
-Do not blindly commit backup artifacts.
-
-## 20. Git Rules
-
-Repository root:
-
-```text
-C:\Users\USER\Desktop\communityshield-platform
-```
-
-Backend:
-
-```text
-C:\Users\USER\Desktop\communityshield-platform\backend
-```
-
-After reboot:
-
-```powershell
-Set-Location "C:\Users\USER\Desktop\communityshield-platform\backend"
-git status
-go test ./...
-go vet ./...
-```
-
-Never paste Go expressions such as `handlers.AssignCase` or `cases.POST(...)` into PowerShell. They belong in `.go` source files.
-
-Open a file:
-
-```powershell
-notepad .\handlers\evidence_handler.go
-```
-
-## 21. Current Blocker
-
-Latest reported error:
-
-```text
-handlers\evidence_handler.go:1:1: illegal character U+0040 '@'
-```
-
-The evidence handler has an accidental `@` at the beginning (or otherwise contains non-Go text).
-
-Immediate repair:
-
-```powershell
-Set-Location "C:\Users\USER\Desktop\communityshield-platform\backend"
-notepad .\handlers\evidence_handler.go
-```
-
-Delete the accidental marker/non-Go content and restore valid Go source.
-
-Then:
-
-```powershell
-gofmt -w .\handlers\evidence_handler.go
-go test ./...
-go vet ./...
-```
-
-Do not start the next backend feature until both checks pass.
-
-## 22. Evidence Route Consistency
-
-The handler uses:
-
-```go
-caseID := c.Param("caseId")
-```
-
-Therefore the route must be:
-
-```go
-evidence.GET("/case/:caseId", middleware.AuthMiddleware(), handlers.GetEvidenceByCase)
-```
-
-Not:
-
-```go
-evidence.GET("/:id", handlers.GetEvidenceByCase)
-```
-
-The latter supplies `id` and currently bypasses authentication.
-
-## 23. Engineering Sequence After Evidence
-
-1. Evidence hardening.
-2. Explicit case-state transition rules.
-3. Unit/resource access enforcement.
-4. Audit system.
-5. Notifications/WebSocket integration.
-6. Frontend operational workflow.
-7. SOS escalation.
-8. GIS/analytics.
-9. AI assistance.
-10. Security hardening.
-11. Staging/production deployment.
-
-## 24. Definition of Done
-
-A feature is complete only when applicable layers are addressed:
-
-```text
-MODEL
- -> MIGRATION
- -> SERVICE
- -> HANDLER
- -> AUTHORIZATION
- -> ROUTE
- -> TEST
- -> FRONTEND
- -> REALTIME/NOTIFICATION
- -> AUDIT
- -> ANALYTICS
- -> DOCUMENTATION
-```
-
-If a layer is not applicable, record why.
-
-## 25. Testing Gate
-
-Minimum backend gate:
-
-```powershell
-go test ./...
-go vet ./...
-```
-
-API tests should cover:
-- unauthenticated;
-- wrong role;
-- wrong unit;
-- authorized success;
-- invalid UUID;
-- missing fields;
-- missing resource;
-- duplicate action;
-- unauthorized mutation.
-
-Later add integration, frontend, E2E, load and security testing.
-
-## 26. Security Requirements
-
-Critical:
-- password hashing;
-- JWT validation;
-- least privilege;
-- secure evidence storage;
-- input validation;
-- rate limiting;
-- audit logs;
-- secret management;
-- HTTPS;
-- CORS policy;
-- backup/restore;
-- privacy controls;
-- retention policy.
-
-Medical information and other sensitive data require stronger controls than ordinary profile data.
-
-## 27. Deployment
-
-```text
-LOCAL
- -> DEVELOPMENT
- -> STAGING
- -> PILOT COMMUNITY / UNIT
- -> MULTI-UNIT
- -> STATE / REGIONAL SCALE
-```
-
-Do not scale before authorization, evidence safety, auditing, backups and monitoring are reliable.
-
-## 28. Grassroots Integration
-
-Target model:
-
-```text
-Community
- -> Ward / Local Structure
- -> Security Unit
- -> Officer / Response Team
- -> Command / Administration
-```
-
-Community participation should enable reporting, safety information, feedback, prevention and local problem identification. It must not encourage vigilantism or unauthorized enforcement.
-
-## 29. Long-Term Roadmap
-
-### Phase A — Foundation
-Authentication, users, units, cases, officers, permissions.
-
-### Phase B — Operational Workflow
-Assignment, dispatch, arrival, progress, evidence, closure.
-
-### Phase C — Community Layer
-Reporting, public safety map, notifications, feedback, announcements.
-
-### Phase D — Intelligence
-GIS, analytics, trends, dashboards, AI assistance.
-
-### Phase E — Institutional Integration
-Agency interoperability, SMS/IVR, approved communication channels, identity and records integrations.
-
-### Phase F — Scale
-Multi-state/multi-agency, disaster recovery, high availability, enterprise governance.
-
-## 30. Research-Based Positioning
-
-CommunityShield aligns with established community-oriented policing principles: partnership, problem solving, local context and prevention.
-
-Nigeria's police materials describe community policing as an established strategy, while current policy discussion continues to emphasize grassroots participation and local ownership. Research also shows that digital engagement can improve reporting access while responsiveness and trust remain important.
-
-Recommended positioning:
-
-> **A digital operating layer for community-centered public safety, connecting grassroots observations and citizen participation to accountable, permission-controlled operational case management.**
-
-## 31. Decision Log
-
-- Go/Gin/GORM backend.
-- PostgreSQL-style UUID entities.
-- JWT authentication with database-backed authorization.
-- `Case.AssignedTo` for primary officer.
-- `CaseOfficer` for team assignments.
-- `Progress` for operational timeline.
-- `Evidence` for case-linked evidence.
-- Explicit dispatch/arrival/closure timestamps.
-- AI remains downstream of reliable operational data.
-- Grassroots integration is a core architecture principle.
-
-## 32. Current Checkpoint
-
-Completed/working according to the latest project state:
-- case assignment handlers exist;
-- case assignment routes exist;
-- dispatch/arrival handlers exist;
-- progress add/get handlers exist;
-- evidence handlers exist but currently contain a source corruption blocker;
-- evidence route parameter mismatch identified;
-- authentication middleware is `auth_middleware.go`;
-- Git synchronization/push was successful at the latest checkpoint.
-
-Current task:
-
-```text
-Repair evidence handler
- -> gofmt
- -> go test
- -> go vet
- -> evidence authorization hardening
- -> case lifecycle hardening
-```
-
-## 33. Agent Operating Rules
-
-1. Check `git status` first.
-2. Confirm repository root after every reboot.
-3. Fix compile errors before adding features.
-4. Never paste Go code directly into PowerShell.
-5. Replace corrupted files completely when necessary.
-6. Run gofmt after source changes.
-7. Run `go test ./...` and `go vet ./...` after each logical backend milestone.
-8. Commit coherent milestones only.
-9. Push only after local verification.
-10. Never commit database dumps, ZIP backups, credentials or temporary recovery files.
-11. Update this document at architectural milestones.
-12. Optimize for a trustworthy end-to-end workflow, not feature count.
-
-## 34. North Star
-
-```text
-COMMUNITY
- -> REPORT / SOS / INTELLIGENCE
- -> SECURE INTAKE
- -> TRIAGE + PRIORITY
- -> UNIT ROUTING
- -> OFFICER ASSIGNMENT
- -> DISPATCH
- -> ARRIVAL
- -> INVESTIGATION
-    -> PROGRESS
-    -> EVIDENCE
-    -> COMMUNICATION
-    -> COLLABORATION
- -> RESOLUTION
- -> APPROVAL / CLOSURE
- -> AUDIT + ANALYTICS
- -> COMMUNITY FEEDBACK
- -> PREVENTION
- -> BETTER LOCAL SECURITY
-```
-
-**North-star principle:** Build digital infrastructure that lets local people, legitimate security institutions and accountable technology work together around real incidents quickly, transparently, safely and with measurable outcomes.
-
-## 35. Research References Used for This Blueprint
-
-- Nigeria Police Force — community policing and strategy development.
-- Nigeria Federal Ministry of Information — grassroots/community participation in security.
-- Nigeria Police National Cybercrime Centre — e-reporting workflow.
-- OJJDP/Office of Justice Programs — community-oriented/problem-oriented policing.
-- Research on police-public engagement and case management in Nigeria.
-- Research on digital policing in Nigeria.
-- Research on technology-enabled community policing in Nigeria.
-- Existing African public-safety technology products and community-reporting systems.
-
-This research supports the problem framing and landscape analysis; it does not prove that CommunityShield itself is novel in every individual feature.
+> Operating contract for any AI or human contributor working in this repository.
 
 ---
 
-# Living Local Intelligence Architecture
+## Who you are
 
-CommunityShield is intended to become more knowledgeable about the communities it serves through structured, permission-aware community observations.
+You are an implementation agent for the **WardGuard** repository.
 
-## Core principle
+You are **NOT** the product owner. You are **NOT** authorized to redesign the architecture. You inspect, plan, implement, test, and report � within the existing architecture.
 
-**CommunityShield learns facts before it learns models.**
+---
 
-Never treat raw user answers as ground truth and never continuously train an AI model directly from unvalidated answers.
+## Source of truth (highest priority first)
 
-```text
-USER ANSWER
-  ?
-OBSERVATION
-  ?
-VALIDATION / CONSENSUS
-  ?
-KNOWLEDGE FACT
-  ?
-RETRIEVAL
-  ?
-AI REASONING
-Location intelligence
+1. Existing working code
+2. This file (`AGENT.md`)
+3. `README.md`
+4. Database schema and migrations
+5. Existing API contracts
+6. Explicit instructions from the user
+7. Approved implementation plans
 
-The map is a central architectural layer.
+**Rule:** Never assume an apparently reasonable change is architecturally correct. Inspect the repository first.
 
-Initial location-learning behavior:
+---
 
-Detect a meaningful new location/area.
-Use approximately 1 km as the initial survey-anchor threshold.
-Check whether useful local knowledge already exists.
-Avoid prompting users who are simply passing through.
-Ask 1�3 short adaptive questions.
-Store answers as observations.
-Validate and aggregate independent observations.
-Promote sufficiently supported observations into knowledge facts.
+## Security principles
 
-Question domains include:
+### Core rule
+**Unit access is NOT case access.**
 
-community/village/area identity
-roads and local road names
-junctions
-markets
-schools
-hospitals
-police/security facilities
-emergency facilities
-landmarks
-accessibility and road conditions
-alternative routes
-local safety knowledge
+An officer in a unit does **not** automatically gain access to every case in that unit. Sensitive case intelligence is available to:
+- Assigned officers (`primary` / `paired`)
+- Explicitly authorized admins (`CaseAdminAssignment`)
+- Head Admin of the unit
+- Super Admin
 
-Do not use this collection mechanism to solicit personal, sensitive, suspect or investigative information.
+Support officers see a **limited** view of their assigned case only.
 
-Knowledge provenance
+### Additional rules
+- Sensitive suspect tracking is never a generic officer capability.
+- Citizen-facing responses never expose officer identity, evidence internals, admin comments, or other suspects.
+- Presumed innocence: a citizen named as a suspect sees only case ID, category, status, and public-safe progress.
 
-The planned local intelligence domain includes concepts corresponding to:
+---
 
-LocalArea
-LocalPlace
-LocalObservation
-LocalQuestion
-LocalKnowledgeFact
-LocalKnowledgeSource
+## Role hierarchy
 
-Knowledge facts should retain:
+    Super Admin  (platform-level, outside unit hierarchy)
+        ?
+        ??? Unit
+              ??? Head Admin  (1 per unit, elected by admins)
+              ??? Admin       (5�10 per unit, elected by verified members)
+              ??? Officer     (tier: primary / paired / support)
+              ??? Member      (verified or provisional)
 
-area
-type
-value
-coordinates
-source type
-source count
-independent source count
-confidence
-first observed
-last confirmed
-verification status
-verified by
-timestamps
+Pre-membership citizens are outside the unit hierarchy.
 
-Source types may include:
+---
 
-official
-osm
-community_observation
-officer_observation
-admin_verified
-external_api
-ai_inferred
+## Case lifecycle (canonical)
 
-AI inference must never be treated as equivalent to verification.
+    pending ? assigned ? dispatched ? on_scene ? investigating
+       ? pending_admin_review
+       ? [admin_changes_requested ? investigating]
+       ? closed
 
-Central map architecture
+**Enforced rules:**
+- Officers **cannot** close a case directly. Closure requires admin approval.
+- Assigned officers **cannot** approve their own case closure.
+- Closure requires **2 approvals** from the 2�3 submitted admins.
 
-Use one central map with permission-controlled layers, not separate map implementations per role.
+---
 
-MAP
- +-- Current location
- +-- Roads/search/navigation
- +-- Public local places
- +-- Community safety information
- +-- Citizen incident/report layers
- +-- Officer operational layers
- +-- Admin analytics
- +-- Sensitive case layers
+## Governance
 
-Sensitive layers remain case-scoped.
+### Elections
+- Term: 12 months
+- Staggered rotation: half the seats renew every 6 months
+- Term limit: 2 consecutive terms, then 6-month cooling-off
+- Quorum: 50% of eligible verified voters
+- Seat bands: 12�20 ? 5 � 21�40 ? 7 � 41�70 ? 9 � 71�100 ? 10
+- Vacancy fill: next-highest vote-getter from the last election
 
-Critical security rule
+### Revocation
+- Regular admin removal: **10+ verified votes + Head Admin approval**
+- Head Admin removal: **majority of verified unit members**
+- One vote per member per cycle
+- Votes are immutable; tally is derived, never trusted from the client
+- Successful removal triggers cooling-off
 
-Unit access != case access.
+### UnitAuth
+- Per-unit policy document: thresholds, quorum, seat bands, term rules, cooling-off
+- Every election and revocation cycle snapshots the policy version at open time
+- No retroactive rule changes
 
-An officer's membership in a security unit does not automatically authorize access to every case in that unit.
+---
 
-Suspect tracking and sensitive case locations are restricted to assigned/authorized case personnel and authorized administrators.
+## Location model
 
-Every sensitive location access should be auditable by:
+- Map is a **central platform capability**, not a role-specific feature
+- Public map: public-safe geographic information only
+- Operational map: restricted by role and case assignment
+- Sensitive case location: restricted to authorized case personnel
 
-actor
-case/suspect
-permission
-purpose/context
-timestamp
-Location-aware AI
+---
 
-The future CommunityShield assistant may combine:
+## Living Local Intelligence
 
-current location
-+
-validated local knowledge
-+
-platform knowledge
-+
-permitted current operational information
+    user location ? local context ? short question
+        ? community observation ? validation ? knowledge fact
+        ? retrieval ? AI reasoning
 
-It can answer concise location-specific questions while respecting the same authorization boundary as the Go API.
+**Rule:** WardGuard learns **facts** before it learns **models**.
 
-The AI layer must never:
+Never treat an AI inference as equivalent to a verified fact. All knowledge carries provenance, confidence, source type, and timestamps.
 
-bypass authorization
-expose protected case information
-expose suspect tracking to unauthorized users
-declare guilt
-authorize enforcement
-make irreversible enforcement decisions
-profile individuals or communities as inherently dangerous
-Information boundaries
-PUBLIC LOCAL KNOWLEDGE
-    ? appropriate general users
+---
 
-OPERATIONAL SECURITY INTELLIGENCE
-    ? authorized officers/admins
+## Working rules
 
-SENSITIVE CASE INTELLIGENCE
-    ? assigned/authorized case personnel + authorized admins
-Team ownership
-Core backend/security
+1. Inspect before modifying.
+2. Never modify unrelated files.
+3. Never overwrite architecture without approval.
+4. Never invent APIs.
+5. Never invent database fields when existing fields can be reused.
+6. Never expose secrets.
+7. Never commit secrets.
+8. Never bypass authorization.
+9. Run relevant tests after implementation.
+10. Report every modified and created file.
+11. Report tests executed and results.
+12. Stop after completing the assigned task.
+13. Do not automatically begin the next phase.
+14. Do not perform destructive Git operations.
+15. Do not commit unless explicitly instructed.
 
-Owns:
+---
 
-local intelligence domain model
-observation/provenance/confidence
-authorization
-audit
-AI retrieval boundaries
-case integration
-sensitive intelligence controls
-Frontend
+## Execution cycle
 
-Owns:
+    READ ? UNDERSTAND ? PLAN ? REPORT
+        ? WAIT FOR APPROVAL
+        ? IMPLEMENT ? TEST ? REPORT ? STOP
 
-central CommunityMap
-LocalKnowledgePanel
-LocalQuestionPrompt
-LocalPlaceMarker
-map layers
-location-aware assistant UI
-GIS/map foundation
+---
 
-Owns:
+## Before every task, provide
 
-geospatial queries
-spatial indexing
-location-area resolution
-OSM/GIS integration
-1 km detection
-geographic validation
+- OBJECTIVE (one sentence)
+- FILES TO INSPECT
+- FILES TO MODIFY
+- FILES TO CREATE
+- FILES NOT TO TOUCH
+- IMPLEMENTATION PLAN
+- SECURITY CONSIDERATIONS
+- TEST PLAN
+- RISKS
 
-The GIS foundation must not duplicate the central frontend map or bypass core authorization.
+## After every task, provide
 
-Living Local Intelligence roadmap
-1. Local knowledge collection
-2. Confidence + provenance
-3. Knowledge-aware map
-4. Location-aware AI
-5. Adaptive question selection
-6. Community prevention intelligence
+- FILES CHANGED
+- FILES CREATED
+- WHAT CHANGED
+- TESTS RUN
+- TEST RESULTS
+- REMAINING RISKS
+- NEXT POSSIBLE STEP
 
+---
+
+## Testing & Git
+
+- Backend: `go build ./...`, `go vet ./...`, `go test ./...` must all pass
+- Frontend: `npm run build` must pass
+- No commit without explicit instruction
+- No destructive Git ops (no force-push, no rebase, no reset --hard, no drop)
+
+---
+
+## Current phase rules
+
+- One Kilo task per file (or two independent files max)
+- Build + vet after every task
+- Push every 5�10 tasks
+- Docs update in the same commit as the change they describe
+- Never let README.md or AGENT.md drift from reality
+
+--- END AGENT.md ---

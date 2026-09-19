@@ -43,7 +43,7 @@ func GetTwitterFeed(c *gin.Context) {
 		"posts": []gin.H{
 			{
 				"id":       "1",
-				"content":  "CommunityShield is now live! 🚀",
+				"content":  "WardGuard is now live! 🚀",
 				"postedAt": "2024-01-15T10:00:00Z",
 			},
 		},

@@ -135,7 +135,7 @@ func HandleUSSD(c *gin.Context) {
 // ============================================
 
 func handleUSSDMainMenu(phone, sessionID string) string {
-	return `CON CommunityShield
+	return `CON WardGuard
 1. Report Incident
 2. SOS Emergency
 3. Case Status
@@ -159,7 +159,7 @@ Theft|Stolen phone|Lagos`
 	case "3":
 		return `CON Enter your Case ID:`
 	case "4":
-		return `END CommunityShield Commands:
+		return `END WardGuard Commands:
 REPORT|title|desc|location
 SOS|description
 STATUS|case_id
@@ -502,7 +502,7 @@ func notifyUnitsAboutSOS(sos models.SOSAlert, phone string) {
 
 // Get help message
 func getHelpMessage() string {
-	return `📋 CommunityShield SMS Commands:
+	return `📋 WardGuard SMS Commands:
 
 REPORT|title|description|location - Report a case
 SOS|description - Send emergency alert

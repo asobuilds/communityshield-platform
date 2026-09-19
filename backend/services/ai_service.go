@@ -72,8 +72,8 @@ func (s *AIService) Chat(messages []ChatMessage) (string, error) {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+s.apiKey)
-	req.Header.Set("HTTP-Referer", "https://communityshield.org")
-	req.Header.Set("X-Title", "CommunityShield")
+	req.Header.Set("HTTP-Referer", "	https://wardguard.app")
+	req.Header.Set("X-Title", "WardGuard")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -107,7 +107,7 @@ func (s *AIService) Chatbot(question, userRole string) (string, error) {
 	messages := []ChatMessage{
 		{
 			Role: "system",
-			Content: `You are CommunityShield AI, a helpful security assistant for Nigerian communities.
+			Content: `You are WardGuard AI, a helpful security assistant for Nigerian communities.
 Your role is to:
 1. Provide safety tips and security advice
 2. Help users report incidents
@@ -131,7 +131,7 @@ func (s *AIService) AnalyzeImage(imageDescription string) (string, error) {
 	messages := []ChatMessage{
 		{
 			Role: "system",
-			Content: `You are a forensic image analyst for CommunityShield.
+			Content: `You are a forensic image analyst for WardGuard.
 Analyze the image description and provide:
 1. Key observations
 2. Potential evidence identification
@@ -152,7 +152,7 @@ func (s *AIService) AnalyzeLocationRisk(latitude, longitude float64, locationNam
 	messages := []ChatMessage{
 		{
 			Role: "system",
-			Content: `You are a security intelligence analyst for CommunityShield in Nigeria.
+			Content: `You are a security intelligence analyst for WardGuard in Nigeria.
 Analyze location security risks and provide actionable insights.
 Consider: local context, recent incidents, and practical safety measures.`,
 		},
@@ -178,7 +178,7 @@ func (s *AIService) AnalyzeNewsSentiment(newsContent string) (string, error) {
 	messages := []ChatMessage{
 		{
 			Role: "system",
-			Content: `You are a security news analyst for CommunityShield.
+			Content: `You are a security news analyst for WardGuard.
 Analyze news content for security implications and sentiment.
 Focus on: threat levels, affected areas, and community impact.`,
 		},
@@ -204,7 +204,7 @@ func (s *AIService) GenerateSecurityWarning(incidentsData string) (string, error
 	messages := []ChatMessage{
 		{
 			Role: "system",
-			Content: `You are a security warning system for CommunityShield.
+			Content: `You are a security warning system for WardGuard.
 Generate clear, actionable security warnings for communities.
 Be specific, practical, and culturally appropriate for Nigeria.`,
 		},
@@ -235,7 +235,7 @@ func (s *AIService) AnalyzeIncidentPatterns(location string, incidents []string)
 	messages := []ChatMessage{
 		{
 			Role: "system",
-			Content: `You are a security pattern analyst for CommunityShield.
+			Content: `You are a security pattern analyst for WardGuard.
 Identify crime patterns, hotspots, and emerging threats.
 Provide data-driven insights for proactive security measures.`,
 		},
@@ -260,7 +260,7 @@ func (s *AIService) GetSmartSafetyTips(location, userRole, timeOfDay, recentThre
 	messages := []ChatMessage{
 		{
 			Role: "system",
-			Content: `You are a safety advisor for CommunityShield.
+			Content: `You are a safety advisor for WardGuard.
 Provide personalized, context-aware safety tips.
 Consider: location, user role, time of day, and current threats.`,
 		},
@@ -284,7 +284,7 @@ func (s *AIService) PredictRiskHotspots(historicalData string) (string, error) {
 	messages := []ChatMessage{
 		{
 			Role: "system",
-			Content: `You are a predictive security analyst for CommunityShield.
+			Content: `You are a predictive security analyst for WardGuard.
 Analyze historical data to predict potential risk hotspots.
 Be specific about locations, timing, and types of risks.`,
 		},
