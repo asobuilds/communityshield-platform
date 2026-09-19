@@ -33,6 +33,8 @@ func SetupRoutes(router *gin.Engine) {
 		api.GET("/public/units/suggest", handlers.SuggestUnits)
 		api.GET("/public/officers/:id/rating", handlers.GetOfficerRating)
 		api.GET("/public/units/:unitId/rating", handlers.GetUnitRating)
+		api.GET("/public/blueprint", handlers.GetBlueprint)
+		api.GET("/public/units/:unitId/auth", handlers.GetPublicUnitAuth)
 		api.POST("/invites/validate", middleware.RateLimitAuth(), handlers.ValidateInvite)
 
 		// Auth routes
@@ -130,6 +132,8 @@ func SetupRoutes(router *gin.Engine) {
 
 		cases.POST("/:id/weekly-update", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.SubmitWeeklyCaseUpdate)
 		cases.GET("/:id/weekly-updates", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetCaseWeeklyUpdates)
+		cases.PUT("/:id/counter-statement", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.PutCounterStatement)
+		cases.GET("/:id/counter-statement", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetCounterStatement)
 		}
 		// Election routes
 		elections := api.Group("/elections")
@@ -192,6 +196,22 @@ func SetupRoutes(router *gin.Engine) {
 			suspects.GET("/:id/sightings", middleware.AuthMiddleware(), handlers.GetSuspectSightings)
 			suspects.GET("/:id/cases", middleware.AuthMiddleware(), handlers.GetSuspectCases)
 			suspects.POST("/:id/associations", middleware.AuthMiddleware(), handlers.CreateSuspectAssociation)
+			suspects.POST("/:id/expungement", middleware.AuthMiddleware(), handlers.RequestExpungement)
+			suspects.GET("/:id/expungement", middleware.AuthMiddleware(), handlers.ListMyExpungementRequests)
+		}
+
+		// Expungement decision routes
+		expungementGroup := api.Group("/expungement-requests")
+		{
+			expungementGroup.PUT("/:id/decision", middleware.AuthMiddleware(), handlers.DecideExpungement)
+		}
+
+		appeals := api.Group("/appeals")
+		{
+			appeals.POST("", middleware.AuthMiddleware(), handlers.FileAppeal)
+			appeals.GET("", middleware.AuthMiddleware(), handlers.ListAppeals)
+			appeals.GET("/:id", middleware.AuthMiddleware(), handlers.GetAppeal)
+			appeals.PUT("/:id/decision", middleware.AuthMiddleware(), handlers.DecideAppeal)
 		}
 
 		// Transfer routes
@@ -382,6 +402,7 @@ func SetupRoutes(router *gin.Engine) {
 			superAdmin.POST("/users/:id/suspend", handlers.SuspendUser)
 			superAdmin.POST("/users/:id/activate", handlers.ActivateUser)
 			superAdmin.POST("/users/:id/impersonate", handlers.ImpersonateUser)
+			superAdmin.PUT("/users/:id/age-override", handlers.AgeOverride)
 			superAdmin.POST("/stop-impersonate", handlers.StopImpersonation)
 			superAdmin.GET("/stats", handlers.GetSystemStats)
 			superAdmin.GET("/platform-donations", handlers.ListPlatformDonations)

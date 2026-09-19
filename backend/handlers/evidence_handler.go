@@ -172,6 +172,9 @@ func officerCanManageCaseEvidence(userID uuid.UUID, caseRecord *models.Case) boo
 
 // UploadEvidence uploads evidence for a case.
 func UploadEvidence(c *gin.Context) {
+	if !requireMinorApproved(c) {
+		return
+	}
 	var input struct {
 		CaseID      string  `json:"caseId" binding:"required"`
 		Type        string  `json:"type" binding:"required"`

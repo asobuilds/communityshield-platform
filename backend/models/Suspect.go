@@ -31,6 +31,9 @@ type Suspect struct {
 	TransferredBy  *uuid.UUID     `gorm:"type:uuid" json:"transferredBy,omitempty"`
 	TransferReason string         `json:"transferReason"`
 	PhotoURL       string         `json:"photoUrl"`
+	ExpungedAt     *time.Time     `gorm:"index:idx_suspect_expunged" json:"expungedAt,omitempty"`
+	ExpungedBy     *uuid.UUID     `gorm:"type:uuid" json:"expungedBy,omitempty"`
+	ExpungedReason string         `gorm:"type:text" json:"expungedReason,omitempty"`
 	UserID         *uuid.UUID     `gorm:"type:uuid;index:idx_suspect_user" json:"userId,omitempty"`
 	CreatedBy      uuid.UUID      `gorm:"type:uuid;not null" json:"createdBy"`
 	CreatedAt      time.Time      `json:"createdAt"`

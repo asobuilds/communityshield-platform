@@ -65,6 +65,8 @@ func (s *SchedulerService) RunOnce() {
 	s.CloseFinishedFinancialYears()
 	s.RecomputeRankings()
 	s.AnnounceOfficerOfTheWeek()
+	s.EscalateStaleAppeals()
+	s.RecomputeMinorStatuses()
 }
 
 // CloseExpiredElections finalizes any open UnitAdminElection whose voting window has passed.
@@ -154,6 +156,12 @@ func (s *SchedulerService) RecomputeRankings() {
 	_ = NewRankingService().RecomputeAll()
 }
 
+// EscalateStaleAppeals flags unresolved appeals past the 30-day threshold and
+// notifies all super admins. Delegates to the appeal service.
+func (s *SchedulerService) EscalateStaleAppeals() {
+	NewAppealService().EscalateStaleAppeals()
+}
+
 // AnnounceOfficerOfTheWeek picks the top-rated officer of the past 7 days
 // and creates a news post. Runs at most once per week — guarded by checking
 // whether an OOW post already exists in the last 7 days.
@@ -241,4 +249,11 @@ func (s *SchedulerService) AnnounceOfficerOfTheWeek() {
 		Status:  "unread",
 	}
 	config.DB.Create(&notification)
+}
+
+// RecomputeMinorStatuses rolls over minors who have aged out (and adults who
+// somehow drifted into "minor") based on the stored DateOfBirth. Skipped for
+// users with a super-admin-granted MinorExceptionGranted to avoid surprises.
+func (s *SchedulerService) RecomputeMinorStatuses() {
+	NewAgeService().RecomputeMinorStatuses()
 }

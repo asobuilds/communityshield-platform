@@ -94,3 +94,33 @@ func UpsertUnitAuth(c *gin.Context) {
 		"version": version,
 	})
 }
+
+// GetPublicUnitAuth — public read-only view of a unit's governance policy.
+// No authentication required. Any visitor can see the rules the unit operates under.
+func GetPublicUnitAuth(c *gin.Context) {
+	unitID, err := uuid.Parse(c.Param("unitId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
+		return
+	}
+
+	var unit models.SecurityUnit
+	if err := config.DB.First(&unit, "id = ?", unitID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "unit not found"})
+		return
+	}
+
+	svc := services.NewUnitAuthService()
+	policy, version, err := svc.GetPolicy(unitID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"unitId":   unit.ID,
+		"unitName": unit.Name,
+		"policy":   policy,
+		"version":  version,
+	})
+}

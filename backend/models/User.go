@@ -18,7 +18,12 @@ type User struct {
 	Role          string         `gorm:"default:citizen" json:"role"`
 	UnitID        *uuid.UUID     `gorm:"type:uuid" json:"unitId,omitempty"`
 	Status        string         `gorm:"default:pending" json:"status"`
-	IsSuperAdmin  bool           `gorm:"default:false" json:"isSuperAdmin"`
+	IsSuperAdmin          bool           `gorm:"default:false" json:"isSuperAdmin"`
+	DateOfBirth           *time.Time     `gorm:"type:date;index:idx_user_dob" json:"dateOfBirth,omitempty"`
+	MinorStatus           string         `gorm:"type:varchar(16);default:'adult';index:idx_user_minor_status" json:"minorStatus"` // minor | adult
+	DOBVerified           bool           `gorm:"default:false;index:idx_user_dob_verified" json:"dobVerified"`
+	MinorExceptionGranted bool           `gorm:"default:false;index:idx_user_minor_exception" json:"minorExceptionGranted"`
+	GuardianID            *uuid.UUID     `gorm:"type:uuid;index:idx_user_guardian" json:"guardianId,omitempty"` // reserved for future verified-guardian feature
 	Impersonating *uuid.UUID     `gorm:"type:uuid" json:"impersonating,omitempty"`
 	MedicalInfo   string         `gorm:"type:text" json:"medicalInfo,omitempty"` // encrypted at rest via BeforeSave/AfterFind
 	AvatarPath    string         `gorm:"type:varchar(255)" json:"avatarPath,omitempty"`

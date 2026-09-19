@@ -140,6 +140,9 @@ func main() {
 
 		&models.OfficerScore{},
 		&models.UnitScore{},
+		&models.CounterStatement{},
+		&models.Appeal{},
+		&models.AgeAudit{},
 	)
 
 	if err != nil {

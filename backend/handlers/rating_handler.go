@@ -13,6 +13,9 @@ import (
 
 // SubmitRating — citizen rates an officer or unit after a closed case.
 func SubmitRating(c *gin.Context) {
+	if !requireMinorApproved(c) {
+		return
+	}
 	var input struct {
 		CaseID     string `json:"caseId" binding:"required"`
 		TargetID   string `json:"targetId" binding:"required"`
