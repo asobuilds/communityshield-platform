@@ -25,8 +25,8 @@ func GetUnitVerificationStatus(c *gin.Context) {
 	}
 
 	var adminCount int64
-	config.DB.Model(&models.UnitMember{}).
-		Where("unit_id = ? AND role = ? AND status = ?", unitID, "admin", "active").
+	config.DB.Model(&models.UnitMembership{}).
+		Where("unit_id = ? AND role = ? AND status = ?", unitID, models.UnitRoleAdmin, models.MembershipActive).
 		Count(&adminCount)
 
 	c.JSON(http.StatusOK, gin.H{

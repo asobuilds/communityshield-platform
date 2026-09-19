@@ -53,7 +53,7 @@ func ApplyForSecurityUnit(c *gin.Context) {
 		return
 	}
 
-	var existing models.UnitMember
+	var existing models.UnitMembership
 
 	err := config.DB.
 		Where("user_id = ? AND unit_id = ?", userID, input.UnitID).
@@ -75,7 +75,7 @@ func ApplyForSecurityUnit(c *gin.Context) {
 		return
 	}
 
-	member := models.UnitMember{
+	member := models.UnitMembership{
 		UserID: userID,
 		UnitID: input.UnitID,
 		Role:   "officer",
@@ -112,7 +112,7 @@ func GetMyUnitMembership(c *gin.Context) {
 		return
 	}
 
-	var memberships []models.UnitMember
+	var memberships []models.UnitMembership
 
 	if err := config.DB.
 		Preload("Unit").

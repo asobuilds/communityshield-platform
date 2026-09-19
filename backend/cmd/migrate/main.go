@@ -38,7 +38,6 @@ func main() {
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.SecurityUnit{},
-		&models.UnitMember{},
 		&models.Officer{},
 		&models.GovernmentIDVerification{},
 
