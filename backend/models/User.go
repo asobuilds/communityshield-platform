@@ -3,7 +3,9 @@ package models
 import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"security-solution/cryptoutil"
 	"time"
+	"strings"
 )
 
 type User struct {
@@ -18,7 +20,9 @@ type User struct {
 	Status        string         `gorm:"default:pending" json:"status"`
 	IsSuperAdmin  bool           `gorm:"default:false" json:"isSuperAdmin"`
 	Impersonating *uuid.UUID     `gorm:"type:uuid" json:"impersonating,omitempty"`
-	MedicalInfo   string         `gorm:"type:text" json:"medicalInfo,omitempty"`
+	MedicalInfo   string         `gorm:"type:text" json:"medicalInfo,omitempty"` // encrypted at rest via BeforeSave/AfterFind
+	AvatarPath    string         `gorm:"type:varchar(255)" json:"avatarPath,omitempty"`
+	CoverPath     string         `gorm:"type:varchar(255)" json:"coverPath,omitempty"`
 	LastLogin     *time.Time     `json:"lastLogin,omitempty"`
 	CreatedAt     time.Time      `json:"createdAt"`
 	UpdatedAt     time.Time      `json:"updatedAt"`
@@ -27,4 +31,33 @@ type User struct {
 
 func (User) TableName() string {
 	return "users"
+}
+
+// BeforeSave encrypts MedicalInfo at rest. If ENCRYPTION_KEY is missing, the save
+// fails rather than persisting plaintext. Values already carrying the encryption
+// prefix are skipped, so this hook is idempotent.
+func (u *User) BeforeSave(tx *gorm.DB) error {
+	if u.MedicalInfo == "" {
+		return nil
+	}
+	if strings.HasPrefix(u.MedicalInfo, cryptoutil.EncryptedPrefix) {
+		return nil
+	}
+	enc, err := cryptoutil.Encrypt(u.MedicalInfo)
+	if err != nil {
+		return err
+	}
+	u.MedicalInfo = enc
+	return nil
+}
+
+// AfterFind decrypts MedicalInfo when it was read from the database. Legacy
+// plaintext rows pass through unchanged. Decryption failures return the raw
+// value rather than failing the read.
+func (u *User) AfterFind(tx *gorm.DB) error {
+	if u.MedicalInfo == "" {
+		return nil
+	}
+	u.MedicalInfo = cryptoutil.Decrypt(u.MedicalInfo)
+	return nil
 }

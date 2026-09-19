@@ -12,3 +12,4 @@ backend/hash.go.bak
 .env
 .env.local
 backend/.env
+storage/

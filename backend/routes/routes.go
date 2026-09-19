@@ -68,12 +68,25 @@ func SetupRoutes(router *gin.Engine) {
 		units.PUT("/:unitId/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
 	}
 
-		invites := api.Group("/invites")
+	invites := api.Group("/invites")
+	{
+		invites.POST("", middleware.AuthMiddleware(), middleware.RateLimitInvite(), handlers.CreateInvite)
+	}
+
+	users := api.Group("/users")
+	{
+		users.POST("/me/avatar", middleware.AuthMiddleware(), middleware.UploadValidationMiddleware("image"), handlers.UploadAvatar)
+		users.POST("/me/cover", middleware.AuthMiddleware(), middleware.UploadValidationMiddleware("image"), handlers.UploadCover)
+		users.DELETE("/me/avatar", middleware.AuthMiddleware(), handlers.DeleteAvatar)
+		users.DELETE("/me/cover", middleware.AuthMiddleware(), handlers.DeleteCover)
+	}
+
+		files := api.Group("/files")
 		{
-			invites.POST("", middleware.AuthMiddleware(), middleware.RateLimitInvite(), handlers.CreateInvite)
+			files.GET("/:category/:hash", middleware.AuthMiddleware(), handlers.ServeFile)
 		}
 
-		// Push notification routes
+	// Push notification routes
 		notify := api.Group("/notifications")
 		{
 			notify.POST("/register", middleware.AuthMiddleware(), handlers.RegisterDevice)
@@ -130,8 +143,9 @@ func SetupRoutes(router *gin.Engine) {
 		// Evidence routes
 		evidence := api.Group("/evidence")
 		{
-			evidence.POST("/upload", middleware.AuthMiddleware(), handlers.UploadEvidence)
-			evidence.GET("/case/:caseId", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetEvidenceByCase)
+		evidence.POST("/upload", middleware.AuthMiddleware(), handlers.UploadEvidence)
+		evidence.POST("/case/:caseId/file", middleware.AuthMiddleware(), middleware.UploadValidationMiddleware("evidence"), middleware.CanAccessCase, handlers.UploadEvidenceFile)
+		evidence.GET("/case/:caseId", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetEvidenceByCase)
 			evidence.DELETE("/:id", middleware.AuthMiddleware(), handlers.DeleteEvidence)
 			evidence.PATCH("/:id/verify", middleware.AuthMiddleware(), handlers.VerifyEvidence)
 		}
