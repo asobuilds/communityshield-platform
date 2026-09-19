@@ -36,15 +36,18 @@ func UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	if userObj.AvatarPath != "" {
-		_ = storageSvc.Delete(userObj.AvatarPath)
-	}
+	oldPath := userObj.AvatarPath
 
 	if err := config.DB.Model(&models.User{}).
 		Where("id = ?", userObj.ID).
 		Update("avatar_path", stored.RelativePath).Error; err != nil {
+		_ = storageSvc.Delete(stored.RelativePath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save avatar"})
 		return
+	}
+
+	if oldPath != "" && oldPath != stored.RelativePath {
+		_ = storageSvc.Delete(oldPath)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -81,15 +84,18 @@ func UploadCover(c *gin.Context) {
 		return
 	}
 
-	if userObj.CoverPath != "" {
-		_ = storageSvc.Delete(userObj.CoverPath)
-	}
+	oldPath := userObj.CoverPath
 
 	if err := config.DB.Model(&models.User{}).
 		Where("id = ?", userObj.ID).
 		Update("cover_path", stored.RelativePath).Error; err != nil {
+		_ = storageSvc.Delete(stored.RelativePath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save cover"})
 		return
+	}
+
+	if oldPath != "" && oldPath != stored.RelativePath {
+		_ = storageSvc.Delete(oldPath)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

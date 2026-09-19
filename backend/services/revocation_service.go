@@ -255,20 +255,36 @@ func (s *RevocationService) CloseRevocationCycle(cycleID uuid.UUID, headAdminApp
 
 	cooling := now.AddDate(0, policy.CoolingOffMonths, 0)
 
-	if err := config.DB.Model(&models.UnitMembership{}).
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Model(&models.UnitMembership{}).
 		Where("id = ?", cycle.TargetMembershipID).
 		Updates(map[string]interface{}{
 			"status":            models.MembershipRevoked,
 			"revoked_at":        now,
 			"cooling_off_until": cooling,
 		}).Error; err != nil {
+		tx.Rollback()
 		return err
 	}
 
-	return config.DB.Model(&cycle).Updates(map[string]interface{}{
+	if err := tx.Model(&cycle).Updates(map[string]interface{}{
 		"status":            "completed",
 		"closed_at":         now,
 		"completed_at":      now,
 		"cooling_off_until": cooling,
-	}).Error
+	}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }

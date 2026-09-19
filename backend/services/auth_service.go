@@ -76,9 +76,8 @@ func (s *AuthService) generateJWT(user *models.User) (string, error) {
 
 func (s *AuthService) generateJWTWithJTI(user *models.User) (string, string, error) {
 	secret := os.Getenv("JWT_SECRET")
-
 	if secret == "" {
-		secret = "your-secret-key-change-in-production"
+		return "", "", errors.New("JWT_SECRET is not set")
 	}
 
 	now := time.Now()
@@ -103,16 +102,14 @@ func (s *AuthService) generateJWTWithJTI(user *models.User) (string, string, err
 
 func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
 	secret := os.Getenv("JWT_SECRET")
-
 	if secret == "" {
-		secret = "your-secret-key-change-in-production"
+		return nil, errors.New("JWT_SECRET is not set")
 	}
 
 	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-
 		return []byte(secret), nil
 	})
 }
