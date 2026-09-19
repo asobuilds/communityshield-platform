@@ -56,7 +56,12 @@ func SetupRoutes(router *gin.Engine) {
 			units.GET("/:id", handlers.GetUnitByID)
 			units.POST("", middleware.AuthMiddleware(), handlers.CreateUnit)
 			units.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateUnit)
-		}
+		units.POST("/:unitId/elections", middleware.AuthMiddleware(), handlers.OpenAdminElection)
+		units.POST("/:unitId/head-admin-elections", middleware.AuthMiddleware(), handlers.OpenHeadAdminElection)
+		units.POST("/:unitId/revocations", middleware.AuthMiddleware(), handlers.OpenRevocationCycle)
+		units.GET("/:unitId/auth", middleware.AuthMiddleware(), handlers.GetUnitAuth)
+		units.PUT("/:unitId/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
+	}
 
 		invites := api.Group("/invites")
 		{
@@ -96,6 +101,21 @@ func SetupRoutes(router *gin.Engine) {
 		cases.POST("/:id/weekly-update", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.SubmitWeeklyCaseUpdate)
 		cases.GET("/:id/weekly-updates", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetCaseWeeklyUpdates)
 		}
+		// Election routes
+		elections := api.Group("/elections")
+		{
+			elections.POST("/:id/vote", middleware.AuthMiddleware(), handlers.CastAdminVote)
+			elections.POST("/:id/close", middleware.AuthMiddleware(), handlers.CloseAdminElection)
+			elections.GET("/:id/results", middleware.AuthMiddleware(), handlers.GetElectionResults)
+		}
+		// Revocation routes
+		revocations := api.Group("/revocations")
+		{
+			revocations.POST("/:id/vote", middleware.AuthMiddleware(), handlers.CastRevocationVote)
+			revocations.POST("/:id/close", middleware.AuthMiddleware(), handlers.CloseRevocationCycle)
+			revocations.GET("/:id", middleware.AuthMiddleware(), handlers.GetRevocationCycle)
+		}
+
 		// Location routes
 		location := api.Group("/location")
 		{
