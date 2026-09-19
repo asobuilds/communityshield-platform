@@ -29,6 +29,10 @@ func SetupRoutes(router *gin.Engine) {
 		api.GET("/public/platform/donation-info", handlers.GetPlatformDonationInfo)
 		api.POST("/public/platform/donations", handlers.CreatePlatformDonation)
 		api.GET("/public/platform/supporters", handlers.ListPublicSupporters)
+		api.GET("/public/leaderboard", handlers.GetPublicLeaderboard)
+		api.GET("/public/units/suggest", handlers.SuggestUnits)
+		api.GET("/public/officers/:id/rating", handlers.GetOfficerRating)
+		api.GET("/public/units/:unitId/rating", handlers.GetUnitRating)
 		api.POST("/invites/validate", middleware.RateLimitAuth(), handlers.ValidateInvite)
 
 		// Auth routes
@@ -72,7 +76,8 @@ func SetupRoutes(router *gin.Engine) {
 		units.POST("/:unitId/head-admin-elections", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenHeadAdminElection)
 		units.POST("/:unitId/revocations", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenRevocationCycle)
 		units.GET("/:unitId/auth", middleware.AuthMiddleware(), handlers.GetUnitAuth)
-		units.PUT("/:unitId/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
+			units.PUT("/:unitId/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
+			units.GET("/:unitId/officers/ranking", middleware.AuthMiddleware(), handlers.GetOfficersInUnitRanking)
 	}
 
 	invites := api.Group("/invites")
@@ -160,8 +165,8 @@ func SetupRoutes(router *gin.Engine) {
 		// Rating routes
 		ratings := api.Group("/ratings")
 		{
-			ratings.GET("/units/:unitId", handlers.GetUnitRatings)
 			ratings.POST("", middleware.AuthMiddleware(), handlers.SubmitRating)
+			ratings.POST("/:id/flag", middleware.AuthMiddleware(), handlers.FlagRating)
 		}
 
 		// SOS routes

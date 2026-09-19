@@ -137,6 +137,9 @@ func main() {
 		&models.FinancialLedger{},
 		&models.UnitFinancialYear{},
 		&models.PlatformDonation{},
+
+		&models.OfficerScore{},
+		&models.UnitScore{},
 	)
 
 	if err != nil {
