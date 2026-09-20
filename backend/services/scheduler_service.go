@@ -5,12 +5,28 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"log"
+	"sync/atomic"
 	"time"
 	"golang.org/x/crypto/bcrypt"
 
 	"security-solution/config"
 	"security-solution/models"
 )
+
+// schedulerLastRunNanos records the wall-clock time of the most recent
+// successful RunOnce completion. Health checks read it to determine
+// whether the scheduler is stale.
+var schedulerLastRunNanos atomic.Int64
+
+// SchedulerLastRunAt returns the last successful RunOnce completion time.
+// Returns the zero time if the scheduler has never completed a run.
+func SchedulerLastRunAt() time.Time {
+	ns := schedulerLastRunNanos.Load()
+	if ns == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, ns)
+}
 
 type SchedulerService struct {
 	Election   *ElectionService
@@ -69,6 +85,10 @@ func (s *SchedulerService) RunOnce() {
 	s.EscalateStaleAppeals()
 	s.RecomputeMinorStatuses()
 	s.PurgeDeletedAccounts()
+
+	// Record the last successful completion so the health check can
+	// detect a stalled scheduler.
+	schedulerLastRunNanos.Store(time.Now().UnixNano())
 }
 
 // CloseExpiredElections finalizes any open UnitAdminElection whose voting window has passed.

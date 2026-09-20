@@ -33,8 +33,19 @@ func main() {
 
 	router := gin.Default()
 
+	// Structured logging middleware: assigns a request ID, echoes it back
+	// in the X-Request-Id response header, and emits one structured log
+	// line per completed request (JSON or text, per LOG_FORMAT).
+	// Outermost of our three custom middlewares.
+	router.Use(middleware.StructuredLogger())
+
 	// Add audit middleware
 	router.Use(middleware.AuditMiddleware())
+
+	// Panic recovery middleware: innermost of our three. Recovers from
+	// handler panics, reports via the ErrorReporter seam, and returns a
+	// generic 500 so StructuredLogger and Audit see the final status.
+	router.Use(middleware.PanicRecovery())
 
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},

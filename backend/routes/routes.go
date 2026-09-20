@@ -7,14 +7,10 @@ import (
 )
 
 func SetupRoutes(router *gin.Engine) {
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":  "ok",
-			"message": "WardGuard API is running",
-			"version": "1.0.0",
-		})
-	})
+	// Health check endpoint — PUBLIC, no auth. External monitors
+	// (Render, UptimeRobot) poll this to determine if the server is
+	// alive and its subsystems are healthy.
+	router.GET("/health", handlers.GetHealth)
 
 	// API v1 routes
 	api := router.Group("/api/v1")
@@ -418,4 +414,10 @@ func SetupRoutes(router *gin.Engine) {
 
 	// WebSocket route (protected)
 	router.GET("/ws", middleware.AuthMiddleware(), handlers.HandleWebSocket)
+
+	// Metrics endpoint — authed, super-admin only. Exposes in-process
+	// counters (request rate, error rate, rolling latency). A future wave
+	// can swap the JSON serializer for a Prometheus text encoder without
+	// changing this route registration.
+	router.GET("/metrics", middleware.AuthMiddleware(), handlers.SuperAdminMiddleware(), handlers.GetMetrics)
 }
