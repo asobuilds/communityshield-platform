@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -27,6 +28,11 @@ func (s *AuthService) GenerateJWT(user *models.User) (string, error) {
 }
 
 func (s *AuthService) Register(user *models.User) (*models.User, error) {
+	// Normalize email to lowercase so the DB unique constraint is
+	// case-insensitive at the application layer. Phone is left as-is
+	// (no formatting rules yet); uniqueness is checked by the caller.
+	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
+
 	hashedPassword, err := bcrypt.GenerateFromPassword(
 		[]byte(user.Password),
 		bcrypt.DefaultCost,
@@ -44,10 +50,28 @@ func (s *AuthService) Register(user *models.User) (*models.User, error) {
 	return user, nil
 }
 
-func (s *AuthService) Login(email, password string) (string, string, *models.User, error) {
-	var user models.User
+func (s *AuthService) LoginWithJTI(identifier, password string) (string, string, *models.User, error) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return "", "", nil, errors.New("identifier is required")
+	}
 
-	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+	var user models.User
+	q := config.DB
+
+	if strings.Contains(identifier, "@") {
+		q = q.Where("LOWER(email) = ?", strings.ToLower(identifier))
+	} else {
+		digits := strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, identifier)
+		q = q.Where("phone = ?", digits)
+	}
+
+	if err := q.First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", "", nil, errors.New("invalid credentials")
 		}
@@ -67,6 +91,11 @@ func (s *AuthService) Login(email, password string) (string, string, *models.Use
 	}
 
 	return token, jti, &user, nil
+}
+
+func (s *AuthService) Login(identifier, password string) (string, *models.User, error) {
+	t, _, u, err := s.LoginWithJTI(identifier, password)
+	return t, u, err
 }
 
 func (s *AuthService) generateJWT(user *models.User) (string, error) {
