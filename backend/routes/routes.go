@@ -82,6 +82,7 @@ func SetupRoutes(router *gin.Engine) {
 		units.GET("/:unitId/auth", middleware.AuthMiddleware(), handlers.GetUnitAuth)
 			units.PUT("/:unitId/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
 			units.GET("/:unitId/officers/ranking", middleware.AuthMiddleware(), handlers.GetOfficersInUnitRanking)
+			units.GET("/:unitId/governance-audit", middleware.AuthMiddleware(), handlers.GetGovernanceAudit)
 	}
 
 	invites := api.Group("/invites")
@@ -143,6 +144,7 @@ func SetupRoutes(router *gin.Engine) {
 			elections.POST("/:id/vote", middleware.AuthMiddleware(), middleware.RateLimitVote(), middleware.IdempotencyMiddleware(), handlers.CastAdminVote)
 			elections.POST("/:id/close", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.CloseAdminElection)
 			elections.GET("/:id/results", middleware.AuthMiddleware(), handlers.GetElectionResults)
+			elections.POST("/seats/:id/fill", middleware.AuthMiddleware(), handlers.FillSeatVacancy)
 		}
 		// Revocation routes
 		revocations := api.Group("/revocations")

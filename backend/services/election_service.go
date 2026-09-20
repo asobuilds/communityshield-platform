@@ -142,23 +142,38 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 		return errors.New("election is not open")
 	}
 
-	policy, policyVersion, err := s.Auth.GetPolicy(election.UnitID)
+	policy, _, err := s.Auth.GetPolicy(election.UnitID)
 	if err != nil {
 		return err
 	}
-	_ = policyVersion
 
+	now := time.Now().UTC()
+
+	// Tie-break order (matches WardGuard's fairness rule):
+	//   1. Higher vote count wins
+	//   2. Longer unit membership wins (earlier joined_at)
+	//   3. Older platform account wins (earlier user_created)
+	//   4. Deterministic final fallback: candidate UUID ascending
+	// The final UUID sort exists only to make results reproducible;
+	// it does not favor any candidate.
 	type tally struct {
 		CandidateID uuid.UUID
 		Count       int
+		JoinedAt    time.Time
+		UserCreated time.Time
 	}
 	var rows []tally
 	if err := config.DB.
 		Model(&models.AdminVote{}).
-		Select("candidate_id, COUNT(*) as count").
-		Where("election_id = ?", electionID).
-		Group("candidate_id").
-		Order("count DESC").
+		Select(`admin_votes.candidate_id,
+		        COUNT(*) AS count,
+		        COALESCE(unit_memberships.created_at, NOW()) AS joined_at,
+		        COALESCE(users.created_at, NOW()) AS user_created`).
+		Joins("LEFT JOIN unit_memberships ON unit_memberships.user_id = admin_votes.candidate_id AND unit_memberships.unit_id = ?", election.UnitID).
+		Joins("LEFT JOIN users ON users.id = admin_votes.candidate_id").
+		Where("admin_votes.election_id = ?", electionID).
+		Group("admin_votes.candidate_id, unit_memberships.created_at, users.created_at").
+		Order("count DESC, joined_at ASC, user_created ASC, admin_votes.candidate_id ASC").
 		Scan(&rows).Error; err != nil {
 		return err
 	}
@@ -169,13 +184,20 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 	}
 	quorumMet := totalVotes >= election.QuorumCount
 
-	now := time.Now().UTC()
-
-	if !quorumMet {
+	// First failure: extend once by 7 days, stay open.
+	if !quorumMet && !election.ExtendedOnce {
+		newEnd := now.AddDate(0, 0, 7)
 		return config.DB.Model(&election).Updates(map[string]interface{}{
-			"status":              "failed",
-			"result_finalized_at": now,
+			"extended_once":  true,
+			"voting_ends_at": newEnd,
 		}).Error
+	}
+
+	// Second failure (or already extended): pass with shortened term.
+	termEnd := election.TermEnd
+	lowTurnout := !quorumMet
+	if lowTurnout {
+		termEnd = election.TermStart.AddDate(0, 6, 0)
 	}
 
 	winnerCount := election.SeatCount
@@ -203,7 +225,7 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 			RotationGroup: election.RotationGroup,
 			MemberID:      &winner.CandidateID,
 			TermStart:     election.TermStart,
-			TermEnd:       election.TermEnd,
+			TermEnd:       termEnd,
 			Status:        "active",
 			ElectedAt:     now,
 		}
@@ -220,7 +242,6 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 		}
 
 		termStart := election.TermStart
-		termEnd := election.TermEnd
 		membership.Role = models.UnitRoleAdmin
 		membership.ElectedAt = &now
 		membership.TermStartAt = &termStart
@@ -238,9 +259,15 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 		}
 	}
 
+	finalStatus := "finalized"
+	if lowTurnout {
+		finalStatus = "finalized_low_turnout"
+	}
+
 	if err := tx.Model(&election).Updates(map[string]interface{}{
-		"status":              "finalized",
+		"status":              finalStatus,
 		"result_finalized_at": now,
+		"quorum_met":          quorumMet,
 	}).Error; err != nil {
 		tx.Rollback()
 		return err
@@ -368,4 +395,105 @@ func sortSeatsByRotationGroup(seats []models.UnitAdminSeat) {
 	sort.SliceStable(seats, func(i, j int) bool {
 		return seats[i].SeatNumber < seats[j].SeatNumber
 	})
+}
+
+// FillVacancy seats the next-highest vote-getter from the given election
+// into the seat identified by seatID. Uses the same tie-break order as
+// CloseAdminElection. No-op if the seat is not vacant, the election is
+// missing, or no eligible candidate remains.
+func (s *ElectionService) FillVacancy(seatID uuid.UUID) error {
+	var seat models.UnitAdminSeat
+	if err := config.DB.First(&seat, "id = ?", seatID).Error; err != nil {
+		return errors.New("seat not found")
+	}
+	if seat.Status != "vacant" {
+		return errors.New("seat is not vacant")
+	}
+
+	var election models.UnitAdminElection
+	if err := config.DB.First(&election, "id = ?", seat.ElectionID).Error; err != nil {
+		return errors.New("election not found")
+	}
+
+	// Candidates who already hold a seat in this election
+	var seatedIDs []uuid.UUID
+	config.DB.Model(&models.UnitAdminSeat{}).
+		Where("election_id = ? AND member_id IS NOT NULL", election.ID).
+		Pluck("member_id", &seatedIDs)
+
+	type tally struct {
+		CandidateID uuid.UUID
+		Count       int
+		JoinedAt    time.Time
+		UserCreated time.Time
+	}
+	query := config.DB.
+		Model(&models.AdminVote{}).
+		Select(`admin_votes.candidate_id,
+		        COUNT(*) AS count,
+		        COALESCE(unit_memberships.created_at, NOW()) AS joined_at,
+		        COALESCE(users.created_at, NOW()) AS user_created`).
+		Joins("LEFT JOIN unit_memberships ON unit_memberships.user_id = admin_votes.candidate_id AND unit_memberships.unit_id = ?", election.UnitID).
+		Joins("LEFT JOIN users ON users.id = admin_votes.candidate_id").
+		Where("admin_votes.election_id = ?", election.ID).
+		Group("admin_votes.candidate_id, unit_memberships.created_at, users.created_at").
+		Order("count DESC, joined_at ASC, user_created ASC, admin_votes.candidate_id ASC")
+
+	if len(seatedIDs) > 0 {
+		query = query.Where("admin_votes.candidate_id NOT IN ?", seatedIDs)
+	}
+
+	var rows []tally
+	if err := query.Scan(&rows).Error; err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return errors.New("no eligible candidate for vacancy")
+	}
+
+	next := rows[0]
+	now := time.Now().UTC()
+
+	var membership models.UnitMembership
+	if err := config.DB.
+		Where("unit_id = ? AND user_id = ?", election.UnitID, next.CandidateID).
+		First(&membership).Error; err != nil {
+		return errors.New("candidate membership not found")
+	}
+
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	termEnd := seat.TermEnd
+	candidateID := next.CandidateID
+
+	if err := tx.Model(&seat).Updates(map[string]interface{}{
+		"member_id":   candidateID,
+		"status":      "active",
+		"elected_at":  now,
+		"vacated_at":  nil,
+	}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	termStart := seat.TermStart
+	membership.Role = models.UnitRoleAdmin
+	membership.ElectedAt = &now
+	membership.TermStartAt = &termStart
+	membership.TermEndAt = &termEnd
+
+	if err := tx.Save(&membership).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }
