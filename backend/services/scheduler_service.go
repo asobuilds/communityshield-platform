@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"log"
 	"time"
+	"golang.org/x/crypto/bcrypt"
 
 	"security-solution/config"
 	"security-solution/models"
@@ -67,6 +68,7 @@ func (s *SchedulerService) RunOnce() {
 	s.AnnounceOfficerOfTheWeek()
 	s.EscalateStaleAppeals()
 	s.RecomputeMinorStatuses()
+	s.PurgeDeletedAccounts()
 }
 
 // CloseExpiredElections finalizes any open UnitAdminElection whose voting window has passed.
@@ -256,4 +258,72 @@ func (s *SchedulerService) AnnounceOfficerOfTheWeek() {
 // users with a super-admin-granted MinorExceptionGranted to avoid surprises.
 func (s *SchedulerService) RecomputeMinorStatuses() {
 	NewAgeService().RecomputeMinorStatuses()
+}
+
+// PurgeDeletedAccounts permanently removes accounts whose deletion grace
+// period (30 days) has elapsed. Before hard-deleting the user row, all
+// personally identifiable fields are anonymized in place so dependent
+// rows (audit logs, financial ledgers, case assignments, etc.) keep their
+// foreign-key references intact without leaking PII.
+//
+// Anonymization map:
+//
+//	Email            -> "deleted_<uuid>@deleted.local"
+//	Phone            -> ""
+//	FirstName/LastName -> "Deleted"
+//	MedicalInfo      -> ""
+//	AvatarPath/CoverPath -> ""
+//	Password         -> bcrypt hash of random 32 bytes (unusable)
+//
+// The user row is then hard-deleted with Unscoped().
+func (s *SchedulerService) PurgeDeletedAccounts() {
+	cutoff := time.Now().UTC().AddDate(0, 0, -30)
+
+	var users []models.User
+	if err := config.DB.
+		Unscoped().
+		Where("deletion_requested_at IS NOT NULL AND deletion_requested_at <= ?", cutoff).
+		Find(&users).Error; err != nil {
+		log.Printf("scheduler: failed to load accounts for purge: %v", err)
+		return
+	}
+
+	if len(users) == 0 {
+		return
+	}
+
+	for _, u := range users {
+		// Anonymize PII in place so dependent rows keep valid FKs.
+		fakeHash, err := bcrypt.GenerateFromPassword(
+			[]byte(uuid.NewString()),
+			bcrypt.DefaultCost,
+		)
+		if err != nil {
+			fakeHash = []byte("$2y$10$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA") //nolint
+		}
+
+		if err := config.DB.Unscoped().Model(&models.User{}).
+			Where("id = ?", u.ID).
+			Updates(map[string]interface{}{
+				"email":          "deleted_" + u.ID.String() + "@deleted.local",
+				"phone":          "",
+				"first_name":     "Deleted",
+				"last_name":      "Deleted",
+				"medical_info":   "",
+				"avatar_path":    "",
+				"cover_path":     "",
+				"password":       string(fakeHash),
+				"last_login":     nil,
+			}).Error; err != nil {
+			log.Printf("scheduler: failed to anonymize user %s: %v", u.ID, err)
+			continue
+		}
+
+		// Hard-delete the user row. GORM soft-delete is bypassed via Unscoped().
+		if err := config.DB.Unscoped().Delete(&models.User{}, u.ID).Error; err != nil {
+			log.Printf("scheduler: failed to hard-delete user %s: %v", u.ID, err)
+		}
+	}
+
+	log.Printf("scheduler: purged %d deleted accounts", len(users))
 }

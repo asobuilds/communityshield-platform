@@ -32,6 +32,7 @@ type User struct {
 	CreatedAt     time.Time      `json:"createdAt"`
 	UpdatedAt     time.Time      `json:"updatedAt"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+	DeletionRequestedAt *time.Time `gorm:"index:idx_user_deletion_requested" json:"deletionRequestedAt,omitempty"`
 }
 
 func (User) TableName() string {

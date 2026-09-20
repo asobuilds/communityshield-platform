@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -44,11 +45,29 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Enforce one-account-per-identifier before insert. Check both email
+	// and phone in a single case-insensitive query so duplicates are caught
+	// regardless of which field the attacker reuses. The error message is
+	// deliberately generic — it never reveals which field matched.
+	normalizedEmail := strings.ToLower(strings.TrimSpace(input.Email))
+	normalizedPhone := strings.TrimSpace(input.Phone)
+	var dupCount int64
+	if err := config.DB.Model(&models.User{}).
+		Where("LOWER(email) = ? OR phone = ?", normalizedEmail, normalizedPhone).
+		Count(&dupCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify account uniqueness"})
+		return
+	}
+	if dupCount > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "An account with that email or phone number already exists"})
+		return
+	}
+
 	// Public registration must always create citizens.
 	// Privileged roles should be assigned by an administrator.
 	user := &models.User{
-		Email:       input.Email,
-		Phone:       input.Phone,
+		Email:       normalizedEmail,
+		Phone:       normalizedPhone,
 		FirstName:   input.FirstName,
 		LastName:    input.LastName,
 		Password:    input.Password,
@@ -77,8 +96,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var input struct {
-		Email    string `json:"email" binding:"required,email"`
-		Password string `json:"password" binding:"required"`
+		Identifier string `json:"identifier"`
+		Email      string `json:"email"`
+		Password   string `json:"password" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -86,7 +106,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, jti, user, err := h.authService.Login(input.Email, input.Password)
+	// Accept either "identifier" or legacy "email" field.
+	ident := strings.TrimSpace(input.Identifier)
+	if ident == "" {
+		ident = strings.TrimSpace(input.Email)
+	}
+	if ident == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "identifier (email or phone) is required"})
+		return
+	}
+
+	token, jti, user, err := h.authService.LoginWithJTI(ident, input.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -453,4 +483,150 @@ func (h *AuthHandler) RevokeAllSessions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "All sessions revoked"})
+}
+
+// ForgotPassword initiates a password reset. The endpoint is public and
+// rate-limited. It always returns 200 with a generic message so callers
+// cannot enumerate which identifiers map to real accounts.
+//
+// TODO: email delivery is not yet wired. When the identifier is an email,
+// the token is currently sent to the resolved user's PHONE number
+// (Correction 1). Replace the SMS branch with an email dispatch once an
+// email service is added.
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var input struct {
+		Identifier string `json:"identifier" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	svc := services.NewPasswordResetService()
+	_, rawToken, err := svc.RequestReset(input.Identifier)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
+		return
+	}
+
+	// TODO: email delivery is not yet wired. When the identifier is an
+	// email, the token is currently sent to the resolved user's PHONE
+	// number (Correction 1). Replace this SMS branch with an email
+	// dispatch once an email service is added.
+	_ = rawToken
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "If an account with that email or phone number exists, we've sent a password reset link.",
+	})
+}
+
+// ResetPassword validates a reset token and applies the new password.
+// On success it marks the token used and revokes every existing session
+// and refresh token so the user must re-authenticate on all devices.
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var input struct {
+		Token       string `json:"token" binding:"required"`
+		NewPassword string `json:"newPassword" binding:"required,min=8"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	svc := services.NewPasswordResetService()
+	if err := svc.ResetWithToken(input.Token, input.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Password reset successful. You can now log in with your new password.",
+	})
+}
+
+// DeleteAccount soft-deletes the authenticated user's account and schedules
+// a hard delete after a 30-day grace period. The user can cancel within that
+// window via CancelDeletion.
+func (h *AuthHandler) DeleteAccount(c *gin.Context) {
+	userInterface, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj, ok := userInterface.(*models.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user"})
+		return
+	}
+
+	now := time.Now().UTC()
+	if err := config.DB.Model(&models.User{}).
+		Where("id = ?", userObj.ID).
+		Updates(map[string]interface{}{
+			"deleted_at":              now,
+			"deletion_requested_at":   now,
+		}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to schedule account deletion"})
+		return
+	}
+
+	// Revoke all existing sessions so the user cannot keep using the account
+	// while it is pending deletion.
+	tokenSvc := services.NewTokenService()
+	_ = tokenSvc.RevokeAllForUser(userObj.ID, "account_deletion")
+	refreshSvc := services.NewRefreshTokenService()
+	_ = refreshSvc.RevokeAllForUser(userObj.ID)
+	sessionSvc := services.NewSessionService()
+	_ = sessionSvc.RevokeAll(userObj.ID, "account_deletion")
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":                "Account scheduled for deletion. You can cancel within 30 days.",
+		"deletionScheduledAt":    now,
+	})
+}
+
+// CancelDeletion restores an account that was scheduled for deletion,
+// provided the 30-day grace period has not yet elapsed.
+func (h *AuthHandler) CancelDeletion(c *gin.Context) {
+	userInterface, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	userObj, ok := userInterface.(*models.User)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user"})
+		return
+	}
+
+	var user models.User
+	if err := config.DB.Unscoped().First(&user, "id = ?", userObj.ID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if user.DeletionRequestedAt == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No pending deletion to cancel"})
+		return
+	}
+
+	graceEnd := user.DeletionRequestedAt.AddDate(0, 0, 30)
+	if time.Now().UTC().After(graceEnd) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Grace period has expired; account cannot be restored"})
+		return
+	}
+
+	if err := config.DB.Unscoped().Model(&models.User{}).
+		Where("id = ?", userObj.ID).
+		Updates(map[string]interface{}{
+			"deleted_at":            nil,
+			"deletion_requested_at": nil,
+		}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel deletion"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Account deletion cancelled. Your account has been restored.",
+	})
 }

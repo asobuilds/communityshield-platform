@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/smtp"
 	"os"
+
+	"security-solution/services"
 )
 
 type EmailConfig struct {
@@ -16,11 +18,15 @@ type EmailConfig struct {
 }
 
 func getEmailConfig() EmailConfig {
+	pass := os.Getenv("SMTP_PASS")
+	if pass == "" {
+		pass = os.Getenv("SMTP_PASSWORD")
+	}
 	return EmailConfig{
 		Host:     os.Getenv("SMTP_HOST"),
 		Port:     os.Getenv("SMTP_PORT"),
 		User:     os.Getenv("SMTP_USER"),
-		Password: os.Getenv("SMTP_PASSWORD"),
+		Password: pass,
 		From:     os.Getenv("SMTP_FROM"),
 	}
 }
@@ -148,5 +154,52 @@ func SendOTPEmail(to, code string) error {
 		<p>Stay safe,</p>
 		<p><strong>WardGuard Team</strong></p>
 	`, code)
+	return SendEmail(to, subject, body)
+}
+
+// emailNotifier implements services.ResetNotifier using the SMTP-backed
+// SendEmail helper above. Registered once at startup from main.go.
+type emailNotifier struct{}
+
+// NotifyEmail delivers the reset code via SMTP. If toEmail is empty, this
+// is a no-op — we never send to "".
+func (n *emailNotifier) NotifyEmail(toEmail, toName, code string) {
+	if toEmail == "" {
+		return
+	}
+	_ = SendPasswordResetTokenEmail(toEmail, code)
+}
+
+// NotifySMS delivers the reset code via the existing SMS service. If
+// toPhone is empty, this is a no-op.
+func (n *emailNotifier) NotifySMS(toPhone, code string) {
+	if toPhone == "" {
+		return
+	}
+	_ = services.SendSMS(toPhone, "Your WardGuard reset code: "+code+" (valid 1 hour)")
+}
+
+// NewEmailNotifier returns a services.ResetNotifier backed by SMTP/SMS.
+func NewEmailNotifier() *emailNotifier {
+	return &emailNotifier{}
+}
+
+// SendPasswordResetTokenEmail delivers the raw reset token via email.
+// The token is shown inline (not a clickable link) so the flow works
+// even before a BASE_URL is configured. TODO: once BASE_URL is set,
+// build a clickable reset link and reuse SendPasswordResetEmail.
+func SendPasswordResetTokenEmail(to, token string) error {
+	subject := "🔐 Reset Your WardGuard Password"
+	body := fmt.Sprintf(`
+		<h1>Password Reset</h1>
+		<p>You requested a password reset for your WardGuard account.</p>
+		<p>Your reset token is:</p>
+		<h2 style="font-size: 28px; letter-spacing: 2px; background: #f0f0f0; padding: 12px; text-align: center; font-family: monospace;">%s</h2>
+		<p>This token expires in 1 hour.</p>
+		<br>
+		<p>If you didn't request this, please ignore this email.</p>
+		<p>Stay safe,</p>
+		<p><strong>WardGuard Team</strong></p>
+	`, token)
 	return SendEmail(to, subject, body)
 }

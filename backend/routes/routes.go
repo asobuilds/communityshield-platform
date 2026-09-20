@@ -50,6 +50,12 @@ func SetupRoutes(router *gin.Engine) {
 			auth.GET("/sessions", middleware.AuthMiddleware(), authHandler.ListSessions)
 			auth.DELETE("/sessions/:jti", middleware.AuthMiddleware(), authHandler.RevokeSession)
 			auth.DELETE("/sessions", middleware.AuthMiddleware(), authHandler.RevokeAllSessions)
+
+			// Account lifecycle (Wave 5c)
+			auth.POST("/forgot-password", middleware.RateLimitOTP(), authHandler.ForgotPassword)
+			auth.POST("/reset-password", middleware.RateLimitOTP(), authHandler.ResetPassword)
+			auth.DELETE("/account", middleware.AuthMiddleware(), authHandler.DeleteAccount)
+			auth.POST("/account/cancel-deletion", middleware.AuthMiddleware(), authHandler.CancelDeletion)
 		}
 
 		// OTP routes

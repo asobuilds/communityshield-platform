@@ -10,6 +10,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"security-solution/config"
+	"security-solution/handlers"
 	"security-solution/middleware"
 	"security-solution/routes"
 	"security-solution/services"
@@ -45,7 +46,12 @@ func main() {
 
 	routes.SetupRoutes(router)
 
-	// Start background scheduler (elections, invites, expiry)
+	// Wire out-of-band delivery for password resets. The services package
+	// defines the interface; the handlers package provides the SMTP-backed
+	// implementation. This keeps services free of any handlers import.
+	services.SetResetNotifier(handlers.NewEmailNotifier())
+
+	// Start background scheduler (elections, invites, expiry, account purge)
 	scheduler := services.NewSchedulerService()
 	scheduler.Start(1 * time.Hour)
 
