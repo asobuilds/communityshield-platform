@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -48,11 +50,12 @@ func main() {
 	router.Use(middleware.PanicRecovery())
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS")),
+		AllowOriginFunc:  allowDebugLocalhost,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 	}))
 
 	routes.SetupRoutes(router)
@@ -76,4 +79,38 @@ func main() {
 	if err := router.Run(":" + port); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// parseAllowedOrigins splits ALLOWED_ORIGINS on commas, trims each entry,
+// and drops blanks. Returns nil when unset (fail-closed: no origins allowed).
+func parseAllowedOrigins(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// allowDebugLocalhost permits loopback origins only when gin.Mode() is debug.
+func allowDebugLocalhost(origin string) bool {
+	if gin.Mode() != gin.DebugMode {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
 }

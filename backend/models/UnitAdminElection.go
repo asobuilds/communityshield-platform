@@ -17,6 +17,8 @@ type UnitAdminElection struct {
 	MemberCountAtElection int            `gorm:"not null;default:0" json:"memberCountAtElection"`
 	EligibleVoterCount    int            `gorm:"not null;default:0" json:"eligibleVoterCount"`
 	QuorumCount           int            `gorm:"not null;default:0" json:"quorumCount"`
+	ExtendedOnce          bool           `gorm:"not null;default:false" json:"extendedOnce"`
+	QuorumMet             bool           `gorm:"not null;default:true" json:"quorumMet"`
 	TermStart             time.Time      `gorm:"not null;index:idx_unit_admin_election_term_start" json:"termStart"`
 	TermEnd               time.Time      `gorm:"not null;index:idx_unit_admin_election_term_end" json:"termEnd"`
 	VotingStartsAt        *time.Time     `gorm:"index:idx_unit_admin_election_voting_start" json:"votingStartsAt,omitempty"`
