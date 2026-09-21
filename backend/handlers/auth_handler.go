@@ -26,7 +26,7 @@ func NewAuthHandler() *AuthHandler {
 func (h *AuthHandler) Register(c *gin.Context) {
 	var input struct {
 		Email         string `json:"email" binding:"required,email"`
-		Phone         string `json:"phone"`
+		Phone     string `json:"phone" binding:"required"`
 		FirstName     string `json:"firstName" binding:"required"`
 		LastName      string `json:"lastName" binding:"required"`
 		Password      string `json:"password" binding:"required,min=6"`
@@ -35,7 +35,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email, phone, firstName, lastName, and password are required"})
 		return
 	}
 
@@ -60,6 +60,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	if dupCount > 0 {
 		c.JSON(http.StatusConflict, gin.H{"error": "An account with that email or phone number already exists"})
+		return
+	}
+
+	if strings.TrimSpace(normalizedPhone) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "phone number is required"})
 		return
 	}
 
