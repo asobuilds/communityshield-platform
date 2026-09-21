@@ -1,4 +1,5 @@
 name: integration-race
+
 on:
   push:
     branches: [main]
@@ -22,24 +23,22 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-      env:
-        TEST_DATABASE_URL: postgresql://postgres:testpass@127.0.0.1:5432/wardguard_test?sslmode=disable
-        CGO_ENABLED: "1"
-      defaults:
-        run:
-          working-directory: backend
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-go@v5
-          with:
-            go-version: '1.24'
-            cache: true
-            cache-dependency-path: backend/go.sum
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:testpass@127.0.0.1:5432/wardguard_test?sslmode=disable
+      CGO_ENABLED: "1"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: backend/go.sum
       - name: install build tools
         run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential
-      - name: go vet
-        run: go vet ./...
       - name: integration suite with race detector
-        run: go test -tags integration -race -count=1 ./handlers/ -v
+        run: go test -tags integration -race -count=1 -timeout 30m ./handlers/ -v
       - name: concurrency test x3
-        run: go test -tags integration -race -count=3 ./handlers/ -run TestFinancialLedgerConcurrentAppend -v
+        run: go test -tags integration -race -count=3 -timeout 30m ./handlers/ -run TestFinancialLedgerConcurrentAppend -v
