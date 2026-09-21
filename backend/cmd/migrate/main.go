@@ -135,6 +135,7 @@ func main() {
 		&models.IdempotencyRecord{},
 
 		&models.FinancialLedger{},
+		&models.LedgerSequence{},
 		&models.UnitFinancialYear{},
 		&models.PlatformDonation{},
 

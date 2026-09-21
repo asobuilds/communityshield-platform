@@ -24,11 +24,10 @@ import (
 //   (C) No lost updates — every successful append has a committed row and
 //       the sum of amounts matches the DB aggregate.
 //
-// The Append implementation generates references via a raw
-// "SELECT COALESCE(MAX(sequence_number),0)+1" outside a transaction, so
-// under contention this test is expected to surface collisions unless the
-// service is later hardened (transaction + SELECT ... FOR UPDATE or a
-// sequence table).
+// The Append implementation generates references via an atomic counter
+// table (ledger_sequences) updated inside the same transaction as the
+// ledger insert, so no duplicate references should ever occur and no
+// retries should be needed.
 func TestFinancialLedgerConcurrentAppend(t *testing.T) {
 	testutil.TruncateAll(t)
 	defer testutil.TruncateAll(t)
@@ -46,13 +45,12 @@ func TestFinancialLedgerConcurrentAppend(t *testing.T) {
 		mu         sync.Mutex
 		references []string
 		amounts    []float64
-		errs       []error
 		successes  int
 		startCh    = make(chan struct{})
 		wg         sync.WaitGroup
 	)
 
-	// Seed one entry so the MAX(sequence_number) baseline is non-zero,
+	// Seed one entry so the counter baseline is non-zero,
 	// making any off-by-one / duplicate collision easier to spot.
 	if _, err := svc.Append(services.LedgerEntryInput{
 		UnitID: unit.ID, Direction: "in", EntryType: "donation",
@@ -84,7 +82,7 @@ func TestFinancialLedgerConcurrentAppend(t *testing.T) {
 
 			mu.Lock()
 			if err != nil {
-				errs = append(errs, err)
+				t.Errorf("Append failed (no retry expected): %v", err)
 			} else {
 				successes++
 				references = append(references, entry.Reference)
@@ -151,13 +149,9 @@ func TestFinancialLedgerConcurrentAppend(t *testing.T) {
 		t.Fatalf("(C) successes=%d but DB has %d non-seed rows", successes, int(total)-1)
 	}
 
-	// If the service swallowed duplicate-reference errors under contention,
-	// report them. The test passes as long as (A)/(B)/(C) hold; the count
-	// of swallowed errors is informational.
-	if len(errs) > 0 {
-		t.Logf("Append returned %d errors under contention (informational):", len(errs))
-		for _, e := range errs {
-			t.Logf("  %v", e)
-		}
+	// Zero retries expected: the atomic counter guarantees correctness;
+	// any error here indicates a real failure, not a transient conflict.
+	if successes != N {
+		t.Fatalf("expected %d successful appends with zero retries, got %d", N, successes)
 	}
 }
