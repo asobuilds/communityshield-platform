@@ -69,6 +69,7 @@ func SetupTestDB() error {
 		&models.OfficerScore{},
 		&models.UnitScore{},
 		&models.FinancialLedger{},
+		&models.LedgerSequence{},
 		&models.UnitFinancialYear{},
 		&models.PlatformDonation{},
 		&models.BankAccount{},

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"security-solution/config"
 	"security-solution/models"
@@ -56,43 +57,54 @@ func (s *LedgerService) appendWithRetry(entry LedgerEntryInput, remaining int) (
 	now := time.Now().UTC()
 	year := now.Year()
 
+	// Primary correctness: atomic counter increment inside the same
+	// transaction as the ledger insert. The INSERT ... ON CONFLICT
+	// ensures the counter row exists, and UPDATE ... RETURNING
+	// serializes concurrent appends for the same year.
+	// The 3-retry loop below is defense-in-depth only.
 	var seq int64
-	if err := config.DB.Raw(
-		"SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM financial_ledgers WHERE year = ?",
-		year,
-	).Scan(&seq).Error; err != nil {
-		return nil, err
-	}
-
-	reference := fmt.Sprintf("WG-%d-%08d", year, seq)
-
-	ledger := models.FinancialLedger{
-		Reference:      reference,
-		UnitID:         entry.UnitID,
-		Year:           year,
-		SequenceNumber: seq,
-		Direction:      entry.Direction,
-		EntryType:      entry.EntryType,
-		Amount:         entry.Amount,
-		Currency:       "NGN",
-		Counterparty:   entry.Counterparty,
-		Description:    entry.Description,
-		SourceType:     entry.SourceType,
-		SourceID:       entry.SourceID,
-		Status:         "posted",
-		Metadata:       entry.Metadata,
-		CreatedBy:      entry.CreatedBy,
-		CreatedAt:      now,
-	}
-
-	if err := config.DB.Create(&ledger).Error; err != nil {
+	var ledger *models.FinancialLedger
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(
+			"INSERT INTO ledger_sequences(year, last_seq) VALUES (?, 0) ON CONFLICT (year) DO NOTHING",
+			year,
+		).Error; err != nil {
+			return err
+		}
+		if err := tx.Raw(
+			"UPDATE ledger_sequences SET last_seq = last_seq + 1 WHERE year = ? RETURNING last_seq",
+			year,
+		).Scan(&seq).Error; err != nil {
+			return err
+		}
+		ledger = &models.FinancialLedger{
+			Reference:      fmt.Sprintf("WG-%d-%08d", year, seq),
+			UnitID:         entry.UnitID,
+			Year:           year,
+			SequenceNumber: seq,
+			Direction:      entry.Direction,
+			EntryType:      entry.EntryType,
+			Amount:         entry.Amount,
+			Currency:       "NGN",
+			Counterparty:   entry.Counterparty,
+			Description:    entry.Description,
+			SourceType:     entry.SourceType,
+			SourceID:       entry.SourceID,
+			Status:         "posted",
+			Metadata:       entry.Metadata,
+			CreatedBy:      entry.CreatedBy,
+			CreatedAt:      now,
+		}
+		return tx.Create(ledger).Error
+	})
+	if err != nil {
 		if remaining <= 1 {
 			return nil, err
 		}
 		return s.appendWithRetry(entry, remaining-1)
 	}
 
-	return &ledger, nil
+	return ledger, nil
 }
 
 // ListForUnit returns ledger entries for a unit, newest first.
