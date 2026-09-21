@@ -26,6 +26,7 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://postgres:testpass@127.0.0.1:5432/wardguard_test?sslmode=disable
       CGO_ENABLED: "1"
+      JWT_SECRET: "ci-test-secret-do-not-use-in-prod-min-32-chars"
     defaults:
       run:
         working-directory: backend
