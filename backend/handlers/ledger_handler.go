@@ -15,7 +15,7 @@ import (
 // GetPublicUnitLedger returns the ledger for a unit — public read.
 // Only confirmed/posted entries are returned. No sensitive fields.
 func GetPublicUnitLedger(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return
@@ -56,7 +56,7 @@ func GetPublicUnitLedger(c *gin.Context) {
 // GetUnitLedger returns the ledger to an authenticated member of the unit.
 // Citizens are blocked. Super admin sees any unit.
 func GetUnitLedger(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return

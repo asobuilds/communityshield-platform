@@ -270,7 +270,7 @@ func GetOfficersByUnit(c *gin.Context) {
 		return
 	}
 
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
 		return

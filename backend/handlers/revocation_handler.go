@@ -21,7 +21,7 @@ type OpenRevocationRequest struct {
 
 // OpenRevocationCycle opens a new revocation cycle for a target membership.
 func OpenRevocationCycle(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return

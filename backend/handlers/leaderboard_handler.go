@@ -87,7 +87,7 @@ func GetOfficerLeaderboard(c *gin.Context) {
 
 // GetUnitRanking returns ranking for a specific unit
 func GetUnitRanking(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 
 	var caseCount int64
 	var resolvedCount int64

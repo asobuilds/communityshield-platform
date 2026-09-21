@@ -46,7 +46,7 @@ func GenerateCaseReport(c *gin.Context) {
 
 // GenerateUnitReport generates a report for a unit
 func GenerateUnitReport(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})

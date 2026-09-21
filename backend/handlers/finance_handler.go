@@ -286,7 +286,7 @@ func RejectTransaction(c *gin.Context) {
 
 // GetTransactions gets all transactions for a unit
 func GetTransactions(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
@@ -354,7 +354,7 @@ func GetTransactionByID(c *gin.Context) {
 
 // GetTransactionSummary gets transaction summary for a unit
 func GetTransactionSummary(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
@@ -497,7 +497,7 @@ func CreateBudget(c *gin.Context) {
 
 // GetBudgets gets all budgets for a unit
 func GetBudgets(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
@@ -624,7 +624,7 @@ func GenerateFinancialReport(c *gin.Context) {
 
 // GetFinancialReports gets all reports for a unit
 func GetFinancialReports(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})

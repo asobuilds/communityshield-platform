@@ -70,7 +70,7 @@ func AddCamera(c *gin.Context) {
 
 // GetCameras gets all cameras for a unit
 func GetCameras(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
