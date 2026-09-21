@@ -13,7 +13,7 @@ import (
 // GetGovernanceAudit returns a summary of governance activity for a unit.
 // Head admin of the unit, or super admin, may call.
 func GetGovernanceAudit(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return

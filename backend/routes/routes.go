@@ -18,19 +18,19 @@ func SetupRoutes(router *gin.Engine) {
 		// Public routes (no authentication required)
 		api.GET("/public/cases", handlers.GetPublicCases)
 		api.GET("/public/units", handlers.GetPublicUnits)
-		api.GET("/public/units/:unitId/bank-accounts", handlers.GetPublicBankAccounts)
-		api.GET("/public/units/:unitId/ledger", handlers.GetPublicUnitLedger)
-		api.GET("/public/units/:unitId/financial-years", handlers.GetPublicFinancialYears)
-		api.GET("/public/units/:unitId/financial-summary", handlers.GetCurrentYearSummary)
+		api.GET("/public/units/:id/bank-accounts", handlers.GetPublicBankAccounts)
+		api.GET("/public/units/:id/ledger", handlers.GetPublicUnitLedger)
+		api.GET("/public/units/:id/financial-years", handlers.GetPublicFinancialYears)
+		api.GET("/public/units/:id/financial-summary", handlers.GetCurrentYearSummary)
 		api.GET("/public/platform/donation-info", handlers.GetPlatformDonationInfo)
 		api.POST("/public/platform/donations", handlers.CreatePlatformDonation)
 		api.GET("/public/platform/supporters", handlers.ListPublicSupporters)
 		api.GET("/public/leaderboard", handlers.GetPublicLeaderboard)
 		api.GET("/public/units/suggest", handlers.SuggestUnits)
 		api.GET("/public/officers/:id/rating", handlers.GetOfficerRating)
-		api.GET("/public/units/:unitId/rating", handlers.GetUnitRating)
+		api.GET("/public/units/:id/rating", handlers.GetUnitRating)
 		api.GET("/public/blueprint", handlers.GetBlueprint)
-		api.GET("/public/units/:unitId/auth", handlers.GetPublicUnitAuth)
+		api.GET("/public/units/:id/auth", handlers.GetPublicUnitAuth)
 		api.POST("/invites/validate", middleware.RateLimitAuth(), handlers.ValidateInvite)
 
 		// Auth routes
@@ -76,13 +76,13 @@ func SetupRoutes(router *gin.Engine) {
 			units.GET("/:id", handlers.GetUnitByID)
 			units.POST("", middleware.AuthMiddleware(), handlers.CreateUnit)
 			units.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateUnit)
-		units.POST("/:unitId/elections", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenAdminElection)
-		units.POST("/:unitId/head-admin-elections", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenHeadAdminElection)
-		units.POST("/:unitId/revocations", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenRevocationCycle)
-		units.GET("/:unitId/auth", middleware.AuthMiddleware(), handlers.GetUnitAuth)
-			units.PUT("/:unitId/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
-			units.GET("/:unitId/officers/ranking", middleware.AuthMiddleware(), handlers.GetOfficersInUnitRanking)
-			units.GET("/:unitId/governance-audit", middleware.AuthMiddleware(), handlers.GetGovernanceAudit)
+units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenAdminElection)
+    units.POST("/:id/head-admin-elections", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenHeadAdminElection)
+    units.POST("/:id/revocations", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenRevocationCycle)
+    units.GET("/:id/auth", middleware.AuthMiddleware(), handlers.GetUnitAuth)
+    units.PUT("/:id/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
+    units.GET("/:id/officers/ranking", middleware.AuthMiddleware(), handlers.GetOfficersInUnitRanking)
+    units.GET("/:id/governance-audit", middleware.AuthMiddleware(), handlers.GetGovernanceAudit)
 	}
 
 	invites := api.Group("/invites")
@@ -253,14 +253,14 @@ func SetupRoutes(router *gin.Engine) {
 		bank := api.Group("/bank")
 		{
 			bank.POST("/accounts", middleware.AuthMiddleware(), handlers.AddBankAccount)
-			bank.GET("/:unitId/accounts", middleware.AuthMiddleware(), handlers.GetBankAccounts)
+			bank.GET("/:id/accounts", middleware.AuthMiddleware(), handlers.GetBankAccounts)
 			bank.PUT("/accounts/:id", middleware.AuthMiddleware(), handlers.UpdateBankAccount)
 			bank.DELETE("/accounts/:id", middleware.AuthMiddleware(), handlers.DeleteBankAccount)
 			bank.PATCH("/accounts/:id/public", middleware.AuthMiddleware(), handlers.ToggleBankAccountPublic)
-			bank.GET("/units/:unitId/ledger", middleware.AuthMiddleware(), handlers.GetUnitLedger)
+			bank.GET("/units/:id/ledger", middleware.AuthMiddleware(), handlers.GetUnitLedger)
 			bank.POST("/donations", middleware.AuthMiddleware(), handlers.RecordDonation)
 			bank.POST("/donations/:id/confirm", middleware.AuthMiddleware(), handlers.ConfirmDonation)
-			bank.GET("/:unitId/donations", middleware.AuthMiddleware(), handlers.GetDonations)
+			bank.GET("/:id/donations", middleware.AuthMiddleware(), handlers.GetDonations)
 		}
 
 		// Finance routes
@@ -269,13 +269,13 @@ func SetupRoutes(router *gin.Engine) {
 			finance.POST("/transactions", middleware.AuthMiddleware(), handlers.CreateTransaction)
 			finance.POST("/transactions/:id/approve", middleware.AuthMiddleware(), handlers.ApproveTransaction)
 			finance.POST("/transactions/:id/reject", middleware.AuthMiddleware(), handlers.RejectTransaction)
-			finance.GET("/units/:unitId/transactions", middleware.AuthMiddleware(), handlers.GetTransactions)
+			finance.GET("/units/:id/transactions", middleware.AuthMiddleware(), handlers.GetTransactions)
 			finance.GET("/transactions/:id", middleware.AuthMiddleware(), handlers.GetTransactionByID)
-			finance.GET("/units/:unitId/summary", middleware.AuthMiddleware(), handlers.GetTransactionSummary)
+			finance.GET("/units/:id/summary", middleware.AuthMiddleware(), handlers.GetTransactionSummary)
 			finance.POST("/budgets", middleware.AuthMiddleware(), handlers.CreateBudget)
-			finance.GET("/units/:unitId/budgets", middleware.AuthMiddleware(), handlers.GetBudgets)
+			finance.GET("/units/:id/budgets", middleware.AuthMiddleware(), handlers.GetBudgets)
 			finance.POST("/reports", middleware.AuthMiddleware(), handlers.GenerateFinancialReport)
-			finance.GET("/units/:unitId/reports", middleware.AuthMiddleware(), handlers.GetFinancialReports)
+			finance.GET("/units/:id/reports", middleware.AuthMiddleware(), handlers.GetFinancialReports)
 		}
 
 		// Community routes
@@ -354,7 +354,7 @@ func SetupRoutes(router *gin.Engine) {
 		video := api.Group("/video")
 		{
 			video.POST("/cameras", middleware.AuthMiddleware(), handlers.AddCamera)
-			video.GET("/units/:unitId/cameras", middleware.AuthMiddleware(), handlers.GetCameras)
+			video.GET("/units/:id/cameras", middleware.AuthMiddleware(), handlers.GetCameras)
 			video.POST("/alerts", middleware.AuthMiddleware(), handlers.GenerateVideoAlert)
 			video.GET("/alerts", middleware.AuthMiddleware(), handlers.GetVideoAlerts)
 			video.PUT("/alerts/:id/review", middleware.AuthMiddleware(), handlers.ReviewVideoAlert)
@@ -366,7 +366,7 @@ func SetupRoutes(router *gin.Engine) {
 		commGroup := api.Group("/communication")
 		{
 			commGroup.POST("/rooms", middleware.AuthMiddleware(), handlers.CreateRoom)
-			commGroup.GET("/units/:unitId/rooms", middleware.AuthMiddleware(), handlers.GetRooms)
+			commGroup.GET("/units/:id/rooms", middleware.AuthMiddleware(), handlers.GetRooms)
 			commGroup.POST("/messages", middleware.AuthMiddleware(), handlers.SendMessage)
 			commGroup.GET("/rooms/:roomId/messages", middleware.AuthMiddleware(), handlers.GetMessages)
 			commGroup.POST("/calls", middleware.AuthMiddleware(), handlers.InitiateCall)
@@ -386,13 +386,13 @@ func SetupRoutes(router *gin.Engine) {
 		peace := api.Group("/peacebuilding")
 		{
 			peace.POST("/committees", middleware.AuthMiddleware(), handlers.CreatePeaceCommittee)
-			peace.GET("/units/:unitId/committees", middleware.AuthMiddleware(), handlers.GetPeaceCommittees)
+			peace.GET("/units/:id/committees", middleware.AuthMiddleware(), handlers.GetPeaceCommittees)
 			peace.POST("/committees/:id/members", middleware.AuthMiddleware(), handlers.AddCommitteeMember)
 			peace.POST("/conflicts", middleware.AuthMiddleware(), handlers.CreateConflictResolution)
-			peace.GET("/units/:unitId/conflicts", middleware.AuthMiddleware(), handlers.GetConflictResolutions)
+			peace.GET("/units/:id/conflicts", middleware.AuthMiddleware(), handlers.GetConflictResolutions)
 			peace.PUT("/conflicts/:id", middleware.AuthMiddleware(), handlers.UpdateConflictResolution)
-			peace.GET("/units/:unitId/peace-metrics", middleware.AuthMiddleware(), handlers.GetPeaceMetrics)
-			peace.GET("/units/:unitId/trust-scores", middleware.AuthMiddleware(), handlers.GetTrustScores)
+			peace.GET("/units/:id/peace-metrics", middleware.AuthMiddleware(), handlers.GetPeaceMetrics)
+			peace.GET("/units/:id/trust-scores", middleware.AuthMiddleware(), handlers.GetTrustScores)
 			peace.POST("/trust-scores", middleware.AuthMiddleware(), handlers.UpdateTrustScore)
 		}
 

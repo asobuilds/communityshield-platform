@@ -14,7 +14,7 @@ import (
 // Only accounts with IsPublic=true are returned. Sensitive fields
 // (Creator, internal notes) are not exposed.
 func GetPublicBankAccounts(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return

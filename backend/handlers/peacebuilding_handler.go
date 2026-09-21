@@ -65,7 +65,7 @@ func CreatePeaceCommittee(c *gin.Context) {
 
 // GetPeaceCommittees gets all peace committees
 func GetPeaceCommittees(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
@@ -223,7 +223,7 @@ func CreateConflictResolution(c *gin.Context) {
 
 // GetConflictResolutions gets all conflict resolutions
 func GetConflictResolutions(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
@@ -323,7 +323,7 @@ func UpdateConflictResolution(c *gin.Context) {
 
 // GetPeaceMetrics gets peace metrics for a unit
 func GetPeaceMetrics(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
@@ -355,7 +355,7 @@ func GetPeaceMetrics(c *gin.Context) {
 
 // GetTrustScores gets community trust scores
 func GetTrustScores(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})

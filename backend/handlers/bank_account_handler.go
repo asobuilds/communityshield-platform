@@ -96,7 +96,7 @@ func AddBankAccount(c *gin.Context) {
 
 // GetBankAccounts gets all bank accounts for a unit
 func GetBankAccounts(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
@@ -465,7 +465,7 @@ func ConfirmDonation(c *gin.Context) {
 
 // GetDonations gets all donations for a unit
 func GetDonations(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})

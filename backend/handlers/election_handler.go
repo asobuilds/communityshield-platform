@@ -19,7 +19,7 @@ type OpenElectionRequest struct {
 // OpenAdminElection creates a new admin election for the unit.
 // Only head admin or unit admin may open an election.
 func OpenAdminElection(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return
@@ -162,7 +162,7 @@ func GetElectionResults(c *gin.Context) {
 
 // OpenHeadAdminElection starts a head-admin election among current admins.
 func OpenHeadAdminElection(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return

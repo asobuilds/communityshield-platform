@@ -69,7 +69,7 @@ func CreateRoom(c *gin.Context) {
 
 // GetRooms gets all rooms for a unit
 func GetRooms(c *gin.Context) {
-	unitID := c.Param("unitId")
+	unitID := c.Param("id")
 	id, err := uuid.Parse(unitID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})

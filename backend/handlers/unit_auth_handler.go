@@ -14,7 +14,7 @@ import (
 // GetUnitAuth returns the parsed policy + version for a unit.
 // Any verified member of the unit may read it.
 func GetUnitAuth(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return
@@ -51,7 +51,7 @@ func GetUnitAuth(c *gin.Context) {
 // UpsertUnitAuth creates or updates the unit's policy.
 // Only head admin or a unit admin may write.
 func UpsertUnitAuth(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return
@@ -98,7 +98,7 @@ func UpsertUnitAuth(c *gin.Context) {
 // GetPublicUnitAuth — public read-only view of a unit's governance policy.
 // No authentication required. Any visitor can see the rules the unit operates under.
 func GetPublicUnitAuth(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid unit id"})
 		return

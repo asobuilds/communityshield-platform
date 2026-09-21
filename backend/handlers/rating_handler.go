@@ -101,7 +101,7 @@ func GetOfficerRating(c *gin.Context) {
 
 // GetUnitRating — public aggregate rating for a unit.
 func GetUnitRating(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
 		return
@@ -170,7 +170,7 @@ func GetPublicLeaderboard(c *gin.Context) {
 // GetOfficersInUnitRanking — members-only view of a unit's officer leaderboard.
 // Citizens blocked; only members of the unit (and super admin) can view.
 func GetOfficersInUnitRanking(c *gin.Context) {
-	unitID, err := uuid.Parse(c.Param("unitId"))
+	unitID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid unit ID"})
 		return
