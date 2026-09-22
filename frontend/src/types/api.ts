@@ -1,5 +1,5 @@
-/**
- * CommunityShield API types.
+﻿/**
+ * Nativity Guard API types.
  *
  * Hand-written from the verified Go contract in backend/ (handlers + models).
  * Envelopes are intentional: the API wraps collections, e.g. `{ cases: [...] }`.

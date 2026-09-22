@@ -1,5 +1,5 @@
-/**
- * Typed fetch client for the CommunityShield API.
+﻿/**
+ * Typed fetch client for the Nativity Guard API.
  *
  * - Injects `Authorization: Bearer <token>` when a session exists.
  * - Normalises errors into `ApiError`.

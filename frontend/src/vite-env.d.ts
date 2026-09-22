@@ -1,4 +1,4 @@
-/// <reference types="vite/client" />
+﻿/// <reference types="vite/client" />
 
 interface ImportMetaEnv {
   /** Base origin of the API, e.g. https://communityshield-backend.onrender.com */

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+﻿import type { ReactNode } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
@@ -134,7 +134,7 @@ export function AppShell() {
         <div className="flex items-center gap-2 border-b border-border px-4 py-4">
           <Shield className="size-6 text-signal" aria-hidden />
           <div>
-            <p className="text-sm font-bold tracking-wide text-ink">COMMUNITYSHIELD</p>
+            <p className="text-sm font-bold tracking-wide text-ink">NATIVITY GUARD</p>
             <p className="text-[11px] text-ink-muted">{role ? ROLE_LABEL[role] : ''} console</p>
           </div>
         </div>
@@ -172,7 +172,7 @@ export function AppShell() {
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-base/90 px-4 py-3 backdrop-blur">
           <div className="flex items-center gap-2 md:hidden">
             <Shield className="size-5 text-signal" aria-hidden />
-            <span className="text-sm font-bold tracking-wide text-ink">COMMUNITYSHIELD</span>
+            <span className="text-sm font-bold tracking-wide text-ink">NATIVITY GUARD</span>
           </div>
           <div className="hidden md:block" />
           <div className="flex items-center gap-2">
