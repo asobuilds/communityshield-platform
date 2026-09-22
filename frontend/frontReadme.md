@@ -1,6 +1,6 @@
-# WardGuard — Frontend Feature & Build Specification
+﻿# Nativity Guard — Frontend Feature & Build Specification
 
-> **This is the build contract for the WardGuard frontend.**
+> **This is the build contract for the Nativity Guard frontend.**
 > It lists every feature, screen, state, and API mapping needed to ship the product.
 > Pair it with [`frontagent.md`](./frontagent.md) — the design agent that governs *how* the UI
 > should look and feel. `frontReadme` says **what to build**; `frontagent` says **how to make it
@@ -75,7 +75,7 @@ case tracking, officer operations, and unit-admin triage and assignment.
 
 **Run it:** `cd frontend && npm install && npm run dev` — mocks are on by default
 (`.env.development`), so every screen below works with **no backend**. Sign in with any demo
-account: `officer@wardguard.ng`, `admin@wardguard.ng`, `citizen@wardguard.ng`, `super@wardguard.ng`
+account: `officer@nativityguard.ng`, `admin@nativityguard.ng`, `citizen@nativityguard.ng`, `super@nativityguard.ng`
 (password `password`).
 
 | Route | Screen | State |
@@ -343,7 +343,7 @@ cached officer view into a citizen view.
 
 ## 1. Product intent & engagement goals
 
-WardGuard must be **chosen** by communities, not mandated. That only happens if the
+Nativity Guard must be **chosen** by communities, not mandated. That only happens if the
 experience is trustworthy, fast, and human. Engagement is a design output, not a growth hack.
 
 **Engagement goals**
@@ -1015,9 +1015,9 @@ what shipped after it.
 
 ### A1 — Rebrand
 
-Platform renamed **CommunityShield → WardGuard**.
+Platform renamed **Nativity Guard → Nativity Guard**.
 Logo, favicon, and wordmark shipped in `frontend/public/logo.svg` and `favicon.svg`.
-Backend display strings, email templates, SMS copy, and AI prompts all say WardGuard.
+Backend display strings, email templates, SMS copy, and AI prompts all say Nativity Guard.
 
 ### A2 — Authentication & session hardening
 
@@ -1094,7 +1094,7 @@ Two invite types now exist:
 
 | Scope | Who creates | Purpose |
 |---|---|---|
-| `platform` | Any registered user | Invite a new person to register on WardGuard (no unit) |
+| `platform` | Any registered user | Invite a new person to register on Nativity Guard (no unit) |
 | `unit` | Admin / Head Admin, post-verification | Invite a citizen to join a specific unit |
 
 | Endpoint | Purpose |

@@ -1,8 +1,8 @@
-# WardGuard
+ï»¿# Nativity Guard
 
 > Community safety and governance infrastructure for Nigerian neighborhoods.
 
-WardGuard connects citizens, security units, officers, and administrators through one auditable workflow: **report ? assign ? dispatch ? investigate ? review ? close**. It is designed to promote accountability, prevent vigilantism, and keep sensitive case intelligence restricted to authorized personnel.
+Nativity Guard connects citizens, security units, officers, and administrators through one auditable workflow: **report ? assign ? dispatch ? investigate ? review ? close**. It is designed to promote accountability, prevent vigilantism, and keep sensitive case intelligence restricted to authorized personnel.
 
 ---
 
@@ -16,9 +16,9 @@ Deployed on: Render (backend) + Supabase (Postgres).
 
 ## Core principles
 
-1. **Unit access is NOT case access.** A police unit does not see every case in its jurisdiction — only the cases assigned to specific officers.
+1. **Unit access is NOT case access.** A police unit does not see every case in its jurisdiction â€” only the cases assigned to specific officers.
 2. **Every hierarchy is auditable.** Head admins, admins, and officers are all removable by defined thresholds and quorum.
-3. **Nothing auto-deletes without user consent** — except security tombstones, which are documented separately.
+3. **Nothing auto-deletes without user consent** â€” except security tombstones, which are documented separately.
 4. **No vigilantism.** The platform coordinates, it does not arm.
 5. **Presumed innocence.** Suspects see only that a case names them, never the investigative detail.
 
@@ -30,13 +30,13 @@ Deployed on: Render (backend) + Supabase (Postgres).
        ?           ?         ?           ?              ?
        ?????? Case workflow (assign ? dispatch ? investigate ? review ? close)
                     ?
-              CaseAdminAssignment (2–3 admins per case)
+              CaseAdminAssignment (2â€“3 admins per case)
                     ?
               RevocationCycle / RevocationVote (removal thresholds)
 
-Backend: Go 1.24 · Gin · GORM · PostgreSQL · JWT · bcrypt
-Frontend: React 19 · TypeScript · Vite · Tailwind · React Query · Leaflet
-Infra: Docker Compose · Render · Supabase
+Backend: Go 1.24 Â· Gin Â· GORM Â· PostgreSQL Â· JWT Â· bcrypt
+Frontend: React 19 Â· TypeScript Â· Vite Â· Tailwind Â· React Query Â· Leaflet
+Infra: Docker Compose Â· Render Â· Supabase
 
 ---
 
@@ -47,39 +47,39 @@ Infra: Docker Compose · Render · Supabase
        ? [admin_changes_requested ? investigating]
        ? closed
 
-Closure requires approval from at least **2 of the 2–3 submitted admins**. Direct officer closure is blocked.
+Closure requires approval from at least **2 of the 2â€“3 submitted admins**. Direct officer closure is blocked.
 
 ---
 
 ## Governance
 
 ### Elections
-- Admins elected by verified members, top 5–10 per unit
-- Terms: 12 months · staggered rotation every 6 months
-- Term limit: 2 consecutive terms · 6-month cooling-off
+- Admins elected by verified members, top 5â€“10 per unit
+- Terms: 12 months Â· staggered rotation every 6 months
+- Term limit: 2 consecutive terms Â· 6-month cooling-off
 - Head Admin elected by admins, one per unit
 
 ### Revocation
 - Regular admin removal: **10+ verified member votes + Head Admin approval**
 - Head Admin removal: **majority of verified unit members**
-- One vote per member per cycle · immutable vote records
+- One vote per member per cycle Â· immutable vote records
 - Successful removal triggers cooling-off
 
 ### UnitAuth
-Per-unit policy document declaring thresholds, quorum, seat bands, and term rules. Every election and revocation cycle snapshots the policy version it was governed by — no retroactive rule changes.
+Per-unit policy document declaring thresholds, quorum, seat bands, and term rules. Every election and revocation cycle snapshots the policy version it was governed by â€” no retroactive rule changes.
 
 ---
 
 ## Security
 
-- **JWT revocation** — tokens carry a `jti`; revocation list checked on every authenticated request
-- **Refresh token rotation** — one-time-use, hash-only storage
-- **Rate limiting** — per-IP and per-identity on auth, OTP, vote, invite
+- **JWT revocation** â€” tokens carry a `jti`; revocation list checked on every authenticated request
+- **Refresh token rotation** â€” one-time-use, hash-only storage
+- **Rate limiting** â€” per-IP and per-identity on auth, OTP, vote, invite
 - **Password change** revokes all sessions immediately
-- **Tiered case access** — primary / paired / support officers; supports see less
-- **Public-safe DTOs** — reporter identity, officer identity, evidence internals never leak
-- **Invite scoping** — platform invites (anyone) vs unit invites (admin/head only, post-verification)
-- **Suspect self-view** — active cases on profile, resolved cases in history
+- **Tiered case access** â€” primary / paired / support officers; supports see less
+- **Public-safe DTOs** â€” reporter identity, officer identity, evidence internals never leak
+- **Invite scoping** â€” platform invites (anyone) vs unit invites (admin/head only, post-verification)
+- **Suspect self-view** â€” active cases on profile, resolved cases in history
 
 ---
 
@@ -89,7 +89,7 @@ Per-unit policy document declaring thresholds, quorum, seat bands, and term rule
 |---|---|---|
 | 1 | Secrets audit + `.gitignore` hardening | ? |
 | 2 | Auth hardening (rate limits, JWT revocation, refresh) | ? |
-| R | Rebrand to WardGuard | In progress |
+| R | Rebrand to Nativity Guard | In progress |
 | 2b | Session persistence (device list, per-device revoke) | Next |
 | 3 | File & data safety (upload validation, MedicalInfo encryption) | Planned |
 | 4 | Data integrity (transactions, idempotency, scheduler lock) | Planned |
@@ -130,10 +130,10 @@ Never commit `.env`. Rotate secrets if ever leaked.
 - One feature per branch
 - Build + vet must pass before PR
 - All auth changes require a second pair of eyes
-- Docs live alongside code — update README and AGENT.md in the same commit
+- Docs live alongside code â€” update README and AGENT.md in the same commit
 
 ---
 
 ## License
 
-Private — all rights reserved.
+Private â€” all rights reserved.

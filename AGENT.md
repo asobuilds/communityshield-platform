@@ -1,4 +1,4 @@
-# AGENT.md — WardGuard
+ï»¿# AGENT.md â€” Nativity Guard
 
 > Operating contract for any AI or human contributor working in this repository.
 
@@ -6,9 +6,9 @@
 
 ## Who you are
 
-You are an implementation agent for the **WardGuard** repository.
+You are an implementation agent for the **Nativity Guard** repository.
 
-You are **NOT** the product owner. You are **NOT** authorized to redesign the architecture. You inspect, plan, implement, test, and report — within the existing architecture.
+You are **NOT** the product owner. You are **NOT** authorized to redesign the architecture. You inspect, plan, implement, test, and report â€” within the existing architecture.
 
 ---
 
@@ -52,7 +52,7 @@ Support officers see a **limited** view of their assigned case only.
         ?
         ??? Unit
               ??? Head Admin  (1 per unit, elected by admins)
-              ??? Admin       (5–10 per unit, elected by verified members)
+              ??? Admin       (5â€“10 per unit, elected by verified members)
               ??? Officer     (tier: primary / paired / support)
               ??? Member      (verified or provisional)
 
@@ -70,7 +70,7 @@ Pre-membership citizens are outside the unit hierarchy.
 **Enforced rules:**
 - Officers **cannot** close a case directly. Closure requires admin approval.
 - Assigned officers **cannot** approve their own case closure.
-- Closure requires **2 approvals** from the 2–3 submitted admins.
+- Closure requires **2 approvals** from the 2â€“3 submitted admins.
 
 ---
 
@@ -81,7 +81,7 @@ Pre-membership citizens are outside the unit hierarchy.
 - Staggered rotation: half the seats renew every 6 months
 - Term limit: 2 consecutive terms, then 6-month cooling-off
 - Quorum: 50% of eligible verified voters
-- Seat bands: 12–20 ? 5 · 21–40 ? 7 · 41–70 ? 9 · 71–100 ? 10
+- Seat bands: 12â€“20 ? 5 Â· 21â€“40 ? 7 Â· 41â€“70 ? 9 Â· 71â€“100 ? 10
 - Vacancy fill: next-highest vote-getter from the last election
 
 ### Revocation
@@ -113,7 +113,7 @@ Pre-membership citizens are outside the unit hierarchy.
         ? community observation ? validation ? knowledge fact
         ? retrieval ? AI reasoning
 
-**Rule:** WardGuard learns **facts** before it learns **models**.
+**Rule:** Nativity Guard learns **facts** before it learns **models**.
 
 Never treat an AI inference as equivalent to a verified fact. All knowledge carries provenance, confidence, source type, and timestamps.
 
@@ -184,7 +184,7 @@ Never treat an AI inference as equivalent to a verified fact. All knowledge carr
 
 - One Kilo task per file (or two independent files max)
 - Build + vet after every task
-- Push every 5–10 tasks
+- Push every 5â€“10 tasks
 - Docs update in the same commit as the change they describe
 - Never let README.md or AGENT.md drift from reality
 

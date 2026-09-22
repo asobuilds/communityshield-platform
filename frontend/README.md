@@ -1,6 +1,6 @@
-# WardGuard — Frontend
+﻿# Nativity Guard — Frontend
 
-React 19 + Vite + TypeScript client for WardGuard. See the repository root `README.md` for the full project overview and `frontReadme.md` / `frontagent.md` in this directory for the frontend feature map and design contract.
+React 19 + Vite + TypeScript client for Nativity Guard. See the repository root `README.md` for the full project overview and `frontReadme.md` / `frontagent.md` in this directory for the frontend feature map and design contract.
 
 ## Quick start
 
@@ -13,10 +13,10 @@ Mocks are on by default — every screen works with no backend required.
 
 Sign in with any of these (password: `password`):
 
-- `citizen@wardguard.ng`
-- `officer@wardguard.ng`
-- `admin@wardguard.ng`
-- `super@wardguard.ng`
+- `citizen@nativityguard.ng`
+- `officer@nativityguard.ng`
+- `admin@nativityguard.ng`
+- `super@nativityguard.ng`
 
 ## Build
 
