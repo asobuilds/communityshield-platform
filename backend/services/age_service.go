@@ -79,7 +79,7 @@ func (s *AgeService) ApplyAgeOverride(in AgeOverrideInput) (*models.User, *model
 		if parsed.After(now) {
 			return nil, nil, errors.New("Date of birth cannot be in the future")
 		}
-		age := yearsBetween(parsed, now)
+		age := YearsBetween(parsed, now)
 		if age > 120 {
 			return nil, nil, errors.New("Date of birth is not valid")
 		}
@@ -108,7 +108,8 @@ func (s *AgeService) ApplyAgeOverride(in AgeOverrideInput) (*models.User, *model
 	return &user, &audit, nil
 }
 
-func yearsBetween(dob, now time.Time) int {
+// YearsBetween returns the number of whole years between dob and now.
+func YearsBetween(dob, now time.Time) int {
 	age := now.Year() - dob.Year()
 	if now.Month() < dob.Month() || (now.Month() == dob.Month() && now.Day() < dob.Day()) {
 		age--
@@ -140,7 +141,7 @@ func (s *AgeService) RecomputeMinorStatuses() {
 		if r.Exception || r.DateOfBirth == nil {
 			continue
 		}
-		age := yearsBetween(*r.DateOfBirth, now)
+		age := YearsBetween(*r.DateOfBirth, now)
 		var target string
 		if age >= 18 {
 			target = "adult"

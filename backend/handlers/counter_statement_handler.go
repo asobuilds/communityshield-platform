@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"security-solution/config"
 	"security-solution/models"
@@ -150,7 +153,13 @@ func GetCounterStatement(c *gin.Context) {
 	}
 
 	var stmt models.CounterStatement
-	_ = config.DB.Where("case_id = ?", caseID).First(&stmt)
+	if err := config.DB.Where("case_id = ?", caseID).First(&stmt).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("counter-statement: lookup failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "lookup failed"})
+			return
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"caseId":    caseID,

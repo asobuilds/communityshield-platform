@@ -174,7 +174,7 @@ func validateDOB(dobStr string) (time.Time, string, error) {
 	if parsed.After(now) {
 		return time.Time{}, "", errors.New("Date of birth cannot be in the future")
 	}
-	age := yearsBetween(parsed, now)
+	age := services.YearsBetween(parsed, now)
 	if age > 120 {
 		return time.Time{}, "", errors.New("Date of birth is not valid")
 	}
@@ -186,14 +186,6 @@ func validateDOB(dobStr string) (time.Time, string, error) {
 		minorStatus = "minor"
 	}
 	return parsed, minorStatus, nil
-}
-
-func yearsBetween(dob, now time.Time) int {
-	age := now.Year() - dob.Year()
-	if now.Month() < dob.Month() || (now.Month() == dob.Month() && now.Day() < dob.Day()) {
-		age--
-	}
-	return age
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {

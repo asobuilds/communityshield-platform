@@ -34,8 +34,8 @@ func BayesianScore(sum float64, count int64) float64 {
 	return (sum + BayesianPriorMean*BayesianPriorCount) / denom
 }
 
-// TierForOfficer maps a Bayesian score + count to a tier label.
-func TierForOfficer(score float64, count int64) string {
+// tierForScore maps a Bayesian score + count to a tier label.
+func tierForScore(score float64, count int64) string {
 	switch {
 	case count >= 500 && score >= 4.8:
 		return "diamond"
@@ -50,6 +50,11 @@ func TierForOfficer(score float64, count int64) string {
 	default:
 		return "unranked"
 	}
+}
+
+// TierForOfficer maps a Bayesian score + count to a tier label.
+func TierForOfficer(score float64, count int64) string {
+	return tierForScore(score, count)
 }
 
 // SubmitRatingRequest is the input to SubmitRating.
