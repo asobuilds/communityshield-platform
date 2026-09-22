@@ -1,4 +1,4 @@
-package handlers
+﻿package handlers
 
 import (
 	"net/http"
@@ -43,7 +43,7 @@ func GetTwitterFeed(c *gin.Context) {
 		"posts": []gin.H{
 			{
 				"id":       "1",
-				"content":  "WardGuard is now live! 🚀",
+				"content":  "Nativity Guard is now live! 🚀",
 				"postedAt": "2024-01-15T10:00:00Z",
 			},
 		},

@@ -1,4 +1,4 @@
-\timing on
+﻿\timing on
 
 BEGIN;
 
@@ -58,7 +58,7 @@ WITH unit_ids AS MATERIALIZED (SELECT array_agg(id) AS ids FROM security_units),
      user_ids AS MATERIALIZED (SELECT array_agg(id) AS ids FROM users)
 INSERT INTO financial_ledgers (reference, unit_id, year, sequence_number, direction, entry_type, amount, currency, status, created_by, created_at)
 SELECT
-  'WG-' || (2024 + (i % 3)) || '-' || LPAD(i::text, 8, '0'),
+  'NG-' || (2024 + (i % 3)) || '-' || LPAD(i::text, 8, '0'),
   (SELECT ids[1 + (i % array_length(ids, 1))] FROM unit_ids),
   2024 + (i % 3),
   i,

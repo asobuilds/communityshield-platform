@@ -1,4 +1,4 @@
-package handlers
+﻿package handlers
 
 import (
 	"crypto/tls"
@@ -83,17 +83,17 @@ func SendEmail(to, subject, body string) error {
 }
 
 func SendPasswordResetEmail(to, resetLink string) error {
-	subject := "🔐 Reset Your WardGuard Password"
+	subject := "🔐 Reset Your Nativity Guard Password"
 	body := fmt.Sprintf(`
 		<h1>Password Reset</h1>
-		<p>You requested a password reset for your WardGuard account.</p>
+		<p>You requested a password reset for your Nativity Guard account.</p>
 		<p>Click the link below to reset your password:</p>
 		<p><a href="%s">%s</a></p>
 		<p>This link expires in 1 hour.</p>
 		<br>
 		<p>If you didn't request this, please ignore this email.</p>
 		<p>Stay safe,</p>
-		<p><strong>WardGuard Team</strong></p>
+		<p><strong>Nativity Guard Team</strong></p>
 	`, resetLink, resetLink)
 	return SendEmail(to, subject, body)
 }
@@ -106,9 +106,9 @@ func SendCaseStatusEmail(to, caseTitle, status, caseURL string) error {
 		<p><strong>New Status:</strong> %s</p>
 		<p>View your case: <a href="%s">%s</a></p>
 		<br>
-		<p>Thank you for using WardGuard.</p>
+		<p>Thank you for using Nativity Guard.</p>
 		<p>Stay safe,</p>
-		<p><strong>WardGuard Team</strong></p>
+		<p><strong>Nativity Guard Team</strong></p>
 	`, caseTitle, status, caseURL, caseURL)
 	return SendEmail(to, subject, body)
 }
@@ -123,7 +123,7 @@ func SendSOSConfirmationEmail(to, unitName, message string) error {
 		<p>A security unit has been dispatched to your location.</p>
 		<br>
 		<p>Stay safe,</p>
-		<p><strong>WardGuard Team</strong></p>
+		<p><strong>Nativity Guard Team</strong></p>
 	`, unitName, message)
 	return SendEmail(to, subject, body)
 }
@@ -136,23 +136,23 @@ func SendAnnouncementEmail(to, title, content string) error {
 		<p>%s</p>
 		<br>
 		<p>Stay informed, stay safe.</p>
-		<p><strong>WardGuard Team</strong></p>
+		<p><strong>Nativity Guard Team</strong></p>
 	`, title, content)
 	return SendEmail(to, subject, body)
 }
 
 // SendOTPEmail sends an OTP code via email
 func SendOTPEmail(to, code string) error {
-	subject := "🔐 WardGuard - OTP Verification"
+	subject := "🔐 Nativity Guard - OTP Verification"
 	body := fmt.Sprintf(`
 		<h1>OTP Verification</h1>
-		<p>Your OTP code for WardGuard is:</p>
+		<p>Your OTP code for Nativity Guard is:</p>
 		<h2 style="font-size: 32px; letter-spacing: 4px; background: #f0f0f0; padding: 12px; text-align: center;">%s</h2>
 		<p>This code expires in 10 minutes.</p>
 		<br>
 		<p>If you didn't request this, please ignore this email.</p>
 		<p>Stay safe,</p>
-		<p><strong>WardGuard Team</strong></p>
+		<p><strong>Nativity Guard Team</strong></p>
 	`, code)
 	return SendEmail(to, subject, body)
 }
@@ -176,7 +176,7 @@ func (n *emailNotifier) NotifySMS(toPhone, code string) {
 	if toPhone == "" {
 		return
 	}
-	_ = services.SendSMS(toPhone, "Your WardGuard reset code: "+code+" (valid 1 hour)")
+	_ = services.SendSMS(toPhone, "Your Nativity Guard reset code: "+code+" (valid 1 hour)")
 }
 
 // NewEmailNotifier returns a services.ResetNotifier backed by SMTP/SMS.
@@ -189,17 +189,17 @@ func NewEmailNotifier() *emailNotifier {
 // even before a BASE_URL is configured. TODO: once BASE_URL is set,
 // build a clickable reset link and reuse SendPasswordResetEmail.
 func SendPasswordResetTokenEmail(to, token string) error {
-	subject := "🔐 Reset Your WardGuard Password"
+	subject := "🔐 Reset Your Nativity Guard Password"
 	body := fmt.Sprintf(`
 		<h1>Password Reset</h1>
-		<p>You requested a password reset for your WardGuard account.</p>
+		<p>You requested a password reset for your Nativity Guard account.</p>
 		<p>Your reset token is:</p>
 		<h2 style="font-size: 28px; letter-spacing: 2px; background: #f0f0f0; padding: 12px; text-align: center; font-family: monospace;">%s</h2>
 		<p>This token expires in 1 hour.</p>
 		<br>
 		<p>If you didn't request this, please ignore this email.</p>
 		<p>Stay safe,</p>
-		<p><strong>WardGuard Team</strong></p>
+		<p><strong>Nativity Guard Team</strong></p>
 	`, token)
 	return SendEmail(to, subject, body)
 }

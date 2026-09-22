@@ -1,4 +1,4 @@
-package handlers
+﻿package handlers
 
 import (
 	"net/http"
@@ -11,9 +11,9 @@ import (
 // Designed to be rendered as the public /about page.
 func GetBlueprint(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"name":    "WardGuard",
+		"name":    "Nativity Guard",
 		"tagline": "Community safety and governance infrastructure for Nigerian neighborhoods.",
-		"purpose": "WardGuard connects citizens, security units, officers, and administrators through one auditable workflow: report → assign → dispatch → investigate → review → close. It is designed to promote accountability, prevent vigilantism, and keep sensitive case intelligence restricted to authorized personnel.",
+		"purpose": "Nativity Guard connects citizens, security units, officers, and administrators through one auditable workflow: report → assign → dispatch → investigate → review → close. It is designed to promote accountability, prevent vigilantism, and keep sensitive case intelligence restricted to authorized personnel.",
 
 		"principles": []gin.H{
 			{"title": "Unit access is NOT case access", "body": "A security unit does not automatically see every case in its jurisdiction — only cases assigned to specific officers, or submitted to specific administrators."},
@@ -55,10 +55,10 @@ func GetBlueprint(c *gin.Context) {
 		},
 
 		"finance": gin.H{
-			"unit_model": "Units publish their own bank account details. Donors transfer directly — WardGuard never touches the money.",
-			"ledger":     "Every donation and expense is stamped with a permanent, unique reference (WG-YYYY-NNNNNNNN). Entries are append-only.",
+			"unit_model": "Units publish their own bank account details. Donors transfer directly — Nativity Guard never touches the money.",
+			"ledger":     "Every donation and expense is stamped with a permanent, unique reference (NG-YYYY-NNNNNNNN). Entries are append-only.",
 			"yearly_cycle": "Each December, the year closes with a frozen snapshot: total in, total out, net, top categories.",
-			"platform_donation": "WardGuard itself accepts donations for maintenance via a separate public endpoint.",
+			"platform_donation": "Nativity Guard itself accepts donations for maintenance via a separate public endpoint.",
 		},
 
 		"governance": gin.H{
@@ -100,8 +100,8 @@ func GetBlueprint(c *gin.Context) {
 		},
 
 		"contact": gin.H{
-			"support_email": "support@wardguard.app",
-			"platform_url":  "https://wardguard.app",
+			"support_email": "support@nativityguard.app",
+			"platform_url":  "https://nativityguard.app",
 		},
 	})
 }

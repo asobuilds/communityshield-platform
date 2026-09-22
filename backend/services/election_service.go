@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"errors"
@@ -149,7 +149,7 @@ func (s *ElectionService) CloseAdminElection(electionID uuid.UUID) error {
 
 	now := time.Now().UTC()
 
-	// Tie-break order (matches WardGuard's fairness rule):
+	// Tie-break order (matches Nativity Guard's fairness rule):
 	//   1. Higher vote count wins
 	//   2. Longer unit membership wins (earlier joined_at)
 	//   3. Older platform account wins (earlier user_created)

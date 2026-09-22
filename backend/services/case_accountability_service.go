@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"errors"
@@ -371,7 +371,7 @@ func StartCaseAccountabilityWorker() {
 		}
 	}()
 
-	log.Println("WardGuard case accountability worker started")
+	log.Println("Nativity Guard case accountability worker started")
 }
 
 func GetCaseAccountability(caseID uuid.UUID) (*CaseAccountability, error) {

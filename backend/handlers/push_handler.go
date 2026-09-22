@@ -1,4 +1,4 @@
-package handlers
+﻿package handlers
 
 import (
 	"net/http"
@@ -105,7 +105,7 @@ func TestNotification(c *gin.Context) {
 		notification := models.Notification{
 			UserID:  userObj.ID,
 			Title:   "🔔 Test Notification",
-			Message: "Your device is connected to WardGuard!",
+			Message: "Your device is connected to Nativity Guard!",
 			Type:    "test",
 			Status:  "sent",
 		}

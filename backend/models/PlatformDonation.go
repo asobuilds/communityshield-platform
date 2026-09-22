@@ -1,4 +1,4 @@
-package models
+﻿package models
 
 import (
 	"time"
@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// PlatformDonation represents a donation made to WardGuard itself
+// PlatformDonation represents a donation made to Nativity Guard itself
 // (not to a unit). Confirmed by a super admin. Optionally public.
 type PlatformDonation struct {
 	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
