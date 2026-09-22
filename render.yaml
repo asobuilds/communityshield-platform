@@ -1,7 +1,7 @@
-services:
+﻿services:
   # Backend Service
   - type: web
-    name: communityshield-backend
+    name: nativityguard-backend
     runtime: go
     rootDir: backend
     buildCommand: go build -o main .
@@ -13,28 +13,28 @@ services:
         value: release
       - key: DATABASE_URL
         fromDatabase:
-          name: communityshield-db
+          name: nativityguard-db
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: OPENROUTER_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        value: https://communityshield-frontend.onrender.com
+        value: https://nativityguard-frontend.onrender.com
     healthCheckPath: /health
     numInstances: 1
     plan: free
 
   # Frontend Service
   - type: web
-    name: communityshield-frontend
+    name: nativityguard-frontend
     runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://communityshield-backend.onrender.com
+        value: https://nativityguard-backend.onrender.com
     headers:
       - path: /assets/*
         name: Cache-Control
@@ -46,7 +46,7 @@ services:
 
   # PostgreSQL Database
   - type: postgresql
-    name: communityshield-db
+    name: nativityguard-db
     plan: free
-    databaseName: communityshield
-    user: communityshield
+    databaseName: nativityguard
+    user: nativityguard

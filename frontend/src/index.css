@@ -1,8 +1,8 @@
-@import 'tailwindcss';
+﻿@import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
 /*
-  CommunityShield — "Quiet Command" design tokens (Tailwind v4 CSS-first).
+  Nativity Guard — "Quiet Command" design tokens (Tailwind v4 CSS-first).
   Deep operational surfaces, one authoritative signal accent, red reserved
   strictly for emergency. See frontend/frontagent.md for the rationale.
 */
