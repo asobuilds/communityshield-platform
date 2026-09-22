@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"time"
 
 	"github.com/google/uuid"
@@ -355,6 +356,11 @@ func RunCaseAccountabilityCheck() {
 
 func StartCaseAccountabilityWorker() {
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("case-accountability: worker panic: %v\n%s", r, debug.Stack())
+			}
+		}()
 		RunCaseAccountabilityCheck()
 
 		ticker := time.NewTicker(1 * time.Hour)
