@@ -17,7 +17,7 @@ type AuditLog struct {
 	IPAddress  string         `json:"ipAddress"`
 	UserAgent  string         `json:"userAgent"`
 	Timestamp  time.Time      `json:"timestamp"`
-	CreatedAt  time.Time      `json:"createdAt"`
+	CreatedAt  time.Time      `gorm:"index:idx_audit_logs_created_at,sort:desc" json:"createdAt"`
 	UpdatedAt  time.Time      `json:"updatedAt"`
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 

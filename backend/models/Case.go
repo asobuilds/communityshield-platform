@@ -8,8 +8,8 @@ import (
 
 type Case struct {
 	ID              uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UnitID          uuid.UUID  `gorm:"type:uuid;not null" json:"unitId"`
-	ReportedBy      uuid.UUID  `gorm:"type:uuid;not null" json:"reportedBy"`
+	UnitID          uuid.UUID  `gorm:"type:uuid;not null;index:idx_cases_unit_created,priority:1" json:"unitId"`
+	ReportedBy      uuid.UUID  `gorm:"type:uuid;not null;index:idx_cases_reported_by" json:"reportedBy"`
 	AssignedTo      *uuid.UUID `gorm:"type:uuid" json:"assignedTo,omitempty"`
 	Title           string     `gorm:"not null" json:"title"`
 	Description     string     `gorm:"type:text;not null" json:"description"`
@@ -17,10 +17,10 @@ type Case struct {
 	Location        string     `json:"location"`
 	Latitude        float64    `json:"latitude"`
 	Longitude       float64    `json:"longitude"`
-	Status          string     `gorm:"default:pending" json:"status"`
+	Status          string     `gorm:"default:pending;index:idx_cases_public_list,priority:2" json:"status"`
 	Priority        string     `gorm:"default:medium" json:"priority"`
 	TransferDetails string     `json:"transferDetails,omitempty"`
-	IsPublic        bool       `gorm:"default:true" json:"isPublic"`
+	IsPublic        bool       `gorm:"default:true;index:idx_cases_public_list,priority:1" json:"isPublic"`
 
 	// NEW FIELDS FOR AUTOMATION
 	TrackingID    string     `gorm:"unique;not null" json:"trackingId"`
@@ -36,7 +36,7 @@ type Case struct {
 	ApprovedBy    *uuid.UUID `gorm:"type:uuid" json:"approvedBy,omitempty"`
 	FinalReport   string     `gorm:"type:text" json:"finalReport"`
 
-	CreatedAt time.Time      `json:"createdAt"`
+	CreatedAt time.Time      `gorm:"index:idx_cases_unit_created,priority:2,sort:desc;index:idx_cases_public_list,priority:3" json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
