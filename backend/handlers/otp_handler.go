@@ -70,7 +70,9 @@ func SendOTP(c *gin.Context) {
 			ExpiresAt: expiresAt,
 			Verified:  false,
 		}
-		config.DB.Create(&otp)
+		if err := config.DB.Create(&otp).Error; err != nil {
+			log.Printf("otp create failed: %v", err)
+		}
 	}()
 
 	// Send SMS in background (non-blocking)
@@ -121,8 +123,12 @@ func VerifyOTP(c *gin.Context) {
 		if time.Now().Before(cacheEntry.ExpiresAt) && cacheEntry.Code == input.Code {
 			// Valid OTP - mark user as verified
 			go func() {
-				config.DB.Model(&models.User{}).Where("id = ?", userID).Update("status", "verified")
-				config.DB.Where("user_id = ? AND code = ?", userID, input.Code).Delete(&models.OTP{})
+				if err := config.DB.Model(&models.User{}).Where("id = ?", userID).Update("status", "verified").Error; err != nil {
+					log.Printf("otp update failed: %v", err)
+				}
+				if err := config.DB.Where("user_id = ? AND code = ?", userID, input.Code).Delete(&models.OTP{}).Error; err != nil {
+					log.Printf("otp delete failed: %v", err)
+				}
 			}()
 			delete(otpCache, userID.String())
 			c.JSON(http.StatusOK, gin.H{"message": "OTP verified successfully"})
@@ -195,7 +201,9 @@ func ResendOTP(c *gin.Context) {
 			ExpiresAt: expiresAt,
 			Verified:  false,
 		}
-		config.DB.Create(&otp)
+		if err := config.DB.Create(&otp).Error; err != nil {
+			log.Printf("otp create failed: %v", err)
+		}
 	}()
 
 	// Get user info

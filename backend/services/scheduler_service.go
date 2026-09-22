@@ -140,9 +140,15 @@ func (s *SchedulerService) Start(interval time.Duration) {
 }
 
 func (s *SchedulerService) CleanupExpiredSessions() {
-	_ = NewSessionService().CleanupExpired()
-	_ = NewRefreshTokenService().CleanupExpired()
-	_ = NewTokenService().CleanupExpired()
+	if err := NewSessionService().CleanupExpired(); err != nil {
+		log.Printf("scheduler: session cleanup failed: %v", err)
+	}
+	if err := NewRefreshTokenService().CleanupExpired(); err != nil {
+		log.Printf("scheduler: refresh-token cleanup failed: %v", err)
+	}
+	if err := NewTokenService().CleanupExpired(); err != nil {
+		log.Printf("scheduler: token cleanup failed: %v", err)
+	}
 	_ = config.DB.Where("expires_at < ?", time.Now().UTC()).Delete(&models.IdempotencyRecord{}).Error
 }
 
@@ -175,7 +181,9 @@ func (s *SchedulerService) CloseFinishedFinancialYears() {
 
 // RecomputeRankings refreshes officer and unit ranking scores from current ratings.
 func (s *SchedulerService) RecomputeRankings() {
-	_ = NewRankingService().RecomputeAll()
+	if err := NewRankingService().RecomputeAll(); err != nil {
+		log.Printf("scheduler: ranking recompute failed: %v", err)
+	}
 }
 
 // EscalateStaleAppeals flags unresolved appeals past the 30-day threshold and
