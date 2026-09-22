@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -189,8 +190,24 @@ func GetAllCases(c *gin.Context) {
 	}
 	userObj := user.(*models.User)
 
+	limit := 50
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+			if limit > 100 {
+				limit = 100
+			}
+		}
+	}
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
 	var cases []models.Case
-	query := config.DB.Preload("Evidence").Preload("Progress").Order("created_at desc")
+	query := config.DB.Preload("Evidence").Preload("Progress").Order("created_at desc").Limit(limit).Offset((page - 1) * limit)
 
 	if userObj.Role == "citizen" {
 		query = query.Where("reported_by = ?", userObj.ID)

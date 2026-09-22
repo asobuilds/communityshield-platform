@@ -93,8 +93,7 @@ func (s *RankingService) recomputeOneUnit(unitID uuid.UUID, now time.Time) {
 	}
 
 	// 2. Direct unit ratings
-	_, directCount, directBayes := s.Ratings.AggregateForUnit(unitID)
-	dSum, _, _ := s.Ratings.AggregateForUnit(unitID)
+	dSum, directCount, directBayes := s.Ratings.AggregateForUnit(unitID)
 	var directAvg float64
 	if directCount > 0 {
 		directAvg = dSum / float64(directCount)
