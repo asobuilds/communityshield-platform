@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+﻿import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { Shield } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -54,14 +54,14 @@ export function LoginPage() {
       <div className="hidden flex-col justify-between bg-surface p-10 lg:flex">
         <div className="flex items-center gap-2">
           <Shield className="size-7 text-signal" aria-hidden />
-          <span className="text-base font-bold tracking-wide text-ink">COMMUNITYSHIELD</span>
+          <span className="text-base font-bold tracking-wide text-ink">NATIVITY GUARD</span>
         </div>
         <div>
           <h1 className="max-w-md text-3xl font-semibold leading-tight text-ink">
             Every report answered. Every case accounted for.
           </h1>
           <p className="mt-3 max-w-md text-sm text-ink-muted">
-            CommunityShield connects citizens, security units and administrators on one operational
+            Nativity Guard connects citizens, security units and administrators on one operational
             record — from the first SOS to the final report.
           </p>
         </div>
@@ -75,7 +75,7 @@ export function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="mb-6 flex items-center gap-2 lg:hidden">
             <Shield className="size-6 text-signal" aria-hidden />
-            <span className="text-sm font-bold tracking-wide text-ink">COMMUNITYSHIELD</span>
+            <span className="text-sm font-bold tracking-wide text-ink">NATIVITY GUARD</span>
           </div>
 
           <h2 className="text-xl font-semibold text-ink">Sign in</h2>

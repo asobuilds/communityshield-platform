@@ -1,4 +1,4 @@
-import { API_BASE } from '@/lib/apiClient'
+﻿import { API_BASE } from '@/lib/apiClient'
 import { matchRoute } from './adapter'
 import { handlers } from './handlers'
 
@@ -46,7 +46,7 @@ export function installMockApi(): () => void {
 
   // Surface the mock layer in the console so it is never mistaken for a live API.
   console.info(
-    '%c[CommunityShield]%c Mock API active — requests are served in-browser. Set VITE_USE_MOCKS=false to use the real API.',
+    '%c[Nativity Guard]%c Mock API active — requests are served in-browser. Set VITE_USE_MOCKS=false to use the real API.',
     'background:#3fbf7f;color:#0b0e14;padding:2px 6px;border-radius:3px;font-weight:600',
     'color:inherit',
   )
