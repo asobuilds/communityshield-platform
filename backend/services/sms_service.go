@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"log"
@@ -15,7 +15,7 @@ func SendSMS(phone, message string) error {
 // SendOTPSMS sends an OTP verification code via SMS
 func SendOTPSMS(phone, otpCode string) error {
 	phone = formatPhoneNumber(phone)
-	message := "Your WardGuard verification code is: " + otpCode + ". It expires in 10 minutes."
+	message := "Your Nativity Guard verification code is: " + otpCode + ". It expires in 10 minutes."
 	log.Printf("📱 OTP SMS to %s: %s", phone, message)
 	return nil
 }

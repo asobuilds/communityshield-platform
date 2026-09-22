@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"errors"
@@ -33,7 +33,7 @@ type LedgerEntryInput struct {
 }
 
 // Append writes a new ledger entry. Append-only: never updates or deletes.
-// Reference format: WG-YYYY-NNNNNNNN (year-scoped, monotonic).
+// Reference format: NG-YYYY-NNNNNNNN (year-scoped, monotonic).
 func (s *LedgerService) Append(entry LedgerEntryInput) (*models.FinancialLedger, error) {
 	if entry.UnitID == uuid.Nil {
 		return nil, errors.New("unitId is required")
@@ -78,7 +78,7 @@ func (s *LedgerService) appendWithRetry(entry LedgerEntryInput, remaining int) (
 			return err
 		}
 		ledger = &models.FinancialLedger{
-			Reference:      fmt.Sprintf("WG-%d-%08d", year, seq),
+			Reference:      fmt.Sprintf("NG-%d-%08d", year, seq),
 			UnitID:         entry.UnitID,
 			Year:           year,
 			SequenceNumber: seq,

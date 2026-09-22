@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"net/http"
@@ -33,7 +33,7 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 	}
 }
 
-// CanAccessCase enforces the WardGuard core rule: unit access is NOT case access.
+// CanAccessCase enforces the Nativity Guard core rule: unit access is NOT case access.
 //
 // Access levels (stored in context as "case_access_level"):
 //   - super_admin:     all cases

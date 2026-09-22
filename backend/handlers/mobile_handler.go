@@ -1,4 +1,4 @@
-package handlers
+﻿package handlers
 
 import (
 	"net/http"
@@ -21,7 +21,7 @@ func MobileAppConfig(c *gin.Context) {
 	userObj := user.(*models.User)
 
 	config := gin.H{
-		"appName": "WardGuard",
+		"appName": "Nativity Guard",
 		"version": "1.0.0",
 		"build":   "100",
 		"features": gin.H{

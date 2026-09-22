@@ -1,4 +1,4 @@
-package services
+﻿package services
 
 import (
 	"context"
@@ -258,8 +258,8 @@ func (s *SchedulerService) AnnounceOfficerOfTheWeek() {
 	news := models.News{
 		Title:       title,
 		Content:     content,
-		Source:      "WardGuard",
-		Author:      "WardGuard",
+		Source:      "Nativity Guard",
+		Author:      "Nativity Guard",
 		Category:    "officer_of_the_week",
 		Location:    unit.Name,
 		Sentiment:   "positive",

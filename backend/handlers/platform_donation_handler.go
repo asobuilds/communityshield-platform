@@ -1,4 +1,4 @@
-package handlers
+﻿package handlers
 
 import (
 	"net/http"
@@ -30,11 +30,11 @@ func GetPlatformDonationInfo(c *gin.Context) {
 		"bankName":      bankName,
 		"accountNumber": accountNumber,
 		"accountName":   accountName,
-		"purpose":       "Maintenance of WardGuard platform — servers, storage, development",
+		"purpose":       "Maintenance of Nativity Guard platform — servers, storage, development",
 	})
 }
 
-// CreatePlatformDonation records a pending donation to WardGuard.
+// CreatePlatformDonation records a pending donation to Nativity Guard.
 // Public endpoint — any visitor may submit. A super admin confirms later.
 func CreatePlatformDonation(c *gin.Context) {
 	var input struct {
