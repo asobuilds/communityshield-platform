@@ -4,8 +4,9 @@
     name: nativityguard-backend
     runtime: go
     rootDir: backend
-    buildCommand: go build -o main .
+    buildCommand: go build -o main . && go build -o migrate ./cmd/migrate
     startCommand: ./main
+    releaseCommand: ./migrate
     envVars:
       - key: PORT
         value: 8080
@@ -18,6 +19,10 @@
       - key: JWT_SECRET
         generateValue: true
       - key: OPENROUTER_API_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: SMS_WEBHOOK_SECRET
         sync: false
       - key: ALLOWED_ORIGINS
         value: https://nativityguard-frontend.onrender.com
@@ -35,6 +40,8 @@
     envVars:
       - key: VITE_API_URL
         value: https://nativityguard-backend.onrender.com
+      - key: VITE_USE_MOCKS
+        value: "false"
     headers:
       - path: /assets/*
         name: Cache-Control
