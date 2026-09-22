@@ -30,7 +30,7 @@ func (s *RankingService) RecomputeAllOfficers() error {
 
 	now := time.Now().UTC()
 	for _, officerID := range officerIDs {
-		sum, count, bayes := s.Ratings.AggregateForOfficer(officerID)
+		_, count, bayes := s.Ratings.AggregateForOfficer(officerID)
 		tier := TierForOfficer(bayes, count)
 
 		var officer models.Officer
@@ -58,7 +58,6 @@ func (s *RankingService) RecomputeAllOfficers() error {
 			}
 			config.DB.Create(&score)
 		}
-		_ = sum
 	}
 	return nil
 }
@@ -153,20 +152,7 @@ func (s *RankingService) recomputeOneUnit(unitID uuid.UUID, now time.Time) {
 
 // TierForUnit maps a composite score + combined count to a tier label.
 func TierForUnit(score float64, count int64) string {
-	switch {
-	case count >= 500 && score >= 4.8:
-		return "diamond"
-	case count >= 150 && score >= 4.6:
-		return "platinum"
-	case count >= 50 && score >= 4.3:
-		return "gold"
-	case count >= 20 && score >= 4.0:
-		return "silver"
-	case count >= 5 && score >= 3.5:
-		return "bronze"
-	default:
-		return "unranked"
-	}
+	return tierForScore(score, count)
 }
 
 // RecomputeAll rebuilds every officer score and every unit score.
