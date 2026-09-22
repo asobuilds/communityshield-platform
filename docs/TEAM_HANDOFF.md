@@ -1,4 +1,4 @@
-# WardGuard — Frontend Build Handoff
+﻿# Nativity Guard — Frontend Build Handoff
 
 > Everything the backend offers today. Endpoint reference, auth flow,
 > role matrix, and the patterns the frontend must follow.

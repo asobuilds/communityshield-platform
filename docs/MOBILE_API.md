@@ -1,7 +1,7 @@
-# CommunityShield Mobile API
+﻿# Nativity Guard Mobile API
 
 ## Base URL
-https://communityshield-backend.onrender.com/api/v1
+https://nativityguard-backend.onrender.com/api/v1
 
 ## Auth
 Add this header to all requests:
@@ -11,7 +11,7 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 ### GET /mobile/config
 Returns app configuration
-Response: { "config": { "appName": "CommunityShield", "version": "1.0.0" } }
+Response: { "config": { "appName": "Nativity Guard", "version": "1.0.0" } }
 
 ### GET /mobile/dashboard
 Returns user dashboard data
