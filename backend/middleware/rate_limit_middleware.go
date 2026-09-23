@@ -69,6 +69,7 @@ var (
 	voteLimiter    = newRateLimiter(20, 1*time.Minute)  // 20 votes/min per user
 	inviteLimiter  = newRateLimiter(10, 1*time.Hour)    // 10 invites/hour per user
 	generalLimiter = newRateLimiter(200, 1*time.Minute) // 200 req/min per IP
+	mapLimiter     = newRateLimiter(60, 1*time.Minute)  // 60 req/min per IP
 )
 
 // makeKey returns the identity used for limiting: user_id if present, otherwise client IP.
@@ -140,6 +141,18 @@ func RateLimitGeneral() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := "gen:" + c.ClientIP()
 		if ok, wait := generalLimiter.allow(key); !ok {
+			reject(c, wait)
+			return
+		}
+		c.Next()
+	}
+}
+
+// RateLimitMap applies a per-IP throttle to map and location endpoints.
+func RateLimitMap() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := "map:" + c.ClientIP()
+		if ok, wait := mapLimiter.allow(key); !ok {
 			reject(c, wait)
 			return
 		}
