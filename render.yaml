@@ -4,9 +4,8 @@ services:
     name: nativityguard-backend
     runtime: go
     rootDir: backend
-    buildCommand: go build -o main . && go build -o migrate ./cmd/migrate
+    buildCommand: go build -o main .
     startCommand: ./main
-    preDeployCommand: ./migrate
     envVars:
       - key: PORT
         value: 8080
