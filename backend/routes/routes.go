@@ -16,10 +16,10 @@ func SetupRoutes(router *gin.Engine) {
 	api := router.Group("/api/v1")
 	{
 		// Public routes (no authentication required)
-		api.GET("/public/cases", handlers.GetPublicCases)
-		api.GET("/public/units", handlers.GetPublicUnits)
+		api.GET("/public/cases", middleware.RateLimitGeneral(), handlers.GetPublicCases)
+		api.GET("/public/units", middleware.RateLimitGeneral(), handlers.GetPublicUnits)
 		api.GET("/public/units/:id/bank-accounts", handlers.GetPublicBankAccounts)
-		api.GET("/public/units/:id/ledger", handlers.GetPublicUnitLedger)
+		api.GET("/public/units/:id/ledger", middleware.RateLimitGeneral(), handlers.GetPublicUnitLedger)
 		api.GET("/public/units/:id/financial-years", handlers.GetPublicFinancialYears)
 		api.GET("/public/units/:id/financial-summary", handlers.GetCurrentYearSummary)
 		api.GET("/public/platform/donation-info", handlers.GetPlatformDonationInfo)
@@ -27,8 +27,8 @@ func SetupRoutes(router *gin.Engine) {
 		api.GET("/public/platform/supporters", handlers.ListPublicSupporters)
 		api.GET("/public/leaderboard", handlers.GetPublicLeaderboard)
 		api.GET("/public/units/suggest", handlers.SuggestUnits)
-		api.GET("/public/officers/:id/rating", handlers.GetOfficerRating)
-		api.GET("/public/units/:id/rating", handlers.GetUnitRating)
+		api.GET("/public/officers/:id/rating", middleware.RateLimitGeneral(), handlers.GetOfficerRating)
+		api.GET("/public/units/:id/rating", middleware.RateLimitGeneral(), handlers.GetUnitRating)
 		api.GET("/public/blueprint", handlers.GetBlueprint)
 		api.GET("/public/units/:id/auth", handlers.GetPublicUnitAuth)
 		api.POST("/invites/validate", middleware.RateLimitAuth(), handlers.ValidateInvite)
@@ -65,15 +65,15 @@ func SetupRoutes(router *gin.Engine) {
 		// Unit routes
 		units := api.Group("/units")
 		{
-			units.GET("/nearby", handlers.GetNearbyUnits)
-			units.GET("/by-location", handlers.GetUnitsByLocation)
-			units.GET("", handlers.GetAllUnits)
+			units.GET("/nearby", middleware.AuthMiddleware(), middleware.RateLimitMap(), handlers.GetNearbyUnits)
+			units.GET("/by-location", middleware.AuthMiddleware(), middleware.RateLimitMap(), handlers.GetUnitsByLocation)
+			units.GET("", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetAllUnits)
 
 			units.POST("/apply", middleware.AuthMiddleware(), handlers.ApplyForSecurityUnit)
 			units.GET("/my-memberships", middleware.AuthMiddleware(), handlers.GetMyUnitMembership)
 			units.POST("/government-id", middleware.AuthMiddleware(), handlers.SubmitGovernmentID)
 
-			units.GET("/:id", handlers.GetUnitByID)
+			units.GET("/:id", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetUnitByID)
 			units.POST("", middleware.AuthMiddleware(), handlers.CreateUnit)
 			units.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateUnit)
 units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenAdminElection)
@@ -81,7 +81,7 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
     units.POST("/:id/revocations", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenRevocationCycle)
     units.GET("/:id/auth", middleware.AuthMiddleware(), handlers.GetUnitAuth)
     units.PUT("/:id/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
-    units.GET("/:id/officers/ranking", middleware.AuthMiddleware(), handlers.GetOfficersInUnitRanking)
+    units.GET("/:id/officers/ranking", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetOfficersInUnitRanking)
     units.GET("/:id/governance-audit", middleware.AuthMiddleware(), handlers.GetGovernanceAudit)
 	}
 
@@ -114,10 +114,10 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 		// Case routes
 		cases := api.Group("/cases")
 		{
-			cases.GET("", middleware.AuthMiddleware(), handlers.GetAllCases)
+			cases.GET("", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetAllCases)
 			cases.POST("", middleware.AuthMiddleware(), handlers.CreateCase)
 			cases.GET("/analytics", middleware.AuthMiddleware(), handlers.GetCaseAnalytics)
-		cases.GET("/:id", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetCaseByID)
+		cases.GET("/:id", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), middleware.CanAccessCase, handlers.GetCaseByID)
 		cases.PUT("/:id", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.UpdateCaseStatus)
 		cases.POST("/:id/timeline", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.AddCaseTimeline)
 		cases.GET("/:id/timeline", middleware.AuthMiddleware(), middleware.CanAccessCase, handlers.GetCaseTimeline)
@@ -157,7 +157,7 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 		// Location routes
 		location := api.Group("/location")
 		{
-			location.POST("", middleware.AuthMiddleware(), handlers.UpdateMyLocation)
+			location.POST("", middleware.AuthMiddleware(), middleware.RateLimitMap(), handlers.UpdateMyLocation)
 		}
 
 		// Evidence routes
@@ -181,9 +181,9 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 		sos := api.Group("/sos")
 		{
 			sos.POST("/send", middleware.AuthMiddleware(), handlers.SendSOSAlert)
-			sos.GET("", middleware.AuthMiddleware(), handlers.GetSOSAlerts)
-			sos.GET("/my", middleware.AuthMiddleware(), handlers.GetUserSOSAlerts)
-			sos.GET("/:id", middleware.AuthMiddleware(), handlers.GetSOSAlertByID)
+			sos.GET("", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetSOSAlerts)
+			sos.GET("/my", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetUserSOSAlerts)
+			sos.GET("/:id", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetSOSAlertByID)
 			sos.PUT("/:id/status", middleware.AuthMiddleware(), handlers.UpdateSOSAlertStatus)
 		}
 
@@ -241,19 +241,19 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 		{
 			ai.POST("/chatbot", middleware.AuthMiddleware(), handlers.AIChatbot)
 			ai.POST("/analyze-image", middleware.AuthMiddleware(), handlers.AIAnalyzeImage)
-			ai.POST("/analyze-location", middleware.AuthMiddleware(), handlers.AIAnalyzeLocation)
-			ai.POST("/map-insights", middleware.AuthMiddleware(), handlers.AIGetMapInsights)
+			ai.POST("/analyze-location", middleware.AuthMiddleware(), middleware.RateLimitMap(), handlers.AIAnalyzeLocation)
+			ai.POST("/map-insights", middleware.AuthMiddleware(), middleware.RateLimitMap(), handlers.AIGetMapInsights)
 			ai.POST("/security-warning", middleware.AuthMiddleware(), handlers.AIGenerateSecurityWarning)
 			ai.POST("/analyze-news", middleware.AuthMiddleware(), handlers.AIAnalyzeNews)
 			ai.POST("/smart-tips", middleware.AuthMiddleware(), handlers.AIGetSmartTips)
-			ai.POST("/predict-hotspots", middleware.AuthMiddleware(), handlers.AIPredictHotspots)
+			ai.POST("/predict-hotspots", middleware.AuthMiddleware(), middleware.RateLimitMap(), handlers.AIPredictHotspots)
 		}
 
 		// Bank Account routes
 		bank := api.Group("/bank")
 		{
 			bank.POST("/accounts", middleware.AuthMiddleware(), handlers.AddBankAccount)
-			bank.GET("/:id/accounts", middleware.AuthMiddleware(), handlers.GetBankAccounts)
+			bank.GET("/:id/accounts", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetBankAccounts)
 			bank.PUT("/accounts/:id", middleware.AuthMiddleware(), handlers.UpdateBankAccount)
 			bank.DELETE("/accounts/:id", middleware.AuthMiddleware(), handlers.DeleteBankAccount)
 			bank.PATCH("/accounts/:id/public", middleware.AuthMiddleware(), handlers.ToggleBankAccountPublic)
@@ -269,7 +269,7 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 			finance.POST("/transactions", middleware.AuthMiddleware(), handlers.CreateTransaction)
 			finance.POST("/transactions/:id/approve", middleware.AuthMiddleware(), handlers.ApproveTransaction)
 			finance.POST("/transactions/:id/reject", middleware.AuthMiddleware(), handlers.RejectTransaction)
-			finance.GET("/units/:id/transactions", middleware.AuthMiddleware(), handlers.GetTransactions)
+			finance.GET("/units/:id/transactions", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetTransactions)
 			finance.GET("/transactions/:id", middleware.AuthMiddleware(), handlers.GetTransactionByID)
 			finance.GET("/units/:id/summary", middleware.AuthMiddleware(), handlers.GetTransactionSummary)
 			finance.POST("/budgets", middleware.AuthMiddleware(), handlers.CreateBudget)
@@ -296,8 +296,8 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 		audit := api.Group("/audit")
 		{
 			audit.POST("/activity", middleware.AuthMiddleware(), handlers.LogActivity)
-			audit.GET("/activities", middleware.AuthMiddleware(), handlers.GetActivityLogs)
-			audit.GET("/logs", middleware.AuthMiddleware(), handlers.GetAuditLogs)
+			audit.GET("/activities", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetActivityLogs)
+			audit.GET("/logs", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetAuditLogs)
 			audit.POST("/logs", middleware.AuthMiddleware(), handlers.CreateAuditLog)
 			audit.GET("/health", middleware.AuthMiddleware(), handlers.GetSystemHealth)
 			audit.POST("/health", middleware.AuthMiddleware(), handlers.UpdateSystemHealth)
@@ -311,7 +311,7 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 			alerts.GET("/news", middleware.AuthMiddleware(), handlers.GetNewsAlerts)
 
 			alerts.POST("", middleware.AuthMiddleware(), handlers.CreateCommunityAlert)
-			alerts.GET("", middleware.AuthMiddleware(), handlers.GetCommunityAlerts)
+			alerts.GET("", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetCommunityAlerts)
 
 			alerts.POST("/subscribe", middleware.AuthMiddleware(), handlers.SubscribeToAlerts)
 			alerts.GET("/subscriptions", middleware.AuthMiddleware(), handlers.GetAlertSubscriptions)
@@ -342,11 +342,11 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 		mobile := api.Group("/mobile")
 		{
 			mobile.GET("/config", middleware.AuthMiddleware(), handlers.MobileAppConfig)
-			mobile.GET("/dashboard", middleware.AuthMiddleware(), handlers.MobileDashboard)
-			mobile.GET("/notifications", middleware.AuthMiddleware(), handlers.MobileNotifications)
+			mobile.GET("/dashboard", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.MobileDashboard)
+			mobile.GET("/notifications", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.MobileNotifications)
 			mobile.PUT("/notifications/:id/read", middleware.AuthMiddleware(), handlers.MobileMarkNotificationRead)
 			mobile.PUT("/notifications/read-all", middleware.AuthMiddleware(), handlers.MobileMarkAllRead)
-			mobile.GET("/sync", middleware.AuthMiddleware(), handlers.MobileSync)
+			mobile.GET("/sync", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.MobileSync)
 			mobile.POST("/crash-report", middleware.AuthMiddleware(), handlers.MobileCrashReport)
 		}
 

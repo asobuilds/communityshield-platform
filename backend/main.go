@@ -35,6 +35,14 @@ func main() {
 
 	router := gin.Default()
 
+	if err := router.SetTrustedProxies([]string{
+		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+	}); err != nil {
+		log.Fatalf("failed to set trusted proxies: %v", err)
+	}
+
+	router.Use(middleware.SecurityHeaders())
+
 	// Structured logging middleware: assigns a request ID, echoes it back
 	// in the X-Request-Id response header, and emits one structured log
 	// line per completed request (JSON or text, per LOG_FORMAT).
