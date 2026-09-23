@@ -1,4 +1,4 @@
-﻿services:
+services:
   # Backend Service
   - type: web
     name: nativityguard-backend
@@ -6,7 +6,7 @@
     rootDir: backend
     buildCommand: go build -o main . && go build -o migrate ./cmd/migrate
     startCommand: ./main
-    releaseCommand: ./migrate
+    preDeployCommand: ./migrate
     envVars:
       - key: PORT
         value: 8080
@@ -51,7 +51,6 @@
         source: /*
         destination: /index.html
 
-# PostgreSQL Database
 databases:
   - name: nativityguard-db
     plan: free
