@@ -48,6 +48,13 @@ import type {
 
 const db: MockDatabase = seedDatabase()
 const sosAlerts: SosAlert[] = []
+const demoTransactions = [
+  { id: 'tx-1', label: 'Community support pledge', amount: 25000, status: 'pending' },
+  { id: 'tx-2', label: 'Equipment allocation', amount: 12000, status: 'approved' },
+]
+const demoFinance = { account: 'Surulere demo operating account', donations: 25000, budget: 100000 }
+const demoSettings = { incidentTemplate: 'Record location, incident details and response actions.', retentionDays: 90 }
+const demoAudit: { id: string; actor: string; action: string; entity: string; time: string }[] = []
 
 function currentUser(request: Request): User | null {
   const header = request.headers.get('Authorization') ?? ''
@@ -216,6 +223,75 @@ interface RegisterInput {
 
 export const handlers: MockRoute[] = [
   ...communityRoutes,
+  {
+    method: 'GET', path: '/demo/admin/state',
+    respond({ request }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      if (!['unit_admin', 'super_admin'].includes(user.role)) return forbidden('Administrator access required')
+      const unit = db.units[0]
+      const cases = user.role === 'super_admin' ? db.cases : db.cases.filter((c) => c.unitId === unit.id)
+      const officers = user.role === 'super_admin' ? db.officers : db.officers.filter((o) => o.unitId === unit.id)
+      return { body: { cases, officers, units: user.role === 'super_admin' ? db.units : [unit], transactions: demoTransactions, finance: demoFinance, settings: demoSettings, audit: user.role === 'super_admin' ? demoAudit : undefined, demo: true } }
+    },
+  },
+  {
+    method: 'PUT', path: '/demo/admin/:section',
+    async respond({ request, params }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      if (!['unit_admin', 'super_admin'].includes(user.role)) return forbidden('Administrator access required')
+      if (['units', 'settings'].includes(params.section) && user.role !== 'super_admin') return forbidden('Platform administrator access required')
+      const input = await request.json() as Record<string, unknown>
+      const value = (key: string) => typeof input[key] === 'string' ? String(input[key]).trim() : ''
+      const bad = (message: string) => ({ status: 400, body: { error: message } })
+      let entity = ''
+      if (params.section === 'officers') {
+        const name = value('name'), badgeNumber = value('badgeNumber')
+        if (!name || !badgeNumber) return bad('Officer name and badge number are required')
+        const officer = db.officers.find((o) => o.id === input.id)
+        if (officer && officer.unitId !== db.units[0].id && user.role !== 'super_admin') return forbidden('Officer belongs to another unit')
+        if (!officer && db.officers.some((o) => o.badgeNumber === badgeNumber)) return bad('Badge number already exists')
+        const updated = { ...(officer ?? { id: crypto.randomUUID(), unitId: db.units[0].id, joinedDate: new Date().toISOString() }), name, badgeNumber, rank: value('rank') || 'Officer', role: value('role') || 'patrol', status: value('status') || 'active', phone: value('phone') }
+        if (officer) Object.assign(officer, updated)
+        else db.officers.push(updated)
+        entity = updated.id
+      } else if (params.section === 'unit' || params.section === 'units') {
+        const unit = params.section === 'unit' ? db.units[0] : db.units.find((u) => u.id === input.id)
+        if (input.delete === true) {
+          if (!unit || db.cases.some((c) => c.unitId === unit.id) || db.officers.some((o) => o.unitId === unit.id)) return bad('Only empty units can be deleted')
+          db.units.splice(db.units.indexOf(unit), 1)
+          entity = unit.id
+        } else {
+          const radius = Number(input.operationalRadius)
+          if (!value('name') || !Number.isFinite(radius) || radius <= 0 || radius > 100) return bad('Name and radius between 0 and 100 km are required')
+          const latitude = Number(input.latitude), longitude = Number(input.longitude)
+          if (!Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return bad('Valid latitude and longitude are required')
+          const updated = { ...(unit ?? { ...db.units[0], id: crypto.randomUUID(), isVerified: false, verificationStatus: 'pending' }), name: value('name'), operationalRadius: radius, latitude, longitude, state: value('state'), city: value('city'), contactPhone: value('contactPhone'), contactEmail: value('contactEmail'), status: value('status') || 'active' }
+          if (unit) Object.assign(unit, updated)
+          else db.units.push(updated)
+          entity = updated.id
+        }
+      } else if (params.section === 'finance') {
+        const budget = Number(input.budget)
+        if (!Number.isFinite(budget) || budget < 0) return bad('Budget must be a nonnegative number')
+        demoFinance.budget = budget
+        entity = 'budget'
+      } else if (params.section === 'transactions') {
+        const tx = demoTransactions.find((t) => t.id === input.id)
+        if (!tx || tx.status !== 'pending' || !['approved', 'rejected'].includes(value('status'))) return bad('Select a pending transaction and a decision')
+        tx.status = value('status')
+        entity = tx.id
+      } else if (params.section === 'settings') {
+        const retentionDays = Number(input.retentionDays)
+        if (!value('incidentTemplate') || !Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 3650) return bad('Template and retention between 1 and 3650 days are required')
+        Object.assign(demoSettings, { incidentTemplate: value('incidentTemplate'), retentionDays })
+        entity = 'settings'
+      } else return notFound('Unknown demo section')
+      demoAudit.unshift({ id: crypto.randomUUID(), actor: user.email, action: `${params.section} updated`, entity, time: new Date().toISOString() })
+      return { body: { ok: true } }
+    },
+  },
   /* ---------------------------------------------------------------- auth */
 
   {
@@ -439,6 +515,20 @@ export const handlers: MockRoute[] = [
       await sleep(120)
       const user = currentUser(request)
       if (!user) return unauthorized
+      return { body: { user } }
+    },
+  },
+  {
+    method: 'PUT', path: '/demo/profile',
+    async respond({ request }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      const input = await request.json() as Record<string, unknown>
+      const firstName = String(input.firstName ?? '').trim(), lastName = String(input.lastName ?? '').trim()
+      const phone = String(input.phone ?? '').trim(), photoUrl = String(input.photoUrl ?? '').trim()
+      if (!firstName || !lastName || (phone && !/^\+?[0-9 ()-]{7,20}$/.test(phone))) return { status: 400, body: { error: 'Enter a name and a valid contact number' } }
+      if (photoUrl && (!/^https:\/\//.test(photoUrl) || photoUrl.length > 2048)) return { status: 400, body: { error: 'Photo must be an HTTPS image URL' } }
+      Object.assign(user, { firstName, lastName, phone, photoUrl, updatedAt: new Date().toISOString() })
       return { body: { user } }
     },
   },

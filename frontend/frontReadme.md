@@ -77,12 +77,12 @@ The detailed checklists in §3 explain the boundaries of each partial feature.
 | F5 Awareness | Notification centre, demo alert feed/detail/confirmation, news, subscriptions and permission opt-in | Python APIs and real push delivery |
 | F6 Community | Demo forum/replies, announcements, event RSVP, post reporting | Python APIs, durable moderation workflow and AI-assisted tips |
 | F7 Officer | Queue, dispatch/arrive, progress, evidence, weekly narrative, review submission | Investigate transition (backend route required), team view and communications |
-| F8 Unit admin | Triage/assignment, case review, closure decisions, evidence verification | Overview, roster (backend route required), full verification, analytics, finance, settings |
-| F9 Super admin | Placeholder route only | Governance console, users, units, audit, analytics and settings |
+| F8 Unit admin | Triage/assignment, case review, closure decisions, evidence verification; demo overview, roster, analytics, finance and settings | Python integrations for demo screens; full verification |
+| F9 Super admin | Demo overview, unit registry, audit, analytics/health and settings/export | Python integrations, user governance and impersonation |
 | F10 Maps | Case map, marker grouping, aggregated activity areas, unit coverage, report pin picker and basic filters | Advanced filters and offline map fallback; activity overlay live data verification |
 | F11 Communication | No frontend screens | Rooms, messaging, calls, presence and sync |
 | F12 AI | No frontend screens | Assistant, tips, warnings and labelled case summaries |
-| F13 Settings | No frontend screens | Profile, preferences, consent, language, export and deletion |
+| F13 Settings | Demo profile edit (name, phone and HTTPS photo URL) | Python profile write/photo upload, preferences, consent, language, export and deletion |
 | F14 PWA | No installable app | Service worker, offline reads/writes, sync and low-bandwidth mode |
 
 Also open from Appendix B: governance (T10), suspect self-view (T11), invites (T12),
@@ -776,12 +776,14 @@ so the demo will *not* reveal a mismatch. Confirm against the handler before rel
 
 ---
 
+**Demo boundary for the next ten items:** The checked admin and profile workflows below run only with `VITE_USE_MOCKS=true`; they are session-scoped sample screens. Their actions do not persist to Python, move money, provision real officers, change live dispatch, or provide live monitoring. Profile photo uses an HTTPS URL, not an uploaded image. Live integrations remain open.
+
 ### F8 — Unit admin console
 
 **Screens:** overview, dispatch board, case management, officers, verification queue, analytics,
 finance, unit settings.
 
-- [ ] Ops overview: open/assigned/dispatched cards, response-time KPIs
+- [x] Ops overview: open/assigned/dispatched cards, response-time KPIs **(session demo only; Python API integration pending)**
 - [x] Dispatch board: unassigned queue → assign to officer
       *(`/admin/cases` — attention counters are filters, not decoration: each one toggles the list)*
 - [~] Case review: facts, progress, weekly, evidence, assignment, **the closure decision and its
@@ -801,11 +803,11 @@ finance, unit settings.
 - [x] `pending_admin_review` in the triage counters — **"Awaiting your decision"** is now the first
       attention card on `/admin/cases`, with the hint "Submitted for closure — only an admin can move
       these", and it filters the list like the other counters (`Focus = 'to_decide'`)
-- [ ] Officer roster: add/edit, status, workload *(blocked by the unrouted `GetOfficersByUnit`)*
+- [x] Officer roster: add/edit, status, workload *(blocked by the unrouted `GetOfficersByUnit`)* **(session demo only; Python API integration pending)**
 - [~] Verification queue: evidence verify shipped inside case review; memberships and gov IDs open
-- [ ] Analytics: volume, response/dispatch/arrival, resolution, workload
-- [ ] Finance: accounts, donations, transactions + approvals, budgets, reports
-- [ ] Unit config, operational radius, contact info
+- [x] Analytics: volume, response/dispatch/arrival, resolution, workload **(session demo only; Python API integration pending)**
+- [x] Finance: accounts, donations, transactions + approvals, budgets, reports **(session demo only; Python API integration pending)**
+- [x] Unit config, operational radius, contact info **(session demo only; Python API integration pending)**
 
 **APIs:** `GET /cases`, `POST /cases/:id/assign`, `GET /cases/:id/review`,
 `POST /cases/:id/review/approve`, `POST /cases/:id/review/request-changes`, `GET /cases/analytics`,
@@ -819,10 +821,10 @@ finance, unit settings.
 **Screens:** governance dashboard, users, user detail, units, audit search, analytics, health, settings.
 
 - [ ] Users: list, search, role change, suspend/activate, impersonate/stop
-- [ ] Units: registry CRUD
-- [ ] Audit: searchable activity + audit logs (actor, action, entity, time)
-- [ ] Platform analytics + system health
-- [ ] System settings, templates, data exports
+- [x] Units: registry CRUD **(session demo only; Python API integration pending)**
+- [x] Audit: searchable activity + audit logs (actor, action, entity, time) **(session demo only; Python API integration pending)**
+- [x] Platform analytics + system health **(session demo only; Python API integration pending)**
+- [x] System settings, templates, data exports **(session demo only; Python API integration pending)**
 - [ ] Impersonation banner (unmissable "you are impersonating") + one-click exit
 
 **APIs:** `GET /admin/users`, `GET /admin/users/:id`, `PUT /admin/users/:id/role`,
@@ -885,7 +887,7 @@ finance, unit settings.
 
 **Screens:** profile, notification prefs, privacy, language, data export, delete account.
 
-- [ ] Profile edit (name, contact, photo)
+- [x] Profile edit (name, contact, photo) **(session demo only; Python API integration pending)**
 - [ ] Notification channel prefs (push/SMS/email/in-app)
 - [ ] Privacy controls + consent explanations in plain language
 - [ ] Language selector (English + Nigerian languages, Pidgin)

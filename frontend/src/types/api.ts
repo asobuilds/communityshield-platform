@@ -40,6 +40,7 @@ export interface User {
   id: string
   email: string
   phone?: string
+  photoUrl?: string
   firstName: string
   lastName: string
   role: Role
