@@ -33,8 +33,8 @@ const NAV: Record<Role, NavItem[]> = {
     { to: '/', label: 'Home', icon: <LayoutDashboard className="size-4" /> },
     { to: '/sos', label: 'Emergency SOS', icon: <ShieldAlert className="size-4" /> },
     { to: '/report', label: 'Report', icon: <FileText className="size-4" /> },
-    { to: '/track', label: 'Track', icon: <FolderKanban className="size-4" />, soon: true },
-    { to: '/alerts', label: 'Alerts', icon: <Megaphone className="size-4" />, soon: true },
+    { to: '/alerts', label: 'Alerts', icon: <Megaphone className="size-4" /> },
+    { to: '/community', label: 'Community', icon: <Users className="size-4" /> },
     { to: '/map', label: 'Safety map', icon: <MapIcon className="size-4" /> },
   ],
   officer: [
@@ -69,7 +69,7 @@ const ROLE_LABEL: Record<Role, string> = {
 function NavItems({ items, variant }: { items: NavItem[]; variant: 'sidebar' | 'bottom' }) {
   return (
     <>
-      {items.map((item) => {
+      {items.filter((item) => variant !== 'bottom' || item.to !== '/sos').map((item) => {
         if (item.soon) {
           return (
             <span
