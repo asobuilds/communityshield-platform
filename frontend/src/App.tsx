@@ -26,6 +26,8 @@ import { NotFoundPage } from '@/pages/NotFoundPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
 import { AlertsPage, AlertDetailPage, NewsPage, SubscriptionsPage } from '@/pages/AwarenessPage'
 import { CommunityPage } from '@/pages/CommunityPage'
+import { AdminDemoPage } from '@/pages/AdminDemoPage'
+import { ProfileDemoPage } from '@/pages/ProfileDemoPage'
 import type { Role } from '@/types/api'
 
 const ALL_ROLES: Role[] = ['citizen', 'officer', 'unit_admin', 'super_admin']
@@ -117,6 +119,7 @@ export function App() {
 
               <Route element={<ProtectedShell />}>
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/profile" element={<ProfileDemoPage />} />
                 <Route path="/alerts" element={<RequireRole roles={['citizen']}><AlertsPage /></RequireRole>} />
                 <Route path="/alerts/:id" element={<RequireRole roles={['citizen']}><AlertDetailPage /></RequireRole>} />
                 <Route path="/news" element={<RequireRole roles={['citizen']}><NewsPage /></RequireRole>} />
@@ -188,6 +191,8 @@ export function App() {
                 />
 
                 {/* Scheduled, not yet built — named rather than 404'd. */}
+                {['overview','officers','analytics','finance','settings'].map((section) => <Route key={section} path={`/admin/${section}`} element={<RequireRole roles={ADMIN_ROLES}><AdminDemoPage section={section} /></RequireRole>} />)}
+                {['overview','units','audit','analytics','settings'].map((section) => <Route key={section} path={`/super/${section}`} element={<RequireRole roles={['super_admin']}><AdminDemoPage section={section} platform /></RequireRole>} />)}
                 <Route
                   path="/admin/*"
                   element={

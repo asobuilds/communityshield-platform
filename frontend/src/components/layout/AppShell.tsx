@@ -44,17 +44,21 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   unit_admin: [
     { to: '/admin/cases', label: 'Case review', icon: <FolderKanban className="size-4" /> },
-    { to: '/admin/overview', label: 'Overview', icon: <LayoutDashboard className="size-4" />, soon: true },
-    { to: '/admin/officers', label: 'Officers', icon: <Users className="size-4" />, soon: true },
-    { to: '/admin/analytics', label: 'Analytics', icon: <BarChart3 className="size-4" />, soon: true },
+    { to: '/admin/overview', label: 'Overview', icon: <LayoutDashboard className="size-4" /> },
+    { to: '/admin/officers', label: 'Officers', icon: <Users className="size-4" /> },
+    { to: '/admin/analytics', label: 'Analytics', icon: <BarChart3 className="size-4" /> },
+    { to: '/admin/finance', label: 'Finance demo', icon: <FileText className="size-4" /> },
+    { to: '/admin/settings', label: 'Unit settings', icon: <Shield className="size-4" /> },
     { to: '/map', label: 'Operations map', icon: <MapIcon className="size-4" /> },
   ],
   super_admin: [
     { to: '/admin/cases', label: 'Case review', icon: <FolderKanban className="size-4" /> },
-    { to: '/super/overview', label: 'Governance', icon: <ShieldAlert className="size-4" />, soon: true },
+    { to: '/super/overview', label: 'Governance', icon: <ShieldAlert className="size-4" /> },
+    { to: '/super/units', label: 'Units', icon: <Shield className="size-4" /> },
     { to: '/super/users', label: 'Users', icon: <Users className="size-4" />, soon: true },
-    { to: '/super/audit', label: 'Audit', icon: <FileText className="size-4" />, soon: true },
-    { to: '/super/analytics', label: 'Analytics', icon: <BarChart3 className="size-4" />, soon: true },
+    { to: '/super/audit', label: 'Audit', icon: <FileText className="size-4" /> },
+    { to: '/super/analytics', label: 'Analytics', icon: <BarChart3 className="size-4" /> },
+    { to: '/super/settings', label: 'Settings', icon: <FileText className="size-4" /> },
     { to: '/map', label: 'Operations map', icon: <MapIcon className="size-4" /> },
   ],
 }
@@ -146,6 +150,7 @@ export function AppShell({ children }: { children?: ReactNode } = {}) {
         </nav>
 
         <div className="border-t border-border p-3">
+          <NavLink to="/profile" className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:text-signal"><UserCircle className="size-4" /> Profile</NavLink>
           <div className="flex items-center gap-2">
             <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-hi text-xs font-semibold text-ink">
               {initials(user?.firstName, user?.lastName)}
@@ -179,9 +184,9 @@ export function AppShell({ children }: { children?: ReactNode } = {}) {
           <div className="hidden md:block" />
           <div className="flex items-center gap-2">
             <NotificationBell />
-            <span className="grid size-9 place-items-center rounded-lg border border-border-hi bg-surface-hi text-ink-muted md:hidden">
+            <NavLink to="/profile" aria-label="Profile" className="grid size-9 place-items-center rounded-lg border border-border-hi bg-surface-hi text-ink-muted md:hidden">
               <UserCircle className="size-4" aria-hidden />
-            </span>
+            </NavLink>
           </div>
         </header>
 
