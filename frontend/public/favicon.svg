@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="WardGuard">
-  <path d="M32 4 L58 14 V38 C58 52 46 60 32 64 C18 60 6 52 6 38 V14 Z"
-        fill="#0F172A" stroke="#D4AF37" stroke-width="2"/>
-  <path d="M22 26 L26 42 L30 34 L32 44 L34 34 L38 42 L42 26"
-        stroke="#D4AF37" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-</svg>
