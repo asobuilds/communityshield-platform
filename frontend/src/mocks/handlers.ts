@@ -40,10 +40,13 @@ import type {
   CreateCaseInput,
   PriorityLevel,
   Progress,
+  SendSosInput,
+  SosAlert,
   User,
 } from '@/types/api'
 
 const db: MockDatabase = seedDatabase()
+const sosAlerts: SosAlert[] = []
 
 function currentUser(request: Request): User | null {
   const header = request.headers.get('Authorization') ?? ''
@@ -1252,6 +1255,61 @@ export const handlers: MockRoute[] = [
         .sort((a, b) => a.distance - b.distance)
 
       return { body: { units } }
+    },
+  },
+
+  /* ------------------------------------------------------- emergency SOS */
+
+  {
+    method: 'POST',
+    path: '/sos/send',
+    async respond({ request }) {
+      await sleep(180)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      if (user.role !== 'citizen') return forbidden('only citizens may send an SOS')
+      const input = (await request.json()) as SendSosInput
+      if (!Number.isFinite(input.latitude) || !Number.isFinite(input.longitude) ||
+          Math.abs(input.latitude) > 90 || Math.abs(input.longitude) > 180 ||
+          (input.latitude === 0 && input.longitude === 0)) {
+        return { status: 400, body: { error: 'a valid location is required' } }
+      }
+      const id = crypto.randomUUID()
+      const alert: SosAlert = {
+        id,
+        userId: user.id,
+        trackingId: `SOS-${Date.now().toString(36).toUpperCase()}`,
+        status: 'pending',
+        latitude: input.latitude,
+        longitude: input.longitude,
+        priority: input.priority === 'critical' ? 'critical' : 'high',
+        ...(input.unitId ? { unitId: input.unitId } : {}),
+        ...(input.emergencyContacts ? { emergencyContacts: input.emergencyContacts } : {}),
+        ...(input.medicalInfo ? { medicalInfo: input.medicalInfo } : {}),
+        createdAt: new Date().toISOString(),
+      }
+      sosAlerts.unshift(alert)
+      return { status: 201, body: { alert } }
+    },
+  },
+  {
+    method: 'GET',
+    path: '/sos/my',
+    async respond({ request }) {
+      await sleep(120)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      return { body: { alerts: sosAlerts.filter((a) => a.userId === user.id) } }
+    },
+  },
+  {
+    method: 'GET',
+    path: '/sos/:id',
+    async respond({ request, params }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      const alert = sosAlerts.find((a) => a.id === params.id && a.userId === user.id)
+      return alert ? { body: { alert } } : notFound('SOS request not found')
     },
   },
 

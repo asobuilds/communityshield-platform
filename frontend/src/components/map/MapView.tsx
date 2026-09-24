@@ -13,6 +13,7 @@ import {
 import { LocateFixed, MapPin, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { formatCoord } from '@/lib/format'
+import { activityGroups, groupCases } from '@/lib/mapGroups'
 import { priorityMeta, statusMeta } from '@/lib/status'
 import type { Case, SecurityUnit } from '@/types/api'
 import { Button } from '@/components/ui/Button'
@@ -34,6 +35,9 @@ export const STATUS_HEX: Record<string, string> = {
   assigned: '#4f8cff',
   dispatched: '#f0a63c',
   on_scene: '#c084fc',
+  investigating: '#2dd4bf',
+  pending_admin_review: '#818cf8',
+  admin_changes_requested: '#e879f9',
   closed: '#3fbf7f',
 }
 
@@ -49,6 +53,7 @@ export interface MapViewProps {
   /** Any CSS length. Defaults to a responsive 60vh. */
   height?: string | number
   showUnitCoverage?: boolean
+  showHotspots?: boolean
   selectedCaseId?: string | null
   onSelectCase?: (caseItem: Case) => void
   /** Current pick location in `pick` mode. */
@@ -105,6 +110,85 @@ const pickIcon = divIcon({
   iconAnchor: [11, 11],
 })
 
+function CaseMarkers({
+  cases,
+  selectedCaseId,
+  onSelectCase,
+  showHotspots,
+}: {
+  cases: Case[]
+  selectedCaseId?: string | null
+  onSelectCase?: (item: Case) => void
+  showHotspots: boolean
+}) {
+  const map = useMapEvents({ zoomend: () => setZoom(map.getZoom()) })
+  const [zoom, setZoom] = useState(map.getZoom())
+  const project = (lat: number, lng: number) => map.project([lat, lng], zoom)
+  const groups = groupCases(cases, project, 52)
+  const concentrations = showHotspots && zoom <= 12
+    ? activityGroups(groupCases(cases, project, 110))
+    : []
+
+  return (
+    <>
+      {concentrations.map((group) => (
+        <Circle
+          key={`activity-${group.cases.map((item) => item.id).sort().join('-')}`}
+          center={[group.latitude, group.longitude]}
+          radius={Math.max(350, 1800 - zoom * 90)}
+          pathOptions={{ color: '#f4cb78', weight: 1, fillColor: '#f4cb78', fillOpacity: 0.16 }}
+        >
+          <Popup>{group.cases.length} reports in this area. This shows activity, not a prediction of danger.</Popup>
+        </Circle>
+      ))}
+      {groups.map((group) => {
+        if (group.cases.length > 1 && zoom < 17) {
+          return (
+            <CircleMarker
+              key={`cluster-${group.cases.map((item) => item.id).sort().join('-')}`}
+              center={[group.latitude, group.longitude]}
+              radius={Math.min(24, 10 + Math.log2(group.cases.length) * 4)}
+              pathOptions={{ color: '#f8f5e9', weight: 2, fillColor: '#254137', fillOpacity: 1 }}
+              eventHandlers={{ click: () => map.flyTo([group.latitude, group.longitude], Math.min(17, zoom + 2)) }}
+            >
+              <Popup>{group.cases.length} reports nearby. Select the marker to zoom in.</Popup>
+            </CircleMarker>
+          )
+        }
+        return group.cases.map((caseItem) => {
+          const hex = STATUS_HEX[caseItem.status] ?? STATUS_HEX.pending
+          const selected = caseItem.id === selectedCaseId
+          return (
+            <CircleMarker
+              key={caseItem.id}
+              center={[caseItem.latitude, caseItem.longitude]}
+              radius={selected ? 10 : 7}
+              pathOptions={{
+                color: selected ? '#ffffff' : '#091613',
+                weight: selected ? 3 : 1.5,
+                fillColor: hex,
+                fillOpacity: 1,
+              }}
+              eventHandlers={{ click: () => onSelectCase?.(caseItem) }}
+            >
+              <Popup>
+                <PopupBody
+                  title={caseItem.title}
+                  subtitle={`${statusMeta(caseItem.status).label} · ${caseItem.trackingId}`}
+                  rows={[
+                    ['Priority', priorityMeta(caseItem.priorityLevel).label],
+                    ['Location', caseItem.location || formatCoord(caseItem.latitude, caseItem.longitude)],
+                  ]}
+                />
+              </Popup>
+            </CircleMarker>
+          )
+        })
+      })}
+    </>
+  )
+}
+
 export function MapView({
   mode = 'view',
   cases = [],
@@ -113,6 +197,7 @@ export function MapView({
   zoom = DEFAULT_ZOOM,
   height = '60vh',
   showUnitCoverage = true,
+  showHotspots = false,
   selectedCaseId,
   onSelectCase,
   pickLocation = null,
@@ -199,7 +284,7 @@ export function MapView({
       <MapContainer
         center={initialCenter}
         zoom={zoom}
-        style={{ height, width: '100%', background: '#0b0e14' }}
+        style={{ height, width: '100%', background: '#091613' }}
         scrollWheelZoom
         className="z-0"
       >
@@ -262,39 +347,7 @@ export function MapView({
                 </CircleMarker>
               ))}
 
-            {cases
-              .filter((c) => Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
-              .map((caseItem) => {
-                const hex = STATUS_HEX[caseItem.status] ?? STATUS_HEX.pending
-                const selected = caseItem.id === selectedCaseId
-                return (
-                  <CircleMarker
-                    key={caseItem.id}
-                    center={[caseItem.latitude, caseItem.longitude]}
-                    radius={selected ? 10 : 7}
-                    pathOptions={{
-                      color: selected ? '#ffffff' : '#0b0e14',
-                      weight: selected ? 3 : 1.5,
-                      fillColor: hex,
-                      fillOpacity: 1,
-                    }}
-                    eventHandlers={{
-                      click: () => onSelectCase?.(caseItem),
-                    }}
-                  >
-                    <Popup>
-                      <PopupBody
-                        title={caseItem.title}
-                        subtitle={`${statusMeta(caseItem.status).label} · ${caseItem.trackingId}`}
-                        rows={[
-                          ['Priority', priorityMeta(caseItem.priorityLevel).label],
-                          ['Location', caseItem.location || formatCoord(caseItem.latitude, caseItem.longitude)],
-                        ]}
-                      />
-                    </Popup>
-                  </CircleMarker>
-                )
-              })}
+            <CaseMarkers cases={cases} selectedCaseId={selectedCaseId} onSelectCase={onSelectCase} showHotspots={showHotspots} />
           </>
         ) : (
           <>

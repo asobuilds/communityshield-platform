@@ -31,6 +31,7 @@ interface NavItem {
 const NAV: Record<Role, NavItem[]> = {
   citizen: [
     { to: '/', label: 'Home', icon: <LayoutDashboard className="size-4" /> },
+    { to: '/sos', label: 'Emergency SOS', icon: <ShieldAlert className="size-4" /> },
     { to: '/report', label: 'Report', icon: <FileText className="size-4" /> },
     { to: '/track', label: 'Track', icon: <FolderKanban className="size-4" />, soon: true },
     { to: '/alerts', label: 'Alerts', icon: <Megaphone className="size-4" />, soon: true },
@@ -195,6 +196,16 @@ export function AppShell({ children }: { children?: ReactNode } = {}) {
             {children ?? <Outlet />}
           </ErrorBoundary>
         </main>
+
+        {role === 'citizen' ? (
+          <NavLink
+            to="/sos"
+            aria-label="Open emergency SOS"
+            className="fixed bottom-16 right-4 z-30 flex min-h-12 items-center gap-2 rounded-full border-2 border-white bg-emergency px-4 font-semibold text-white shadow-panel focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:bottom-5"
+          >
+            <ShieldAlert className="size-5" aria-hidden /> SOS
+          </NavLink>
+        ) : null}
 
         {/* Mobile bottom nav */}
         <nav
