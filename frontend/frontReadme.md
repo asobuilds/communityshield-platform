@@ -19,6 +19,32 @@ case tracking, officer operations, and unit-admin triage and assignment.
 >
 > M0 is **complete**. M1–M5 are **part-built** (§6): ten routes render working screens against the
 > mock API. Nothing in M6–M8 has started.
+
+### Current feature inventory (2026-09-24)
+
+This is a code-level inventory of the frontend on `main` after the frontend-tree repair, before
+the visual refresh in §0.5. A rendered route or mock is not proof of a live backend integration.
+The detailed checklists in §3 explain the boundaries of each partial feature.
+
+| Area | Implemented | Still to build or confirm |
+|---|---|---|
+| F1 Auth | Login, role guards, signup, password recovery screens, rotating token refresh, `/login` alias | OTP, officer/unit applications, onboarding, session management; live signup and recovery checks |
+| F2 SOS | Citizen home lists cases | SOS creation, confirmation, location fallback, active state and history |
+| F3 Reporting | Four-step report wizard, unit/pin selection, evidence links, draft restore, receipt | Binary uploads require a backend route; offline submit queue remains open |
+| F4 Tracking | Citizen case list/detail, status rail and review loop, shared weekly updates, staff evidence view | Citizen feedback submission, push status updates, privacy review of live responses |
+| F5 Awareness | Notification bell and popover | Alerts, news, subscriptions, push registration, full notification centre |
+| F6 Community | No frontend screens | Forum, announcements, events, safety tips and moderation |
+| F7 Officer | Queue, dispatch/arrive, progress, evidence, weekly narrative, review submission | Investigate transition (backend route required), team view and communications |
+| F8 Unit admin | Triage/assignment, case review, closure decisions, evidence verification | Overview, roster (backend route required), full verification, analytics, finance, settings |
+| F9 Super admin | Placeholder route only | Governance console, users, units, audit, analytics and settings |
+| F10 Maps | Case map, unit coverage, report pin picker and basic filters | Clustering, hotspots, advanced filters and offline map fallback |
+| F11 Communication | No frontend screens | Rooms, messaging, calls, presence and sync |
+| F12 AI | No frontend screens | Assistant, tips, warnings and labelled case summaries |
+| F13 Settings | No frontend screens | Profile, preferences, consent, language, export and deletion |
+| F14 PWA | No installable app | Service worker, offline reads/writes, sync and low-bandwidth mode |
+
+Also open from Appendix B: governance (T10), suspect self-view (T11), invites (T12),
+session management (T9) and live backend verification. These are separate from visual polish.
 >
 > **M4.5 (lifecycle re-alignment) is done.** The backend moved the case lifecycle underneath this
 > frontend — a post-frontend commit (`36a94ec feat: add accountable case review workflow`) added three
@@ -341,6 +367,35 @@ cached officer view into a citizen view.
 
 ---
 
+### 0.5 Visual direction — Dawn Canopy
+
+**Status: first pass implemented in this branch; visual review on mobile and desktop pending.**
+Replace the old navy-blue impression with a sheltered forest at dawn: deep evergreen surfaces,
+warm sunlight for the primary action, a soft sky glow and a few still points of light on the public
+front door. The scene should suggest visibility, calm and a place to return to. The system is a
+public-safety tool, so the atmospheric treatment belongs in hero and welcome areas; reporting,
+maps, forms and case decisions retain quiet, solid, highly legible surfaces.
+
+| Role | Token | Colour | Use |
+|---|---|---|---|
+| Background | `--color-base` | `#10221d` | App canvas; replaces navy |
+| Panels | `--color-surface` / `--color-surface-hi` | `#193129` / `#254137` | Cards and raised controls |
+| Primary action | `--color-signal` / `--color-signal-ink` | `#f4cb78` / `#19251c` | Warm dawn light, with dark button text |
+| Text | `--color-ink` / `--color-ink-muted` | `#f8f5e9` / `#c2d4c7` | Main and supporting copy |
+| Boundaries | `--color-border` / `--color-border-hi` | `#355348` / `#527466` | Structure without bright outlines |
+| Emergency | `--color-emergency` | `#ef4444` | SOS and urgent states only; never decorative |
+
+The first pass updates shared CSS tokens and gives the public landing hero a lightweight CSS dawn
+sky and forest horizon. It adds no network image or animation. Keep lifecycle colours distinct and
+keep all status labels visible so meaning never depends on colour. Verify text, focus, buttons,
+status chips and maps for contrast on a phone in daylight; respect reduced motion if atmosphere is
+extended. Do not apply stars or scenery behind emergency controls or input fields.
+
+**Sequence:** finish and review this visual direction before starting another feature from §3.
+Keep the theme separate from the SOS, governance, communication and PWA milestones.
+
+---
+
 ## 1. Product intent & engagement goals
 
 Nativity Guard must be **chosen** by communities, not mandated. That only happens if the
@@ -407,18 +462,20 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 
 ### F1 — Authentication & onboarding
 
-**Screens:** login, register (role select), OTP verify, forgot/reset, onboarding wizard.
+**Screens:** login, citizen signup, forgot/reset; OTP verify and onboarding wizard pending.
 
 - [x] Email/phone + password login; role-aware redirect
-- [ ] Register as citizen / officer-application
+- [x] Register a citizen at `/auth/signup` (no role selector; backend assigns the role)
+- [ ] Officer application and onboarding
+- [x] Password recovery screens (6-digit code; live delivery and reset still to verify)
 - [ ] OTP send / verify / resend (countdown, rate-limit messaging)
 - [ ] Unit application flow (search nearby units, select, apply)
 - [ ] Government ID submission (camera/file, status pending/verified/rejected)
 - [ ] Medical info intake (explicitly optional, privacy notice)
 - [ ] Profile completion + onboarding checklist
 - [x] Session: JWT storage, session restore on boot, logout, 401 → login
-- [ ] Refresh token flow — backend now issues refresh tokens
-      (`POST /auth/refresh`, one-time-use rotation). Wire it.
+- [x] Refresh token flow via `POST /auth/refresh` with one shared in-flight rotation attempt;
+      rejected refresh signs out
 
 **States:** idle · loading · invalid credentials · OTP expired · rate-limited · pending verification
 **APIs:** `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`,
@@ -712,7 +769,7 @@ finance, unit settings.
 - [x] Incident markers (clustered) with severity/status color *(status-coloured; no clustering yet)*
 - [x] Unit coverage radii
 - [ ] Hotspot/heatmap layer (prevention framing, never individual profiling)
-- [~] Case location picker (drag pin) — `MapView mode="pick"` is built; report wizard not wired
+- [x] Case location picker — `MapView mode="pick"` is wired into the report wizard
 - [~] Filters: period, category, status, unit — status + free-text search shipped
 
 **States:** map-unavailable fallback to list; tiles offline-degraded
@@ -824,7 +881,9 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
 
 - [x] **M0 — Foundations:** scaffold, router, API client, auth/session, design tokens, component
       primitives *(lint/build/CI wiring still to run — see §9)*
-- [~] **M1 — Auth & onboarding:** login + role routing + guards done; register/OTP/onboarding open
+- [~] **M1 — Auth & onboarding:** login, role routing, guards, citizen signup, password recovery
+      screens and token refresh shipped; OTP, officer applications, onboarding, session management
+      and live signup/recovery verification open
 - [x] **M2 — Citizen core: reporting and tracking — COMPLETE.** `/report` is a four-step wizard
       against `POST /cases` — what happened, where (pin + unit), optional evidence links, review —
       ending in a receipt that carries the tracking ID and attaches the links, each with its own

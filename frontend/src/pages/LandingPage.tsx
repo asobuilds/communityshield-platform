@@ -49,7 +49,7 @@ export function LandingPage() {
 
       <main className="mx-auto max-w-5xl px-6">
         {/* ------------------------------------------------------------ hero */}
-        <section className="py-14 sm:py-20">
+        <section className="dawn-hero my-4 rounded-panel border border-border-hi px-6 py-14 sm:px-10 sm:py-20">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hi px-3 py-1 text-[11px] text-ink-muted ring-1 ring-border-hi">
             <ShieldCheck className="size-3.5 text-signal" aria-hidden />
             Community safety, on the record
