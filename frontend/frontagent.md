@@ -37,13 +37,14 @@ Design and implement a frontend that is:
 
 ## 2. Design DNA
 
-**Concept: "Quiet Command."** A dark, high-contrast operational instrument with a single warm
-signal accent. Calm surfaces, precise typography, restrained motion — the interface stays out of
-the way until something needs attention, then it is unmistakable.
+**Concept: "Dawn Canopy."** A sheltered forest palette with a warm dawn signal and a quiet sky
+on the public front door. Calm surfaces, precise typography, restrained motion — the interface
+stays out of the way until something needs attention, then it is unmistakable. The palette and
+where its atmospheric treatment belongs are specified in `frontReadme.md` §0.5.
 
 | Token | Direction |
 |---|---|
-| **Surfaces** | Deep near-black base, elevated panels with subtle border, not heavy shadows |
+| **Surfaces** | Deep evergreen base, elevated forest panels with subtle borders, not heavy shadows |
 | **Signal accent** | One authoritative accent for actionable/primary; red reserved *strictly* for SOS/emergency |
 | **Status palette** | Distinct, colour-blind-safe hues for the **full eight-state lifecycle** — `pending` · `assigned` · `dispatched` · `on_scene` · `investigating` · `pending_admin_review` · `admin_changes_requested` · `closed` |
 | **Type** | Strong, legible sans; monospace for IDs, coordinates, timestamps, tracking tokens |
@@ -78,17 +79,10 @@ tokens) and `src/components/ui/`. Extend those tokens and primitives; never inve
    state"** with the raw value shown — and it is the standard every later fallback is held to. For a
    public-safety product, "I don't know this state" is an honest screen; a confident wrong label is
    not. Design the fallback.
-3. **A role is not a destination until it is a *known* role.** The same principle applied to
-   identity, and here it currently fails. `Role` is a union of four underscore literals and nothing
-   normalises what the API returns, so one unexpected value — `super-admin` from a legacy row — sends
-   `homePathForRole` to its `default: return '/'` and `HomeRoute` straight back to it: an infinite
-   self-redirect that React kills as "Maximum update depth exceeded." With no error boundary above
-   it, the user watches the page render and then go black — not a permissions error, a dead app.
-   **Two consequences.** A role the frontend does not recognise gets a *designed* screen that names
-   the problem and offers a way out (sign out, contact an administrator) — never a guess at which
-   console to open, and never a redirect. And `homePathForRole` must return "no home", not `'/'`,
-   because `'/'` is a real destination for a real role; returning it as the fallback is precisely
-   what made the loop possible.
+3. **A role is not a destination until it is a *known* role.** `normaliseRole()` now handles known
+   database spellings at the auth boundary; an unknown role gets an explained screen with a sign-out
+   path. `homePathForRole` returns no destination for unknown roles, so `/` cannot redirect to itself.
+   Keep that behavior when changing routes or account screens.
 
 ---
 
