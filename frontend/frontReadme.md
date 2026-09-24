@@ -18,7 +18,7 @@ case tracking, officer operations, and unit-admin triage and assignment.
 > ### Frontend stage — M4.5 complete, M2 (citizen reporting + tracking) complete
 >
 > M0 is **complete**. M1–M5 are **part-built** (§6): ten routes render working screens against the
-> mock API. Nothing in M6–M8 has started.
+> mock API. M6 has an aggregated map activity layer; F11 and F12 remain open.
 
 ### Current feature inventory (2026-09-24)
 
@@ -29,15 +29,15 @@ The detailed checklists in §3 explain the boundaries of each partial feature.
 | Area | Implemented | Still to build or confirm |
 |---|---|---|
 | F1 Auth | Login, role guards, signup, password recovery screens, rotating token refresh, `/login` alias | OTP, officer/unit applications, onboarding, session management; live signup and recovery checks |
-| F2 SOS | Citizen home lists cases | SOS creation, confirmation, location fallback, active state and history |
+| F2 SOS | Citizen SOS console, confirm/cancel, map or manual location, optional responder details, status/history and persistent entry point (mock verified) | Verify request/response and dispatch semantics against the live SOS service; mock does not simulate dispatch |
 | F3 Reporting | Four-step report wizard, unit/pin selection, evidence links, draft restore, receipt | Binary uploads require a backend route; offline submit queue remains open |
 | F4 Tracking | Citizen case list/detail, status rail and review loop, shared weekly updates, staff evidence view | Citizen feedback submission, push status updates, privacy review of live responses |
-| F5 Awareness | Notification bell and popover | Alerts, news, subscriptions, push registration, full notification centre |
+| F5 Awareness | Notification bell, popover, full centre, individual and bulk read actions | Alerts, news, subscriptions, push registration |
 | F6 Community | No frontend screens | Forum, announcements, events, safety tips and moderation |
 | F7 Officer | Queue, dispatch/arrive, progress, evidence, weekly narrative, review submission | Investigate transition (backend route required), team view and communications |
 | F8 Unit admin | Triage/assignment, case review, closure decisions, evidence verification | Overview, roster (backend route required), full verification, analytics, finance, settings |
 | F9 Super admin | Placeholder route only | Governance console, users, units, audit, analytics and settings |
-| F10 Maps | Case map, unit coverage, report pin picker and basic filters | Clustering, hotspots, advanced filters and offline map fallback |
+| F10 Maps | Case map, marker grouping, aggregated activity areas, unit coverage, report pin picker and basic filters | Advanced filters and offline map fallback; activity overlay live data verification |
 | F11 Communication | No frontend screens | Rooms, messaging, calls, presence and sync |
 | F12 AI | No frontend screens | Assistant, tips, warnings and labelled case summaries |
 | F13 Settings | No frontend screens | Profile, preferences, consent, language, export and deletion |
@@ -45,6 +45,12 @@ The detailed checklists in §3 explain the boundaries of each partial feature.
 
 Also open from Appendix B: governance (T10), suspect self-view (T11), invites (T12),
 session management (T9) and live backend verification. These are separate from visual polish.
+
+**Next ten frontend checklist items, this branch:** F2's seven SOS items, F10 marker grouping,
+F10 aggregated activity areas, and F5's full notification centre. The first seven are mock-verified
+and require the live integration gate described under F2. This tally counts the clustering work
+within the already partially implemented F10 marker item, rather than counting every sub-control
+as a separate feature.
 >
 > **M4.5 (lifecycle re-alignment) is done.** The backend moved the case lifecycle underneath this
 > frontend — a post-frontend commit (`36a94ec feat: add accountable case review workflow`) added three
@@ -489,13 +495,27 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 
 **Screens:** citizen home, SOS console, SOS active/status, SOS history.
 
-- [ ] One-tap SOS with confirm + cancel (never accidental)
-- [ ] Geolocation with graceful permission-denied fallback + manual pin
-- [ ] Live tracking token + status once active
-- [ ] Emergency-contacts capture; medical-info attach
-- [ ] Priority select (default high); optional unit target
-- [ ] SOS history + per-alert status (`pending → dispatched → resolved → escalated`)
-- [ ] Prominent, always-reachable SOS affordance (persistent action)
+- [x] Emergency SOS entry opens the console; explicit confirm/cancel before `POST /sos/send`
+- [x] Geolocation with permission-denied fallback, map pin and manual coordinates
+- [x] Receipt with server-returned tracking ID and status; `/sos/my` refreshes every 15 seconds
+- [x] Optional emergency-contact details and medical information, cleared from the form after success
+- [x] Priority select (default high) and optional preferred unit; preference never claims dispatch
+- [x] SOS history and per-alert status (`pending`, `dispatched`, `resolved`, `escalated`)
+- [x] Persistent, labelled SOS entry in the citizen shell on desktop and mobile
+
+**Live integration gate:** these seven frontend items work against the in-browser mock. The
+checkout contains no matching Go SOS handler to verify the wire contract, so the live payload and
+response shape, consent/storage handling for medical details, and real dispatch lifecycle must be
+checked before enabling SOS in a pilot. With `VITE_USE_MOCKS=false`, send is disabled and the page
+explains that the service is unavailable. The mock stores new SOS requests as `pending` and never
+pretends a unit was dispatched. A receipt confirms submission only. The optional details stay out
+of local storage. The `GET /sos/:id` mock exists for contract exploration; the console reads the
+history endpoint. `PUT /sos/:id/status` remains a staff-side API, not a citizen control.
+
+**Demo check:** run `npm run dev`, sign in as the citizen mock account, open **SOS**, enter a manual
+location or place the pin, press **Prepare SOS**, then cancel once to verify nothing is sent. Confirm
+on the second attempt and check that a `pending` receipt appears in history. The in-memory mock
+history resets on page reload; it is not an offline or durable emergency queue.
 
 **States:** locating · active · escalated · resolved · permission-denied · offline-queued
 **APIs:** `POST /sos/send`, `GET /sos/my`, `GET /sos/:id`, `PUT /sos/:id/status`
@@ -633,8 +653,8 @@ fact rather than a design preference:
 - [ ] Community alert feed with severity styling
 - [ ] Alert detail with location, confirm action, share
 - [ ] News feed + news-alert items
-- [~] Notification center (unread badge, mark read / mark all) — bell + popover in the shell;
-      full-page centre not built
+- [x] Notification center — bell + popover and `/notifications` page with all entries, individual
+      mark-read, bulk mark-read and loading/empty/error states
 - [ ] Subscription management (areas, categories, channels)
 - [ ] Push opt-in with clear value framing; device register/unregister
 
@@ -766,9 +786,11 @@ finance, unit settings.
 
 **Screens:** incident map, unit coverage, hotspot view, case location picker.
 
-- [x] Incident markers (clustered) with severity/status color *(status-coloured; no clustering yet)*
+- [x] Incident markers grouped at close screen positions, with count and click-to-zoom; individual
+      status-coloured markers appear when separated
 - [x] Unit coverage radii
-- [ ] Hotspot/heatmap layer (prevention framing, never individual profiling)
+- [x] Optional aggregated activity overlay (at least five cases per area, low zoom only); explicitly
+      labelled as observed report concentration, never predicted danger or individual profiling
 - [x] Case location picker — `MapView mode="pick"` is wired into the report wizard
 - [~] Filters: period, category, status, unit — status + free-text search shipped
 
@@ -889,9 +911,9 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
       ending in a receipt that carries the tracking ID and attaches the links, each with its own
       outcome. `/` lists the reporter's cases and `/cases/:id` renders one as a curated record: the
       final report, the closure decisions and their comments, the shared weekly narratives, and a
-      status-change log with names and internal notes withheld. Draft auto-save is in; **SOS (F2) and
-      feedback submission are the parts of this milestone still open**
-- [~] **M3 — Awareness:** F10 case/unit map shipped; alerts, news, notifications centre open
+      status-change log with names and internal notes withheld. Draft auto-save is in; **SOS UI is
+      mock-verified with a live integration gate, while feedback submission remains open**
+- [~] **M3 — Awareness:** case/unit map and notification centre shipped; alerts and news open
 - [~] **M4 — Officer console:** queue and case workspace (details/progress/weekly/evidence) shipped,
       with weekly narratives served by the real endpoints (M4.5); dispatch → arrive shipped;
       **closure moved to the review workflow**; team view and comms open
@@ -906,7 +928,7 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
       `/admin/cases/:id`) — triage counters, assignment, evidence verification, **and the closure
       decision (delivered in M4.5)**; overview, roster, analytics, finance and settings open.
       **Super admin:** F9 not started
-- [ ] **M6 — Depth:** F11 (comms), F12 (AI), F10 hotspot layer
+- [~] **M6 — Depth:** aggregated activity map overlay shipped; F11 (comms) and F12 (AI) open
 - [ ] **M7 — Field hardening:** F14 offline/PWA, performance budget, a11y audit, E2E suite
 - [ ] **M8 — Pilot polish:** empty/error states everywhere, i18n, analytics funnel, real-device testing
 
@@ -1177,8 +1199,8 @@ uses `/invites/validate` to show the join-or-stay-citizen choice.
 
 - `npm install` must be run once — `node_modules/` is required for `npm run build`
 - No component tests, only pure-function tests
-- Map clustering not yet built
-- SOS flow (F2) still entirely unbuilt
+- Map marker grouping and aggregated activity overlay are built; advanced map filters remain open
+- SOS frontend is mock-verified; live service contract and dispatch behavior remain unverified
 - Feedback submission form still unbuilt
 
 
@@ -1355,7 +1377,8 @@ when its Definition of Done (§7) is met.
 - [ ] **T10** — Governance UI (A4)
 - [ ] **T11** — Suspect self-view (A5)
 - [ ] **T12** — Invites (A6)
-- [ ] **T13** — F2 SOS (still entirely unbuilt)
+- [~] **T13** — F2 SOS frontend built against mocks; live integration and responder-side workflow
+      must be verified before pilot use
 - [ ] **T14** — Feedback submission (F4)
 - [ ] **T15** — Audit / finance / bank-account / public endpoints from the brief's §4 reference
 

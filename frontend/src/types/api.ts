@@ -105,6 +105,30 @@ export interface CaseFeedback {
   createdAt?: string
 }
 
+/** SOS contract used by the emergency console; live response shape needs verification. */
+export interface SosAlert {
+  id: string
+  userId: string
+  trackingId: string
+  status: 'pending' | 'dispatched' | 'resolved' | 'escalated'
+  latitude: number
+  longitude: number
+  priority: 'high' | 'critical'
+  unitId?: string
+  emergencyContacts?: string
+  medicalInfo?: string
+  createdAt: string
+}
+
+export interface SendSosInput {
+  latitude: number
+  longitude: number
+  priority: SosAlert['priority']
+  unitId?: string
+  emergencyContacts?: string
+  medicalInfo?: string
+}
+
 export interface Case {
   id: string
   unitId: string
