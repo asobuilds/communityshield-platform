@@ -14,6 +14,7 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { CitizenHomePage } from '@/pages/citizen/CitizenHomePage'
 import { CitizenCasePage } from '@/pages/citizen/CitizenCasePage'
+import { SosPage } from '@/pages/citizen/SosPage'
 import { ReportIncidentPage } from '@/pages/citizen/ReportIncidentPage'
 import { OfficerQueuePage } from '@/pages/officer/OfficerQueuePage'
 import { OfficerCasePage } from '@/pages/officer/OfficerCasePage'
@@ -22,6 +23,7 @@ import { AdminCaseQueuePage } from '@/pages/admin/AdminCaseQueuePage'
 import { AdminCaseReviewPage } from '@/pages/admin/AdminCaseReviewPage'
 import { ComingSoonPage } from '@/pages/ComingSoonPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { NotificationsPage } from '@/pages/NotificationsPage'
 import type { Role } from '@/types/api'
 
 const ALL_ROLES: Role[] = ['citizen', 'officer', 'unit_admin', 'super_admin']
@@ -112,6 +114,8 @@ export function App() {
               <Route path="/" element={<RootRoute />} />
 
               <Route element={<ProtectedShell />}>
+                <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/sos" element={<RequireRole roles={['citizen']}><SosPage /></RequireRole>} />
                 {/* A citizen's own report — the curated detail view, deliberately
                     narrower than the staff case page. Citizen-only, so an officer
                     who lands here is sent to their own queue rather than shown a
