@@ -39,3 +39,30 @@ export function userIdFromToken(token: string | null): string | null {
   if (!token?.startsWith('mock.')) return null
   return token.slice('mock.'.length) || null
 }
+
+/**
+ * The refresh half of a mock session. `generation` advances on every rotation, so
+ * a client that fails to store the replacement gets caught rather than quietly
+ * reusing a spent token — the failure mode the real rotation exists to prevent.
+ */
+export function mockRefreshFor(userId: string, generation = 0): string {
+  return `mockrefresh.${generation}.${userId}`
+}
+
+export function userIdFromRefreshToken(token: string | null): string | null {
+  if (!token?.startsWith('mockrefresh.')) return null
+  const rest = token.slice('mockrefresh.'.length)
+  const separator = rest.indexOf('.')
+  if (separator < 0) return null
+  return rest.slice(separator + 1) || null
+}
+
+/**
+ * The code the mock accepts at `POST /auth/reset-password`, for any account.
+ *
+ * No message is actually sent in mock mode, so the flow needs a code the person
+ * exercising it can know. Deliberately an obvious placeholder rather than
+ * something plausible: a realistic-looking code would suggest a real message had
+ * arrived. The reset screen prints it while `USE_MOCKS` is on.
+ */
+export const MOCK_RESET_CODE = '123456'

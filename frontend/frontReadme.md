@@ -1121,3 +1121,199 @@ uses `/invites/validate` to show the join-or-stay-citizen choice.
 - Map clustering not yet built
 - SOS flow (F2) still entirely unbuilt
 - Feedback submission form still unbuilt
+
+
+---
+
+## Appendix B — Live backend integration (Wave 9)
+
+The backend is live and its contract is now the binding constraint. This appendix records the
+integration work, the parts of the integration brief that did **not** survive verification, and
+the ordered task list. **Verified 2026-09-24 against this branch's source and the Go handlers —
+where this appendix disagrees with a brief or with §0, this appendix wins.**
+
+### B1 — The live environment
+
+| | |
+|---|---|
+| Frontend | `https://nativityguard-frontend.onrender.com` |
+| Backend | `https://nativityguard-backend.onrender.com` |
+| API base | `https://nativityguard-backend.onrender.com/api/v1` |
+| Health | `/health` (public) |
+
+Render free tier: the first load takes 30–60 s. That is a cold start, **not a bug** — but the UI
+must not present it as one. No error state during a cold start; the skeleton is the honest screen
+(`frontagent` §3 law 3 — never lie with state).
+
+To develop against the live backend, `frontend/.env.local`:
+
+    VITE_API_URL=https://nativityguard-backend.onrender.com
+    VITE_USE_MOCKS=false
+
+**CORS:** the backend whitelists `https://nativityguard-frontend.onrender.com` only. A Render
+preview URL must be added to `ALLOWED_ORIGINS` by Agene — do not assume it already works.
+
+### B2 — Verified contract (corrections to the integration brief)
+
+| Item | Verified reality | Source |
+|---|---|---|
+| **Role strings** | **Underscore** — `citizen` · `officer` · `unit_admin` · `super_admin`. Compared in ~40 places. Super-admin is *also* a separate boolean, `models.User.IsSuperAdmin`; several guards accept either. A hyphenated DB value is an outlier to fix in the data, not a convention to adopt. `head_admin` is **not** a user role — it is `UnitMembership.IsHeadAdmin`. | `middleware/permission_middleware.go`, `models/UnitMembership.go` |
+| **`POST /auth/register`** | Returns **201 `{ message, user }` and NO token.** It also **ignores the `role` input** — `Role: "citizen"` is hardcoded — so a role selector on signup would collect an answer the server discards. `dateOfBirth` (YYYY-MM-DD) is `binding:"required"`. | `handlers/auth_handler.go` ~L26–100 |
+| **`POST /auth/login`** | Accepts **either** `identifier` **or** legacy `email`. The brief implies `identifier` is required; the existing `{ email, password }` call is fine and was never a bug. | `handlers/auth_handler.go` ~L102–122 |
+| **Route params** | `:id` everywhere — never `:unitId`, never `:userId`. | `routes/routes.go` |
+| **`GET /units/:id/officers`** | **Unrouted**, but the handler is fully implemented, already reads `c.Param("id")`, already authorises via `canViewOfficersInUnit`, and already returns `{ officers: [...] }` — the exact shape `useOfficers.ts` expects. Registering it is one line. Only `/:id/officers/ranking` is registered today. | `handlers/officers_handler.go` `GetOfficersByUnit` |
+| **`/cases` pagination** | `?limit=` is capped at **100**, default **50**. Never assume "get all"; page through. Other list endpoints follow in a later wave. | brief §5 |
+| **Error envelope** | `{ "error": "..." }` — that is the whole message. Do not add or invent a wrapper. | handlers |
+
+`ranking` is **not** a substitute for the roster: it is an ordered leaderboard, whereas
+`AssignOfficerDialog` needs every assignable officer in the unit.
+
+### B3 — Bug triage, verified against this branch
+
+The integration brief listed eight bugs. Checked against the source, **three are not real, one has
+the right symptom and the wrong cause, and three real defects are missing from it entirely.**
+
+| # | Brief's claim | Verdict |
+|---|---|---|
+| 1 | `/login` renders blank black | **Partly.** The route is `/auth/login` (`App.tsx:48`), and `/login` redirects there rather than going blank. An alias is still worth adding; the stated symptom is wrong. |
+| 2 | `/` blank when logged out | **Not a bug.** `RequireRole.tsx:23-25` navigates to `/auth/login` with `state.from`. There *is* a redirect target. |
+| 3 | Flash then blank on every page | **Real symptom, wrong cause** — see B3.1. |
+| 4 | No signup page, no landing page | **Real.** `src/pages/auth/` contains only `LoginPage.tsx`; there is no `/signup` route. This is the genuine blocking gap. |
+| 5 | No catch-all; unknown URLs blank | **Not a bug.** `App.tsx:143` → `<Route path="*">` → `NotFoundPage`, which exists. |
+| 6 | Role string mismatch | **Real — and it is the root cause of #3.** |
+| 7 | `/units/:id/officers` does not exist | **Real** (see B2). |
+| 8 | Mock param drift `:unitId` → `:id` | **Cosmetic, not a bug.** The mock matches its own pattern and reads its own `params.unitId`, so it works. Convention alignment only. |
+| **+** | *(absent from the brief)* | **`POST /auth/register` issues no token** — a signup page built to the brief's stated response shape fails silently on auto-login. |
+| **+** | *(absent from the brief)* | **No error boundary.** `main.tsx` renders `<App />` bare, so any render throw becomes an unexplained blank page. |
+| **+** | *(absent from the brief)* | **`/public/*` serialises whole models to anonymous callers** — see B3.2. Why the landing page ships without its map preview. |
+
+#### B3.1 — Why the app actually goes blank
+
+`types/api.ts` types `Role` as the underscore union, and **nothing normalises what the API
+returns**. With a hyphenated role from the database:
+
+1. `RequireRole.tsx:26` — the role is not in `ALL_ROLES` → `Navigate` to `homePathForRole('super-admin')`
+2. `RequireRole.tsx:41-43` — no switch match → `default: return '/'`
+3. `/` → `HomeRoute` (`App.tsx:37`) — the role is truthy and is not `'citizen'` → `Navigate` to `homePathForRole(...)` → `'/'`
+4. **Infinite self-redirect** → React throws "Maximum update depth exceeded" → no error boundary → black screen.
+
+That is the reported symptom exactly. **The brief's priority order is therefore inverted: this is
+the first thing to fix, not the last item to reconcile.**
+
+**Two independent defects have to be fixed, and fixing only one leaves the app breakable:**
+
+- **The data** — Agene sets the database role to `super_admin` (underscore).
+- **The code** — the frontend must survive a role it does not recognise. A correct database today
+  does not stop the next unexpected value (a new role, a typo, a legacy row) from blanking the app
+  again. This is `frontagent` §2 rule 3, and its fallback is a designed screen.
+
+#### B3.2 — Why the landing page has no map preview
+
+`GET /public/cases` and `GET /public/units` are registered with **no auth middleware** — only
+`RateLimitGeneral()` (`routes/routes.go`) — and neither handler narrows the query with a `Select`. So
+every `json`-tagged field on the model serialises to an anonymous caller:
+
+- from `models.Case` — `reportedBy`, the citizen's `title` and `description`, `latitude` /
+  `longitude` **and** `gisLatitude` / `gisLongitude`, `assignedTo`, `closedBy`, `approvedBy`;
+- from `models.SecurityUnit` — `contactPerson`, `contactPhone`, `contactEmail`, `hostUserId`,
+  `verifiedBy`, `verificationNotes`, `adminCount`, `memberCount`.
+
+The handler's own comment reads `// GetPublicUnits - Public endpoint for landing page (no auth
+required)` — these were written *for* the page T3 builds. The leak is real and bounded, and it is
+**not a frontend fix**: narrowing the response is a backend change (a curated public DTO), so T3
+ships without the map block and `LandingPage` makes no API call at all. Reported to Agene; see the
+open question in B2.
+
+### B4 — Task backlog
+
+Ordered. One task per branch-push, each verified locally before it ships. Every task ships only
+when its Definition of Done (§7) is met.
+
+**P0 — blocking a usable site**
+
+- [x] **T1 — Role reconciliation + unrecognised-role state** — *done, verified 2026-09-24 (`lib/role.ts` + 7 tests, 90 passing).*
+      New `lib/role.ts` (pure, tested): `normaliseRole()` maps database spellings onto the canonical
+      union and returns `null` for anything it does not know. `AuthContext` normalises at the
+      boundary and exposes the raw value alongside. `RequireRole` renders a designed
+      **Unrecognised role** screen instead of redirecting, and `homePathForRole` returns null rather
+      than defaulting to `'/'`.
+      *DoD:* no role value can produce a redirect loop; an unknown role is visible, explained and
+      escapable; the normaliser is unit-tested.
+      *Blocked on:* nothing — defensive regardless of the database fix.
+
+- [x] **T2 — Signup page** (`/signup`) wired to `POST /auth/register` — *done, verified 2026-09-24
+      (`lib/signup.ts` + 13 tests, 103 passing). Live-backend half of the DoD still to confirm.*
+      Fields: email, phone, firstName, lastName, password (min 6), **dateOfBirth (required)**.
+      **No role selector** — the endpoint ignores it. **No auto-login** — the response carries no
+      token, so success redirects to `/auth/login` with the email prefilled and a notice.
+      *DoD:* a real account is created against the live backend and then signed in successfully.
+
+- [x] **T3 — Public landing page at `/` for logged-out visitors** — *done, verified 2026-09-24
+      (103 tests, build clean). `LandingPage.tsx`; `/` moved outside `ProtectedShell` and decided by
+      `RootRoute` from auth status. **The map-preview block is deliberately unbuilt** — see B3.2.*
+      Hero, value proposition, feature sections, **Sign in** / **Get started**.
+      Requires moving `/` outside `ProtectedShell`. *DoD:* logged-out `/` renders the landing page;
+      signed-in `/` behaves exactly as today. Design brief: `frontagent` §11.
+
+- [x] **T4 — `/login` alias** → redirect to `/auth/login`, preserving `state.from`.
+      *Done, verified 2026-09-24. `LoginAlias` carries `location.state` — a bare `<Navigate>` drops it.*
+
+- [x] **T5 — Error boundary.** *Done, verified 2026-09-24. `ErrorBoundary.tsx` mounted full-page in
+      `main.tsx` and per-page in `AppShell` so a route throw keeps the chrome.*
+      Any render throw becomes an explained, recoverable screen.
+      *DoD:* a deliberate throw in a page component shows the boundary, not a blank page.
+
+**P1 — contract alignment**
+
+- [ ] **T6 — Officer roster.** Ask Agene to register `GET /units/:id/officers` (handler exists, shape
+      already matches). `AssignOfficerDialog` then loses its contract-gap branch (§0.3). Rename the
+      mock's `:unitId` → `:id` in the same change (cosmetic; B3 #8).
+
+- [x] **T7 — Refresh token flow** (F1 / A2) — *done, verified 2026-09-24 (`apiClient.test.ts` 9 → 15
+      tests, 109 passing). Rotating refresh, one shared attempt, hard logout on a rejected refresh.*
+
+- [ ] **T8 — Password recovery.** `POST /auth/forgot-password`, `POST /auth/reset-password`.
+      Built but **not yet verified**. `/auth/forgot-password` → `/auth/reset-password`, plus
+      `lib/passwordReset.ts` (pure validators + `maskIdentifier`). Two corrections to the brief,
+      both read off `services/password_reset_service.go`:
+      1. **The token is a 6-digit code, not a link.** `generateResetCode` mints six digits and both
+         notifiers put the code in the message body. The handler's 200 still says "we've sent a
+         password reset link" — the screens do not repeat that, because someone told to expect a
+         link waits for one that never arrives. **Backend copy is wrong** (report to Agene).
+      2. **Reset requires 8 characters; registration accepts 6.** `ResetPassword` binds `min=8` and
+         `ResetWithToken` refuses anything shorter again. Stated as-is in the reset hint rather than
+         reusing signup's 6 — a 6-character password can never be *reset*, only set at signup.
+         **Backend asymmetry** (report to Agene).
+      Success revokes every session and refresh token, so the page calls `logout()` before handing
+      off to `/auth/login` with a `reset` notice — a local token left behind would fail its next
+      request with no explanation.
+
+- [ ] **T9 — Session management.** `GET /auth/sessions`, `DELETE /auth/sessions/:jti`,
+      `DELETE /auth/sessions`.
+
+**P2 — surfaces the brief exposes that have no UI yet**
+
+- [ ] **T10** — Governance UI (A4)
+- [ ] **T11** — Suspect self-view (A5)
+- [ ] **T12** — Invites (A6)
+- [ ] **T13** — F2 SOS (still entirely unbuilt)
+- [ ] **T14** — Feedback submission (F4)
+- [ ] **T15** — Audit / finance / bank-account / public endpoints from the brief's §4 reference
+
+**Explicitly not tasks:** the brief's "BUG 2", "BUG 3" and "BUG 5" (not real — see B3), and BUG 8
+beyond the cosmetic rename. Do not "fix" a redirect guard that is already correct.
+
+### B5 — Doc drift, tracked and deferred
+
+Found while confirming these docs. Not corrected here, to keep this change to a single task.
+
+1. §A1 reads "renamed **Nativity Guard → Nativity Guard**" — the source name was lost in the edit.
+   It was almost certainly **Community Shield → Nativity Guard**.
+2. §A4 files governance UI as "**F7** — Governance UI", but F7 is already the Officer console.
+3. F4's `**States:**` / `**APIs:**` block is duplicated verbatim (~L553–556 and ~L565–568).
+4. §A3 and §0.3/F4 disagree on the reporter's privacy boundary. **Verified truth:** the curated
+   `case` DTO, the evidence list and the progress feed *are* now withheld server-side
+   (`handlers/case_handler.go` `GetCaseByID`), but **`timeline` is still returned in full** — so
+   `lib/caseLog.ts`'s role-not-name redaction remains load-bearing, not cosmetic. §A3's "safe by
+   contract" is half-right; §0.3's warning is half-stale.
+5. `frontagent` §2 rule 2 described a `lib/status.ts` fallback bug that is already fixed.
