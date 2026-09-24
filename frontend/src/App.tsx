@@ -24,6 +24,8 @@ import { AdminCaseReviewPage } from '@/pages/admin/AdminCaseReviewPage'
 import { ComingSoonPage } from '@/pages/ComingSoonPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
+import { AlertsPage, AlertDetailPage, NewsPage, SubscriptionsPage } from '@/pages/AwarenessPage'
+import { CommunityPage } from '@/pages/CommunityPage'
 import type { Role } from '@/types/api'
 
 const ALL_ROLES: Role[] = ['citizen', 'officer', 'unit_admin', 'super_admin']
@@ -115,6 +117,11 @@ export function App() {
 
               <Route element={<ProtectedShell />}>
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/alerts" element={<RequireRole roles={['citizen']}><AlertsPage /></RequireRole>} />
+                <Route path="/alerts/:id" element={<RequireRole roles={['citizen']}><AlertDetailPage /></RequireRole>} />
+                <Route path="/news" element={<RequireRole roles={['citizen']}><NewsPage /></RequireRole>} />
+                <Route path="/subscriptions" element={<RequireRole roles={['citizen']}><SubscriptionsPage /></RequireRole>} />
+                <Route path="/community" element={<RequireRole roles={['citizen']}><CommunityPage /></RequireRole>} />
                 <Route path="/sos" element={<RequireRole roles={['citizen']}><SosPage /></RequireRole>} />
                 {/* A citizen's own report — the curated detail view, deliberately
                     narrower than the staff case page. Citizen-only, so an officer
