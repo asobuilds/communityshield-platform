@@ -171,6 +171,7 @@ const CASE_IDS = {
   // makes the self-approval rule reachable in the demo. Without it the rule is
   // invisible until a real deployment produces the collision.
   selfreview: uid('cccc3333', 12),
+  feedbackDemo: uid('cccc3333', 13),
 }
 
 export const CASE_LIST: Case[] = [
@@ -522,6 +523,27 @@ export const CASE_LIST: Case[] = [
       'Four incidents logged, all between 00:30 and 02:00 on weeknights. Two residents independently describe a group of three on a single motorcycle. A discarded ball peen hammer was recovered from the base of the fourth lamp and logged as evidence. No CCTV covers the stretch. Consider closing with a recommendation to the council for a lamp-post camera.',
     createdAt: daysAgo(21),
     updatedAt: hoursAgo(20),
+  },
+  {
+    id: CASE_IDS.feedbackDemo,
+    unitId: UNIT_MAIN,
+    reportedBy: CITIZEN.userId,
+    assignedTo: OFFICER.userId,
+    title: 'Demo: resolved street sign obstruction',
+    description: 'Sample closed report for trying the feedback form. This is not a real incident.',
+    location: 'Sample location, Lagos',
+    latitude: 6.5002,
+    longitude: 3.3545,
+    status: 'closed',
+    priorityLevel: 'P3',
+    trackingId: 'DEMO-2026-0001',
+    gisLatitude: 6.5002,
+    gisLongitude: 3.3545,
+    isPublic: true,
+    closedAt: daysAgo(1),
+    finalReport: 'Sample report completed for demonstration.',
+    createdAt: daysAgo(4),
+    updatedAt: daysAgo(1),
   },
 ]
 

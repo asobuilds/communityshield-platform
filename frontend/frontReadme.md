@@ -73,9 +73,9 @@ The detailed checklists in §3 explain the boundaries of each partial feature.
 | F1 Auth | Login, role guards, signup, password recovery screens, rotating token refresh, `/login` alias | OTP, officer/unit applications, onboarding, session management; live signup and recovery checks |
 | F2 SOS | Citizen SOS console, confirm/cancel, map or manual location, optional responder details, status/history and persistent entry point (mock verified) | Verify request/response and dispatch semantics against the live SOS service; mock does not simulate dispatch |
 | F3 Reporting | Four-step report wizard, unit/pin selection, evidence links, draft restore, receipt | Binary uploads require a backend route; offline submit queue remains open |
-| F4 Tracking | Citizen case list/detail, status rail and review loop, shared weekly updates, staff evidence view | Citizen feedback submission, push status updates, privacy review of live responses |
-| F5 Awareness | Notification bell, popover, full centre, individual and bulk read actions | Alerts, news, subscriptions, push registration |
-| F6 Community | No frontend screens | Forum, announcements, events, safety tips and moderation |
+| F4 Tracking | Citizen case list/detail, status rail and review loop, shared weekly updates, staff evidence view, mock feedback submission | Push status updates, privacy review of live responses |
+| F5 Awareness | Notification centre, demo alert feed/detail/confirmation, news, subscriptions and permission opt-in | Python APIs and real push delivery |
+| F6 Community | Demo forum/replies, announcements, event RSVP, post reporting | Python APIs, durable moderation workflow and AI-assisted tips |
 | F7 Officer | Queue, dispatch/arrive, progress, evidence, weekly narrative, review submission | Investigate transition (backend route required), team view and communications |
 | F8 Unit admin | Triage/assignment, case review, closure decisions, evidence verification | Overview, roster (backend route required), full verification, analytics, finance, settings |
 | F9 Super admin | Placeholder route only | Governance console, users, units, audit, analytics and settings |
@@ -93,6 +93,13 @@ F10 aggregated activity areas, and F5's full notification centre. The first seve
 and require the live integration gate described under F2. This tally counts the clustering work
 within the already partially implemented F10 marker item, rather than counting every sub-control
 as a separate feature.
+
+**Following ten frontend checklist items (`feature/frontend-awareness-community`):** F4 feedback
+submission; F5 alert feed, alert detail/confirmation/share, news, subscriptions and push permission
+opt-in; F6 forum/replies, announcements, event RSVP and reporting a post. All are browser/mock
+features. Demo content is visibly labelled and stored in memory. The Python backend has no mounted
+API for these flows; push permission does not imply delivery, and reporting a post does not reach a
+live moderation team. The static preparedness copy is not AI-assisted, so F6 tips stay open.
 >
 > **M4.5 (mock lifecycle re-alignment) is done.** The former target contract moved the case lifecycle underneath this
 > frontend — a post-frontend commit (`36a94ec feat: add accountable case review workflow`) added three
@@ -665,8 +672,8 @@ fact rather than a design preference:
       matters most), the **admin** Review tab, and now the **citizen case detail**, so "why is my case
       still open" has an answer addressed to the person who asked it. A closed case with no recorded
       decision is described as such rather than as "not decided yet"
-- [~] Feedback: rating + comment **rendered** where present; **submission form not built**, and no
-      citizen-facing surface renders feedback yet
+- [x] Feedback: a reporter can rate and comment on their closed case once in the demo; the mock
+      rejects non-reporters, open cases and duplicate submissions. Live Python integration pending
 - [ ] Push/in-app updates on every status change
 
 **States:** empty · loading · not-found · forbidden · closed-readonly · awaiting-review · changes-requested
@@ -692,13 +699,14 @@ fact rather than a design preference:
 
 **Screens:** alert feed, alert detail, news feed, notification center, subscriptions.
 
-- [ ] Community alert feed with severity styling
-- [ ] Alert detail with location, confirm action, share
-- [ ] News feed + news-alert items
+- [x] Demo community alert feed with severity labels and empty/loading/error states
+- [x] Demo alert detail with location, idempotent confirm action and explicit demo-link sharing
+- [x] Demo news feed with `news`/`alert` item types and clear source labeling
 - [x] Notification center — bell + popover and `/notifications` page with all entries, individual
       mark-read, bulk mark-read and loading/empty/error states
-- [ ] Subscription management (areas, categories, channels)
-- [ ] Push opt-in with clear value framing; device register/unregister
+- [x] Demo subscription management for areas, categories and preferred channels
+- [x] Browser permission opt-in and demo device register/unregister; no push delivery until a
+      Python service implements it
 
 **APIs:** `GET /alerts`, `GET /alerts/:id`, `POST /alerts/:id/confirm`, `POST /alerts/subscribe`,
 `GET /alerts/subscriptions`, `GET /alerts/news`, `GET /news`, `GET /news/:id`,
@@ -710,11 +718,11 @@ fact rather than a design preference:
 
 **Screens:** community hub, forum post, announcements, events, event detail/RSVP.
 
-- [ ] Forum: post list, post detail, replies, create post
-- [ ] Announcements feed
-- [ ] Events with RSVP + attendee count
+- [x] Demo forum: post list, inline detail, replies and create post
+- [x] Demo announcements feed
+- [x] Demo events with RSVP toggle and attendee count
 - [ ] Prevention/safety tips surface (AI-assisted, cached)
-- [ ] Moderation affordances (report content) — visible, simple
+- [x] Demo post-report action, visibly recorded only in memory; live moderation queue pending
 
 **APIs:** `POST|GET /community/posts`, `GET /community/posts/:id`, `POST /community/replies`,
 `POST|GET /community/announcements`, `POST|GET /community/events`, `POST /community/events/:id/rsvp`
@@ -954,8 +962,9 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
       outcome. `/` lists the reporter's cases and `/cases/:id` renders one as a curated record: the
       final report, the closure decisions and their comments, the shared weekly narratives, and a
       status-change log with names and internal notes withheld. Draft auto-save is in; **SOS UI is
-      mock-verified with a live integration gate, while feedback submission remains open**
-- [~] **M3 — Awareness:** case/unit map and notification centre shipped; alerts and news open
+      mock-verified with a live integration gate; feedback is now available in the demo only**
+- [~] **M3 — Awareness:** case/unit map, notification centre, demo alerts/news and subscription
+      controls shipped in the browser; Python integration and real push delivery remain open
 - [~] **M4 — Officer console:** queue and case workspace (details/progress/weekly/evidence) shipped,
       with weekly narratives served by the real endpoints (M4.5); dispatch → arrive shipped;
       **closure moved to the review workflow**; team view and comms open
