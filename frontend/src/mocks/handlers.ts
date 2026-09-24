@@ -20,6 +20,7 @@
  */
 
 import { sleep, type MockRoute } from './adapter'
+import { communityRoutes } from './community'
 import { USERS, seedDatabase, type MockDatabase } from './seed'
 import {
   MOCK_ACCOUNTS,
@@ -214,6 +215,7 @@ interface RegisterInput {
 }
 
 export const handlers: MockRoute[] = [
+  ...communityRoutes,
   /* ---------------------------------------------------------------- auth */
 
   {
@@ -599,6 +601,33 @@ export const handlers: MockRoute[] = [
   },
 
   /* ------------------------------------------------------- case workflow */
+
+  {
+    method: 'POST',
+    path: '/cases/:id/feedback',
+    async respond({ request, params }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      const caseItem = db.cases.find((item) => item.id === params.id)
+      if (!caseItem) return notFound('case not found')
+      if (caseItem.reportedBy !== user.id) return forbidden('only the reporter may leave feedback')
+      if (caseItem.status !== 'closed') return { status: 409, body: { error: 'feedback is available when the case is closed' } }
+      if (db.feedback.some((item) => item.caseId === params.id && item.userId === user.id)) {
+        return { status: 409, body: { error: 'feedback already recorded' } }
+      }
+      const body = await request.json() as { rating?: number; comment?: string }
+      if (!Number.isInteger(body.rating) || (body.rating ?? 0) < 1 || (body.rating ?? 0) > 5) {
+        return { status: 400, body: { error: 'rating must be between 1 and 5' } }
+      }
+      const feedback = {
+        id: crypto.randomUUID(), caseId: caseItem.id, userId: user.id,
+        rating: body.rating as number, comment: typeof body.comment === 'string' ? body.comment.trim().slice(0, 1000) : '',
+        createdAt: new Date().toISOString(),
+      }
+      db.feedback.push(feedback)
+      return { status: 201, body: { feedback } }
+    },
+  },
 
   {
     method: 'POST',
