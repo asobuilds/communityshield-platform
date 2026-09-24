@@ -150,3 +150,120 @@ describe('api client', () => {
     expect(JSON.parse(String(init.body))).toEqual({ action: 'note', description: 'checked' })
   })
 })
+
+/**
+ * Refresh behaviour.
+ *
+ * `/auth/refresh` **rotates**: the token you send is spent and the response carries
+ * its replacement. That makes the concurrency case a correctness problem rather
+ * than a performance one — two refreshes racing would have the second present a
+ * token the first had already consumed, and the user would be signed out at the
+ * exact moment the app was trying to keep them in. These tests pin that, and pin
+ * that a genuinely dead refresh token is still a hard sign-out.
+ */
+describe('session refresh', () => {
+  /** A server that accepts `Bearer fresh-*` and rejects anything else as expired. */
+  function expiringServer(options: { refreshStatus?: number } = {}) {
+    const calls: string[] = []
+    const fetchMock = vi.fn(async (url: unknown, init?: RequestInit): Promise<Response> => {
+      const target = String(url)
+      calls.push(target)
+
+      if (target.endsWith('/auth/refresh')) {
+        if (options.refreshStatus && options.refreshStatus >= 400) {
+          return jsonResponse({ error: 'refresh token revoked' }, { status: options.refreshStatus })
+        }
+        const attempt = calls.filter((c) => c.endsWith('/auth/refresh')).length
+        return jsonResponse({ token: `fresh-${attempt}`, refreshToken: `refresh-${attempt + 1}` })
+      }
+
+      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization
+      return auth?.startsWith('Bearer fresh')
+        ? jsonResponse({ ok: true })
+        : jsonResponse({ error: 'token expired' }, { status: 401 })
+    })
+    return { fetchMock, calls }
+  }
+
+  it('refreshes an expired access token, stores the rotation, and replays once', async () => {
+    tokenStore.set('stale')
+    tokenStore.setRefresh('refresh-1')
+    const { fetchMock, calls } = expiringServer()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(api.get('/cases')).resolves.toEqual({ ok: true })
+
+    expect(calls).toHaveLength(3) // original → refresh → replay
+    expect(calls[1]).toMatch(/\/auth\/refresh$/)
+
+    const replay = fetchMock.mock.calls[2][1] as RequestInit
+    expect((replay.headers as Record<string, string>).Authorization).toBe('Bearer fresh-1')
+
+    expect(tokenStore.get()).toBe('fresh-1')
+    // Dropping this is the bug rotation is designed to surface.
+    expect(tokenStore.getRefresh()).toBe('refresh-2')
+  })
+
+  it('runs a single refresh for concurrent 401s rather than one per request', async () => {
+    tokenStore.set('stale')
+    tokenStore.setRefresh('refresh-1')
+    const { fetchMock, calls } = expiringServer()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(Promise.all([api.get('/a'), api.get('/b'), api.get('/c')])).resolves.toHaveLength(3)
+
+    expect(calls.filter((c) => c.endsWith('/auth/refresh'))).toHaveLength(1)
+  })
+
+  it('signs the user out when the refresh token is itself rejected', async () => {
+    tokenStore.set('stale')
+    tokenStore.setRefresh('spent')
+    const { fetchMock, calls } = expiringServer({ refreshStatus: 401 })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(api.get('/cases')).rejects.toMatchObject({ status: 401 })
+
+    // Original + refresh, and no replay — a second 401 is a real sign-out.
+    expect(calls).toHaveLength(2)
+    expect(tokenStore.get()).toBeNull()
+    expect(tokenStore.getRefresh()).toBeNull()
+  })
+
+  it('does not attempt a refresh when there is no refresh token to spend', async () => {
+    tokenStore.set('stale')
+    const { fetchMock, calls } = expiringServer()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(api.get('/cases')).rejects.toMatchObject({ status: 401 })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('never refreshes on behalf of an anonymous request', async () => {
+    // A rejected sign-in must not spend the refresh token of a session the user
+    // already has, let alone end it.
+    tokenStore.setRefresh('refresh-1')
+    const { fetchMock, calls } = expiringServer()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(api.postAnonymous('/auth/login', { email: 'a@b.c' })).rejects.toMatchObject({
+      status: 401,
+    })
+    expect(calls).toHaveLength(1)
+    expect(tokenStore.getRefresh()).toBe('refresh-1')
+  })
+
+  it('refreshes again after an earlier refresh has settled', async () => {
+    // The in-flight promise must not be cached forever — if it were, the first
+    // expiry would work and every later one would quietly reuse a stale result.
+    tokenStore.set('stale')
+    tokenStore.setRefresh('refresh-1')
+    const { fetchMock, calls } = expiringServer()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.get('/a')
+    tokenStore.set('stale-again') // the next access token ages out too
+    await api.get('/b')
+
+    expect(calls.filter((c) => c.endsWith('/auth/refresh'))).toHaveLength(2)
+  })
+})

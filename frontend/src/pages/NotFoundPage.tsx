@@ -5,6 +5,9 @@ import { homePathForRole } from '@/auth/RequireRole'
 
 export function NotFoundPage() {
   const { role } = useAuth()
+  // This page renders behind the guard, so the role has a home; the fallback keeps
+  // the link honest rather than letting `null` reach an href.
+  const home = homePathForRole(role) ?? '/'
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
@@ -19,7 +22,7 @@ export function NotFoundPage() {
         </p>
       </div>
       <Link
-        to={homePathForRole(role)}
+        to={home}
         className="inline-flex h-9 items-center rounded-lg border border-border-hi bg-surface-hi px-3 text-sm text-ink transition-colors hover:bg-surface-hi/80"
       >
         Back to home

@@ -1,5 +1,6 @@
 ﻿import type { ReactNode } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import {
   BarChart3,
   FileText,
@@ -117,7 +118,7 @@ function NavItems({ items, variant }: { items: NavItem[]; variant: 'sidebar' | '
  * Application shell: desktop sidebar + top bar, mobile bottom nav.
  * Role-aware, and honest about what isn't built yet.
  */
-export function AppShell() {
+export function AppShell({ children }: { children?: ReactNode } = {}) {
   const { user, role, logout } = useAuth()
   const navigate = useNavigate()
   const items = role ? NAV[role] : []
@@ -184,7 +185,15 @@ export function AppShell() {
         </header>
 
         <main className="min-w-0 flex-1 pb-20 md:pb-0">
-          <Outlet />
+          {/* Narrow boundary: a page that throws takes out the content area only,
+              so the header and navigation survive and the user can walk away from
+              the broken screen instead of losing the whole console. */}
+          <ErrorBoundary title="This page failed to render">
+            {/* `children` when a caller renders the shell directly (`/` does, since
+                it has to decide between the landing page and the console before
+                the router picks a child); `<Outlet/>` for every nested route. */}
+            {children ?? <Outlet />}
+          </ErrorBoundary>
         </main>
 
         {/* Mobile bottom nav */}

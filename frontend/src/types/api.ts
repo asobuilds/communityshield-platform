@@ -267,7 +267,59 @@ export interface Notification {
 
 export interface LoginResponse {
   token: string
+  /** Required: the backend 500s rather than omit it. See `RefreshResponse`. */
+  refreshToken: string
   user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role'>
+}
+
+/**
+ * The body of `POST /auth/refresh`.
+ *
+ * Refresh **rotates**: the token you send is spent, and the response carries its
+ * replacement. A caller that keeps only `token` will find its next refresh
+ * rejected as revoked — so `refreshToken` is not optional here.
+ */
+export interface RefreshResponse {
+  token: string
+  refreshToken: string
+}
+
+/**
+ * The body of `POST /auth/register`, which returns **201 and no token**.
+ *
+ * Registration deliberately does not sign you in: the response carries a message
+ * and the created user, nothing more. A caller that expected a token here would
+ * fail silently, so the shape is spelled out rather than inferred from
+ * `LoginResponse`. `role` is always `"citizen"` — the handler hardcodes it and
+ * ignores any `role` sent in the request.
+ */
+export interface RegisterResponse {
+  message: string
+  user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role'>
+}
+
+/**
+ * The body of `POST /auth/forgot-password`.
+ *
+ * Always 200, whether or not the identifier matches an account: the endpoint is
+ * deliberately non-enumerating and its message says so. That message mentions a
+ * "reset link", but what actually arrives is a 6-digit code — so the screens show
+ * their own copy rather than echoing this string back at someone who is waiting
+ * for a link.
+ */
+export interface ForgotPasswordResponse {
+  message: string
+}
+
+/**
+ * The body of `POST /auth/reset-password`.
+ *
+ * Success is not local to this device: the service revokes every session and
+ * refresh token the account holds, so any session open in this browser is dead by
+ * the time this resolves.
+ */
+export interface ResetPasswordResponse {
+  message: string
 }
 
 export interface ProfileResponse {

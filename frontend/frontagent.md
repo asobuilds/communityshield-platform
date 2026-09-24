@@ -64,17 +64,31 @@ tokens) and `src/components/ui/`. Extend those tokens and primitives; never inve
 (`Skeleton`, `EmptyState`, `ErrorState`, `OfflineBanner`). **Adding a status means adding a
 `--color-status-*` token and a `CASE_STATUS_META` entry — not a one-off class string.**
 
-**Two rules the current lifecycle forces on you:**
+**Three rules the current lifecycle forces on you:**
 
 1. **A linear rail cannot express a loop.** `pending_admin_review → admin_changes_requested →
    pending_admin_review` returns backwards, and an administrator may bounce it more than once. A
    five-step progress rail renders that as nonsense. Design the review phase as its own instrument —
    a cycle with a visible decision history — and keep the one-way rail for the field work that
    genuinely is one-way (`pending → … → investigating`). Do not stretch one component over both.
-2. **An unrecognised state must be *visible*, never quietly normalised.** The status metadata
-   currently falls back to `pending` for anything it does not know (`lib/status.ts`), which renders a
-   case under investigation as "Pending — awaiting triage." For a public-safety product, "I don't
-   know this state" is an honest screen; a confident wrong label is not. Design the fallback.
+2. **An unrecognised state must be *visible*, never quietly normalised.** This was once the
+   codebase's biggest liability: the status metadata fell back to `pending` for anything it did not
+   know (`lib/status.ts`), rendering a case under investigation as "Pending — awaiting triage." That
+   specific bug is fixed — `statusMeta()` now returns `known: false` and the UI says **"Unrecognised
+   state"** with the raw value shown — and it is the standard every later fallback is held to. For a
+   public-safety product, "I don't know this state" is an honest screen; a confident wrong label is
+   not. Design the fallback.
+3. **A role is not a destination until it is a *known* role.** The same principle applied to
+   identity, and here it currently fails. `Role` is a union of four underscore literals and nothing
+   normalises what the API returns, so one unexpected value — `super-admin` from a legacy row — sends
+   `homePathForRole` to its `default: return '/'` and `HomeRoute` straight back to it: an infinite
+   self-redirect that React kills as "Maximum update depth exceeded." With no error boundary above
+   it, the user watches the page render and then go black — not a permissions error, a dead app.
+   **Two consequences.** A role the frontend does not recognise gets a *designed* screen that names
+   the problem and offers a way out (sign out, contact an administrator) — never a guess at which
+   console to open, and never a redirect. And `homePathForRole` must return "no home", not `'/'`,
+   because `'/'` is a real destination for a real role; returning it as the fallback is precisely
+   what made the loop possible.
 
 ---
 
@@ -257,6 +271,16 @@ If any box is unchecked, the work is not done.
 - **A lifecycle drawn as a straight line when it loops**, or a single progress rail stretched over
   both one-way field work and the reversible review phase
 - **A confident status the data does not support** — unknown states rendered as a known one
+- **A fallback that assumes the happy path** — a `default:` clause that returns a *real* destination
+  (a route, a console, a role home) so an unrecognised value resolves to something plausible instead
+  of stopping. The blank-screen redirect loop was one `return '/'`
+- **A redirect that can point at itself.** If two guards can each send the user to the other's
+  destination, the app hangs where it should have failed loudly. Show the problem; do not bounce
+- **A failure with no floor under it.** A render throw used to leave an empty `<div id="root">` —
+  the crash was real but invisible, and the user had nothing to read and nowhere to go. Every routed
+  screen now sits inside `ErrorBoundary` (`AppShell` wraps `<Outlet/>`), and `main.tsx` wraps the app
+  in a second one so a crash in the shell itself is still survivable. New surfaces inherit this by
+  rendering inside the shell; do not render a route outside it without saying why
 - Over-animation, parallax, decorative motion in an emergency path
 - Surveillance or profiling aesthetics; anything that could shame a user
 - Notification spam or retention dark patterns
@@ -286,3 +310,83 @@ attach the relevant feature section of [`frontReadme.md`](./frontReadme.md).
 
 > Your measure of success: a user reports an incident, tracks it to resolution, and comes back to
 > the app when it matters — because it earned their trust.
+
+---
+
+## 11. The public face — landing, signup and recovery
+
+Every section above assumes someone who is already inside. They are not. `/` still sends an anonymous
+visitor straight to a login form — so the product has no front door. These two surfaces are the only
+part of it a stranger ever sees, and they carry the whole of §1's argument: this platform is
+**chosen**, not mandated. (All built: landing T3, signup T2, recovery T8.)
+
+Design for a resident who has never heard of Nativity Guard, on a mid-range Android over a slow
+connection, arriving from a neighbour's WhatsApp forward. They are deciding, in seconds, whether this
+is a real service or somebody's student project.
+
+**Two constraints that are not design choices:**
+
+- **A cold start is not an error.** Render free tier takes 30–60 s on first load. Show the skeleton;
+  never an error state, never a spinner that implies failure. §3 law 3 — say what is true.
+- **The signup contract is narrower than it looks.** `POST /auth/register` returns **no token** and
+  **ignores any `role` you send**. So there is no role selector, and success means "account created,
+  now sign in" — not a silent auto-login that will never happen. `dateOfBirth` is required.
+
+### Landing page (`/`, logged out)
+
+| Block | Job |
+|---|---|
+| **Hero** | One sentence a resident would repeat to a neighbour — the promise, not the feature list. Primary **Get started**, secondary **Sign in**. No stock-photo surveillance imagery, no night-vision clichés (§8) |
+| **The lifecycle, shown not claimed** | `pending → … → closed` with the review loop, as the product's heartbeat. This is the thing no competitor has: a report you can watch being answered |
+| **What it is for** | Report an incident · see what happened nearby · know which unit responds. Plain language, no jargon |
+| **Accountability** | The rules that make it trustworthy, stated as facts: an officer cannot close their own case; closure needs a second administrator; unit access is not case access. This is the section that converts a sceptic |
+| **Map preview** | Their area, real units. Local relevance (§4) — it must feel like *their* street. **Blocked, not skipped:** `/public/cases` and `/public/units` serialise whole models — reporter ids, exact coordinates, unit contact details — to anonymous callers. No preview ships until the backend projects a public DTO (`frontReadme` B3.2) |
+| **Close** | Repeat the primary action; a short, honest line about what happens to their data |
+
+Anti-goals apply hardest here: **no manufactured urgency, no countdown pressure, no notification
+opt-in demanded before the product has earned it.**
+
+### Signup (`/auth/signup`)
+
+The form is a promise about what happens next, so it says so. Single page, six fields, in the order
+a person knows the answers — email, phone, first name, last name, date of birth, password. Show the
+password minimum up front (6) rather than after a failed submit. **Say plainly that a new account is
+a citizen account** and what a unit membership would mean later, because the endpoint decides that
+and the UI must not imply otherwise (§3 law 3).
+
+Refusals are normal outcomes: an existing email or phone returns a deliberately generic
+`{ "error": "..." }` that does not say which field matched. **Do not "improve" that message on the
+client by guessing** — mirror it. On success, land on `/auth/login` with the email prefilled and a
+notice that the account exists.
+
+### Password recovery (`/auth/forgot-password` → `/auth/reset-password`)
+
+Two screens, because the code alone is what the second call needs — so it still works after a reload
+throws away the state that carried the identifier across.
+
+The flow is a **code, not a link**, and the copy has to say so. `generateResetCode` mints six digits
+and both notifiers put that code in the message body; the endpoint's own 200 still claims a "reset
+link" was sent. **Do not echo the server's wording here.** Someone told to expect a link goes looking
+for one that never arrives while the code sits in the SMS they already have — §3 law 3, in the one
+place where repeating the backend verbatim is the dishonest choice.
+
+`/auth/forgot-password` answers **200 whatever you send**, including an identifier with no account
+behind it. That is deliberate and the screen must not undo it: no "no such account", no error styling
+on a known address, and the confirmation stays conditional — *if* an account matches. Masking the
+identifier back (`a•••@example.com`) is fine; it is what they just typed.
+
+Reset refuses anything under **8 characters**, though registration accepts 6. State the floor that
+applies to *this* form rather than reusing signup's — a six-character password can be set at signup
+and can never be reset, which is a backend asymmetry to report, not to paper over.
+
+Success revokes **every** session and refresh token on the account. Sign the local session out before
+handing off to `/auth/login`, and say why: a token left in place fails its next request with no
+explanation, which reads as the app breaking rather than as the security measure it is.
+
+### The unrecognised-role screen (§2 rule 3)
+
+Not part of the public face, but the same discipline. A signed-in user whose role this build cannot
+name gets a calm, specific screen: state the raw value, say it is not a role this version
+recognises, and offer **sign out** and the administrator route. No console, no redirect, no spinner
+that never resolves. It should read as a gap in *our* deployment, not as the user having done
+something wrong.

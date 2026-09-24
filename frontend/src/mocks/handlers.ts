@@ -21,8 +21,18 @@
 
 import { sleep, type MockRoute } from './adapter'
 import { USERS, seedDatabase, type MockDatabase } from './seed'
-import { MOCK_ACCOUNTS, mockTokenFor, mockUid, userIdFromToken } from './config'
+import {
+  MOCK_ACCOUNTS,
+  MOCK_RESET_CODE,
+  mockRefreshFor,
+  mockTokenFor,
+  mockUid,
+  userIdFromRefreshToken,
+  userIdFromToken,
+} from './config'
 import { ISO_WEEK_MS, startOfIsoWeekUtc } from '@/lib/week'
+import { MIN_SIGNUP_AGE, ageOn } from '@/lib/signup'
+import { normaliseResetCode, MIN_RESET_PASSWORD_LENGTH } from '@/lib/passwordReset'
 import type {
   Case,
   CaseReview,
@@ -120,6 +130,86 @@ const nowIso = () => new Date().toISOString()
  */
 const ZERO_UNIT_ID = '00000000-0000-0000-0000-000000000000'
 
+/**
+ * Accounts created through `POST /auth/register` during this session.
+ *
+ * Kept apart from `MOCK_ACCOUNTS` on purpose: that list is the login screen's
+ * one-tap demo buttons, and a registered account landing in it would add a
+ * duplicate "Citizen" button. Registration still has to be *usable*, though — the
+ * point of the flow is signing in with what you just created — so login consults
+ * both lists. Session-only, like the rest of the mock state.
+ */
+const registeredAccounts = new Map<string, { password: string; userId: string }>()
+
+/**
+ * Advances on every rotation. The real service invalidates the refresh token it
+ * just consumed; this mock only moves the generation forward, which is enough to
+ * catch a client that stores the access token but drops the replacement refresh
+ * token — the failure mode rotation exists to expose — but not a double-spend.
+ */
+let refreshGeneration = 0
+
+/**
+ * The account the most recent password-reset request resolved to.
+ *
+ * The real flow's indirection matters and is modelled: `/auth/reset-password` is
+ * handed only a code, and the server finds the user through the persisted reset
+ * row — it never sees the identifier again. This stands in for that row. Only the
+ * most recent request is kept because the mock recognises a single code; the real
+ * service would still honour an earlier, unexpired one.
+ */
+let pendingReset: { userId: string } | null = null
+
+/**
+ * Mirrors `RequestReset`'s lookup: email is case-insensitive, phone matches on
+ * digits alone. Unknown identifiers resolve to `null` — the caller must not be
+ * able to tell that apart from a match.
+ */
+function findUserId(identifier: string): string | null {
+  const trimmed = identifier.trim()
+  if (trimmed.includes('@')) {
+    const email = trimmed.toLowerCase()
+    const demo = MOCK_ACCOUNTS.find((account) => account.email.toLowerCase() === email)
+    if (demo) return demo.userId
+    return registeredAccounts.get(email)?.userId ?? null
+  }
+
+  const digits = normaliseResetCode(trimmed)
+  if (!digits) return null
+  // Comparison is on the stored number's digits, like the `phone = ?` clause.
+  const match = Object.values(USERS).find(
+    (user) => normaliseResetCode(user.phone ?? '') === digits,
+  )
+  return match?.id ?? null
+}
+
+/**
+ * Replace a password wherever that account lives.
+ *
+ * Without this the walk-through would be a lie about the one thing it exists to
+ * show: reset the password, then be refused at sign-in for using it.
+ */
+function setPasswordFor(userId: string, password: string): void {
+  const demo = MOCK_ACCOUNTS.find((account) => account.userId === userId)
+  if (demo) {
+    demo.password = password
+    return
+  }
+  for (const [email, record] of registeredAccounts) {
+    if (record.userId === userId) registeredAccounts.set(email, { ...record, password })
+  }
+}
+
+/** The registration body, field for field from `Register`'s input struct. */
+interface RegisterInput {
+  email: string
+  phone: string
+  firstName: string
+  lastName: string
+  password: string
+  dateOfBirth: string
+}
+
 export const handlers: MockRoute[] = [
   /* ---------------------------------------------------------------- auth */
 
@@ -129,20 +219,29 @@ export const handlers: MockRoute[] = [
     async respond({ request }) {
       await sleep(250)
       const body = (await request.json().catch(() => ({}))) as {
+        identifier?: string
         email?: string
         password?: string
       }
-      const email = (body.email ?? '').trim().toLowerCase()
-      const account = MOCK_ACCOUNTS.find((a) => a.email === email)
+      // The real handler binds `identifier` and the legacy `email` and falls back
+      // from one to the other, so the mock accepts either spelling too.
+      const identifier = (body.identifier || body.email || '').trim().toLowerCase()
 
-      if (!account || account.password !== body.password) {
+      const account = MOCK_ACCOUNTS.find((a) => a.email.toLowerCase() === identifier)
+      const registered = registeredAccounts.get(identifier)
+      const userId = account?.userId ?? registered?.userId
+      const expected = account?.password ?? registered?.password
+
+      if (!userId || expected !== body.password) {
         return { status: 401, body: { error: 'invalid credentials' } }
       }
 
-      const user = USERS[account.userId]
+      const user = USERS[userId]
       return {
         body: {
           token: mockTokenFor(user.id),
+          // Login always issues a pair, and the backend 500s rather than omit it.
+          refreshToken: mockRefreshFor(user.id),
           user: {
             id: user.id,
             email: user.email,
@@ -150,6 +249,179 @@ export const handlers: MockRoute[] = [
             lastName: user.lastName,
             role: user.role,
           },
+        },
+      }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/auth/refresh',
+    async respond({ request }) {
+      await sleep(200)
+      const body = (await request.json().catch(() => ({}))) as { refreshToken?: string }
+
+      const userId = userIdFromRefreshToken(body.refreshToken ?? null)
+      const user = userId ? USERS[userId] : null
+      if (!user) {
+        return { status: 401, body: { error: 'invalid or expired refresh token' } }
+      }
+
+      refreshGeneration += 1
+      return {
+        body: {
+          token: mockTokenFor(user.id),
+          refreshToken: mockRefreshFor(user.id, refreshGeneration),
+        },
+      }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/auth/register',
+    async respond({ request }) {
+      await sleep(400)
+      const body = (await request.json().catch(() => ({}))) as Partial<RegisterInput>
+
+      const email = (body.email ?? '').trim().toLowerCase()
+      const phone = (body.phone ?? '').trim()
+      const firstName = (body.firstName ?? '').trim()
+      const lastName = (body.lastName ?? '').trim()
+      const password = body.password ?? ''
+      const dateOfBirth = (body.dateOfBirth ?? '').trim()
+
+      if (!email || !phone || !firstName || !lastName || !password || !dateOfBirth) {
+        return {
+          status: 400,
+          body: {
+            error:
+              'email, phone, firstName, lastName, password and dateOfBirth are required',
+          },
+        }
+      }
+
+      // `validateDOB` runs first on the real handler, then the uniqueness check,
+      // then the blank-phone guard. Mirrored in that order so a given request
+      // fails for the same reason in either mode.
+      const age = ageOn(dateOfBirth)
+      if (age === null) return { status: 400, body: { error: 'Invalid date of birth' } }
+      if (age < 0) {
+        return { status: 400, body: { error: 'Date of birth cannot be in the future' } }
+      }
+      if (age > 120) {
+        return { status: 400, body: { error: 'Date of birth is not valid' } }
+      }
+      if (age < MIN_SIGNUP_AGE) {
+        return {
+          status: 400,
+          body: { error: 'Registration refused: users under 16 are not permitted' },
+        }
+      }
+
+      // One account per email or phone, case-insensitive — and, like the real
+      // handler, the refusal never says which of the two matched.
+      const taken = (candidate: string) =>
+        Object.values(USERS).some(
+          (u) => u.email.toLowerCase() === candidate || u.phone === candidate,
+        )
+      if (taken(email) || taken(phone)) {
+        return {
+          status: 409,
+          body: { error: 'An account with that email or phone number already exists' },
+        }
+      }
+
+      const id = mockUid('aaaa2222', registeredAccounts.size + 1)
+      const timestamp = nowIso()
+      const user: User = {
+        id,
+        email,
+        phone,
+        firstName,
+        lastName,
+        // Hardcoded on the real handler too, which ignores any `role` sent.
+        role: 'citizen',
+        status: 'active',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }
+      USERS[id] = user
+      registeredAccounts.set(email, { password, userId: id })
+
+      // 201 with no token: registration deliberately does not sign you in.
+      return {
+        status: 201,
+        body: {
+          message: 'User registered successfully',
+          user: { id, email, firstName, lastName, role: user.role },
+        },
+      }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/auth/forgot-password',
+    async respond({ request }) {
+      await sleep(350)
+      const body = (await request.json().catch(() => ({}))) as { identifier?: string }
+      const identifier = (body.identifier ?? '').trim()
+      if (!identifier) return { status: 400, body: { error: 'identifier is required' } }
+
+      // An unknown identifier is a silent no-op in `RequestReset`, and the status
+      // is 200 either way — so nothing here can be used to discover whether an
+      // account exists. An earlier request is deliberately left standing, because
+      // the real service does not invalidate a code it already issued.
+      const userId = findUserId(identifier)
+      if (userId) pendingReset = { userId }
+
+      // The real 200 says "password reset link". Kept verbatim so the mock is a
+      // faithful stand-in — but the UI does not display it, because what arrives
+      // is a 6-digit code and promising a link sends people looking for one that
+      // never comes.
+      return {
+        body: {
+          message:
+            "If an account with that email or phone number exists, we've sent a password reset link.",
+        },
+      }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/auth/reset-password',
+    async respond({ request }) {
+      await sleep(400)
+      const body = (await request.json().catch(() => ({}))) as {
+        token?: string
+        newPassword?: string
+      }
+      const code = normaliseResetCode(body.token ?? '')
+      const newPassword = body.newPassword ?? ''
+
+      // `ResetWithToken` checks the length before it looks the token up, so the
+      // shorter refusal is the one that wins in either mode.
+      if (newPassword.length < MIN_RESET_PASSWORD_LENGTH) {
+        return { status: 400, body: { error: 'password must be at least 8 characters' } }
+      }
+
+      const reset = pendingReset
+      if (code !== MOCK_RESET_CODE || !reset) {
+        return { status: 400, body: { error: 'invalid or expired reset token' } }
+      }
+
+      setPasswordFor(reset.userId, newPassword)
+      // The real service revokes every session and refresh token at this point.
+      // Mock tokens carry no revocation list, so that half is not modelled — the
+      // reset screen signs itself out on success, which it must do against the
+      // real API as well.
+      pendingReset = null
+
+      return {
+        body: {
+          message: 'Password reset successful. You can now log in with your new password.',
         },
       }
     },

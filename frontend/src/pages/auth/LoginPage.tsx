@@ -1,13 +1,28 @@
 ﻿import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
-import { Shield } from 'lucide-react'
+import { Link, Navigate, useLocation } from 'react-router-dom'
+import { CheckCircle2, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Field, Input } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/auth/AuthContext'
 import { homePathForRole } from '@/auth/RequireRole'
+import { UnrecognisedRoleScreen } from '@/auth/UnrecognisedRoleScreen'
 import { ApiError } from '@/lib/apiClient'
 import { MOCK_ACCOUNTS, USE_MOCKS } from '@/mocks/config'
+
+/**
+ * What an earlier screen may hand us. `from` is set when a guard bounced you
+ * here; `email` and `registered` are set by the signup page, because registration
+ * returns no token and so cannot sign anyone in itself. `reset` comes from the
+ * password-reset screen, which ends the session server-side and so must not leave
+ * anyone believing they are still signed in.
+ */
+interface LoginHandoff {
+  from?: string
+  email?: string
+  registered?: boolean
+  reset?: boolean
+}
 
 /**
  * Sign-in. When mocks are enabled (`VITE_USE_MOCKS=true`) the seeded demo
@@ -15,18 +30,23 @@ import { MOCK_ACCOUNTS, USE_MOCKS } from '@/mocks/config'
  * without a running API.
  */
 export function LoginPage() {
-  const { login, status, role } = useAuth()
+  const { login, status, role, rawRole, logout } = useAuth()
   const location = useLocation()
   const { notify } = useToast()
 
-  const [email, setEmail] = useState('')
+  const handoff = (location.state as LoginHandoff | null) ?? null
+
+  const [email, setEmail] = useState(handoff?.email ?? '')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (status === 'authenticated') {
-    const from = (location.state as { from?: string } | null)?.from
-    return <Navigate to={from || homePathForRole(role)} replace />
+    const destination = handoff?.from || homePathForRole(role)
+    // No destination means the role is not one this build can name. Say so, rather
+    // than bouncing — an unrecognised role is what used to blank the screen.
+    if (!destination) return <UnrecognisedRoleScreen rawRole={rawRole} onSignOut={logout} />
+    return <Navigate to={destination} replace />
   }
 
   async function onSubmit(event: FormEvent) {
@@ -83,6 +103,29 @@ export function LoginPage() {
             Use your service email address and password.
           </p>
 
+          {handoff?.registered ? (
+            <p
+              role="status"
+              className="mt-4 flex items-start gap-2 rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-xs text-ok"
+            >
+              <CheckCircle2 className="mt-px size-4 shrink-0" aria-hidden />
+              <span>Account created. Sign in with the password you just chose.</span>
+            </p>
+          ) : null}
+
+          {handoff?.reset ? (
+            <p
+              role="status"
+              className="mt-4 flex items-start gap-2 rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-xs text-ok"
+            >
+              <CheckCircle2 className="mt-px size-4 shrink-0" aria-hidden />
+              <span>
+                Password changed. Every device on the account was signed out — sign in with the new
+                password.
+              </span>
+            </p>
+          ) : null}
+
           <form className="mt-6 flex flex-col gap-4" onSubmit={onSubmit} noValidate>
             <Field label="Email" required>
               {(props) => (
@@ -114,6 +157,13 @@ export function LoginPage() {
             <Button type="submit" variant="primary" size="lg" block loading={submitting}>
               Sign in
             </Button>
+
+            <Link
+              to="/auth/forgot-password"
+              className="-mt-2 self-end text-xs text-signal hover:text-signal-ink"
+            >
+              Forgot password?
+            </Link>
           </form>
 
           {USE_MOCKS ? (
@@ -140,6 +190,13 @@ export function LoginPage() {
               </div>
             </div>
           ) : null}
+
+          <p className="mt-8 text-sm text-ink-muted">
+            No account yet?{' '}
+            <Link to="/auth/signup" className="text-signal hover:text-signal-ink">
+              Create one
+            </Link>
+          </p>
         </div>
       </div>
     </div>
