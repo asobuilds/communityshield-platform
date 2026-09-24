@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Bell, CheckCheck } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import {
@@ -110,6 +111,9 @@ export function NotificationBell() {
               </ul>
             )}
           </div>
+          <Link to="/notifications" onClick={() => setOpen(false)} className="block border-t border-border px-3 py-2.5 text-center text-xs font-semibold text-signal hover:bg-surface-hi">
+            View all notifications
+          </Link>
         </div>
       ) : null}
     </div>
