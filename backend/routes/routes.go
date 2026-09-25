@@ -154,6 +154,12 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 			revocations.GET("/:id", middleware.AuthMiddleware(), handlers.GetRevocationCycle)
 		}
 
+		// Geo routes (Wave 10.1c) — public reverse geocoding.
+		geo := api.Group("/geo")
+		{
+			geo.GET("/reverse", middleware.RateLimitMap(), handlers.ReverseGeocode)
+		}
+
 		// Location routes
 		location := api.Group("/location")
 		{

@@ -144,6 +144,7 @@ func main() {
 		&models.CounterStatement{},
 		&models.Appeal{},
 		&models.AgeAudit{},
+		&models.GeocodeCache{},
 	)
 
 	if err != nil {

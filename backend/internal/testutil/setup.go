@@ -83,6 +83,7 @@ func SetupTestDB() error {
 		&models.SuspectSighting{},
 		&models.SuspectAssociation{},
 		&models.UserLocation{},
+		&models.GeocodeCache{},
 		&models.UserSession{},
 		&models.RefreshToken{},
 		&models.RevokedToken{},
