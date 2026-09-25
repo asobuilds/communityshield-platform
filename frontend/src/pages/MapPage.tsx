@@ -31,6 +31,7 @@ export function MapPage() {
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   const [showCoverage, setShowCoverage] = useState(true)
+  const [showHotspots, setShowHotspots] = useState(false)
 
   const allCases = useMemo(() => casesQuery.data ?? [], [casesQuery.data])
 
@@ -71,15 +72,14 @@ export function MapPage() {
             {unitsQuery.data?.length ?? 0} units
           </p>
         </div>
-        <Button
-          size="sm"
-          variant={showCoverage ? 'primary' : 'secondary'}
-          icon={<Layers className="size-4" aria-hidden />}
-          aria-pressed={showCoverage}
-          onClick={() => setShowCoverage((v) => !v)}
-        >
-          Unit coverage
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant={showCoverage ? 'primary' : 'secondary'} icon={<Layers className="size-4" aria-hidden />} aria-pressed={showCoverage} onClick={() => setShowCoverage((v) => !v)}>
+            Unit coverage
+          </Button>
+          <Button size="sm" variant={showHotspots ? 'primary' : 'secondary'} aria-pressed={showHotspots} onClick={() => setShowHotspots((v) => !v)}>
+            Activity areas
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
@@ -145,6 +145,7 @@ export function MapPage() {
               cases={visibleCases}
               units={unitsQuery.data ?? []}
               showUnitCoverage={showCoverage}
+              showHotspots={showHotspots}
               height="60vh"
               selectedCaseId={selected}
               onSelectCase={(caseItem) => setSelected(caseItem.id)}

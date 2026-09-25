@@ -1,5 +1,6 @@
 ﻿import type { ReactNode } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import {
   BarChart3,
   FileText,
@@ -30,9 +31,10 @@ interface NavItem {
 const NAV: Record<Role, NavItem[]> = {
   citizen: [
     { to: '/', label: 'Home', icon: <LayoutDashboard className="size-4" /> },
+    { to: '/sos', label: 'Emergency SOS', icon: <ShieldAlert className="size-4" /> },
     { to: '/report', label: 'Report', icon: <FileText className="size-4" /> },
-    { to: '/track', label: 'Track', icon: <FolderKanban className="size-4" />, soon: true },
-    { to: '/alerts', label: 'Alerts', icon: <Megaphone className="size-4" />, soon: true },
+    { to: '/alerts', label: 'Alerts', icon: <Megaphone className="size-4" /> },
+    { to: '/community', label: 'Community', icon: <Users className="size-4" /> },
     { to: '/map', label: 'Safety map', icon: <MapIcon className="size-4" /> },
   ],
   officer: [
@@ -42,17 +44,21 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   unit_admin: [
     { to: '/admin/cases', label: 'Case review', icon: <FolderKanban className="size-4" /> },
-    { to: '/admin/overview', label: 'Overview', icon: <LayoutDashboard className="size-4" />, soon: true },
-    { to: '/admin/officers', label: 'Officers', icon: <Users className="size-4" />, soon: true },
-    { to: '/admin/analytics', label: 'Analytics', icon: <BarChart3 className="size-4" />, soon: true },
+    { to: '/admin/overview', label: 'Overview', icon: <LayoutDashboard className="size-4" /> },
+    { to: '/admin/officers', label: 'Officers', icon: <Users className="size-4" /> },
+    { to: '/admin/analytics', label: 'Analytics', icon: <BarChart3 className="size-4" /> },
+    { to: '/admin/finance', label: 'Finance demo', icon: <FileText className="size-4" /> },
+    { to: '/admin/settings', label: 'Unit settings', icon: <Shield className="size-4" /> },
     { to: '/map', label: 'Operations map', icon: <MapIcon className="size-4" /> },
   ],
   super_admin: [
     { to: '/admin/cases', label: 'Case review', icon: <FolderKanban className="size-4" /> },
-    { to: '/super/overview', label: 'Governance', icon: <ShieldAlert className="size-4" />, soon: true },
+    { to: '/super/overview', label: 'Governance', icon: <ShieldAlert className="size-4" /> },
+    { to: '/super/units', label: 'Units', icon: <Shield className="size-4" /> },
     { to: '/super/users', label: 'Users', icon: <Users className="size-4" />, soon: true },
-    { to: '/super/audit', label: 'Audit', icon: <FileText className="size-4" />, soon: true },
-    { to: '/super/analytics', label: 'Analytics', icon: <BarChart3 className="size-4" />, soon: true },
+    { to: '/super/audit', label: 'Audit', icon: <FileText className="size-4" /> },
+    { to: '/super/analytics', label: 'Analytics', icon: <BarChart3 className="size-4" /> },
+    { to: '/super/settings', label: 'Settings', icon: <FileText className="size-4" /> },
     { to: '/map', label: 'Operations map', icon: <MapIcon className="size-4" /> },
   ],
 }
@@ -67,7 +73,7 @@ const ROLE_LABEL: Record<Role, string> = {
 function NavItems({ items, variant }: { items: NavItem[]; variant: 'sidebar' | 'bottom' }) {
   return (
     <>
-      {items.map((item) => {
+      {items.filter((item) => variant !== 'bottom' || item.to !== '/sos').map((item) => {
         if (item.soon) {
           return (
             <span
@@ -117,7 +123,7 @@ function NavItems({ items, variant }: { items: NavItem[]; variant: 'sidebar' | '
  * Application shell: desktop sidebar + top bar, mobile bottom nav.
  * Role-aware, and honest about what isn't built yet.
  */
-export function AppShell() {
+export function AppShell({ children }: { children?: ReactNode } = {}) {
   const { user, role, logout } = useAuth()
   const navigate = useNavigate()
   const items = role ? NAV[role] : []
@@ -144,6 +150,7 @@ export function AppShell() {
         </nav>
 
         <div className="border-t border-border p-3">
+          <NavLink to="/profile" className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:text-signal"><UserCircle className="size-4" /> Profile</NavLink>
           <div className="flex items-center gap-2">
             <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-hi text-xs font-semibold text-ink">
               {initials(user?.firstName, user?.lastName)}
@@ -177,15 +184,33 @@ export function AppShell() {
           <div className="hidden md:block" />
           <div className="flex items-center gap-2">
             <NotificationBell />
-            <span className="grid size-9 place-items-center rounded-lg border border-border-hi bg-surface-hi text-ink-muted md:hidden">
+            <NavLink to="/profile" aria-label="Profile" className="grid size-9 place-items-center rounded-lg border border-border-hi bg-surface-hi text-ink-muted md:hidden">
               <UserCircle className="size-4" aria-hidden />
-            </span>
+            </NavLink>
           </div>
         </header>
 
         <main className="min-w-0 flex-1 pb-20 md:pb-0">
-          <Outlet />
+          {/* Narrow boundary: a page that throws takes out the content area only,
+              so the header and navigation survive and the user can walk away from
+              the broken screen instead of losing the whole console. */}
+          <ErrorBoundary title="This page failed to render">
+            {/* `children` when a caller renders the shell directly (`/` does, since
+                it has to decide between the landing page and the console before
+                the router picks a child); `<Outlet/>` for every nested route. */}
+            {children ?? <Outlet />}
+          </ErrorBoundary>
         </main>
+
+        {role === 'citizen' ? (
+          <NavLink
+            to="/sos"
+            aria-label="Open emergency SOS"
+            className="fixed bottom-16 right-4 z-30 flex min-h-12 items-center gap-2 rounded-full border-2 border-white bg-emergency px-4 font-semibold text-white shadow-panel focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:bottom-5"
+          >
+            <ShieldAlert className="size-5" aria-hidden /> SOS
+          </NavLink>
+        ) : null}
 
         {/* Mobile bottom nav */}
         <nav

@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { PriorityChip, StatusChip } from '@/components/ui/Chips'
 import { ErrorState, Skeleton } from '@/components/ui/States'
 import { CaseLog } from '@/components/case/CaseLog'
+import { CitizenFeedback } from '@/components/case/CitizenFeedback'
 import { CaseStatusStepper } from '@/components/case/CaseStatusStepper'
 import { ReviewHistory, ReviewNextStep } from '@/components/case/CaseReviewTrail'
 import { WeeklyUpdates } from '@/components/case/WeeklyUpdates'
@@ -208,6 +209,7 @@ export function CitizenCasePage() {
             isLoading={detail.isLoading}
           />
         </Card>
+        <CitizenFeedback caseId={caseItem.id} closed={caseItem.status === 'closed'} feedback={detail.data?.feedback ?? []} />
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useAuth } from './AuthContext'
+import { UnrecognisedRoleScreen } from './UnrecognisedRoleScreen'
 import type { Role } from '@/types/api'
 import { FullPageSpinner } from '@/components/ui/States'
 
@@ -16,21 +17,40 @@ export function RequireRole({
   roles: Role[]
   children: ReactNode
 }) {
-  const { status, role } = useAuth()
+  const { status, role, rawRole, logout } = useAuth()
   const location = useLocation()
 
   if (status === 'loading') return <FullPageSpinner label="Restoring session…" />
   if (status === 'anonymous') {
     return <Navigate to="/auth/login" replace state={{ from: location.pathname }} />
   }
-  if (role && !roles.includes(role)) {
-    return <Navigate to={homePathForRole(role)} replace />
+
+  // Signed in, but the role is not one this build can name. Show it and stop —
+  // never guess a console, never redirect. The old `default: '/'` here is what
+  // sent the app to `/`, had `HomeRoute` send it back, and blanked the screen.
+  if (!role) return <UnrecognisedRoleScreen rawRole={rawRole} onSignOut={logout} />
+
+  if (!roles.includes(role)) {
+    const home = homePathForRole(role)
+    if (!home) return <UnrecognisedRoleScreen rawRole={rawRole} onSignOut={logout} />
+    return <Navigate to={home} replace />
   }
+
   return <>{children}</>
 }
 
-export function homePathForRole(role: Role | null | undefined): string {
+/**
+ * The landing route for a role — or `null`, which is the point of the signature.
+ *
+ * Answering `'/'` for an unknown role (the previous `default`) let this function
+ * claim a home for a role that has none, and `'/'` is a *real* destination that
+ * bounces every non-citizen straight back here. Returning `null` forces each caller
+ * to decide what to show instead, which makes the loop unrepresentable.
+ */
+export function homePathForRole(role: Role | null | undefined): string | null {
   switch (role) {
+    case 'citizen':
+      return '/'
     case 'officer':
       return '/officer/queue'
     case 'unit_admin':
@@ -38,8 +58,7 @@ export function homePathForRole(role: Role | null | undefined): string {
       return '/admin/cases'
     case 'super_admin':
       return '/super/overview'
-    case 'citizen':
     default:
-      return '/'
+      return null
   }
 }

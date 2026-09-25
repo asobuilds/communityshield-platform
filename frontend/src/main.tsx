@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { USE_MOCKS } from '@/mocks/config'
 import './index.css'
 
@@ -18,7 +19,13 @@ async function bootstrap() {
 
   createRoot(container).render(
     <StrictMode>
-      <App />
+      {/* Outermost boundary: whatever else fails, this is what stands between a
+          thrown render and an empty page. `AppShell` has its own, narrower one so
+          a crashed page keeps the navigation — this one catches what that cannot,
+          including a crash in the shell itself. */}
+      <ErrorBoundary fullPage>
+        <App />
+      </ErrorBoundary>
     </StrictMode>,
   )
 }

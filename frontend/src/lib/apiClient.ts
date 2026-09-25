@@ -7,7 +7,10 @@
  *   route the user back to login (see src/auth/AuthContext.tsx).
  */
 
+import type { RefreshResponse } from '@/types/api'
+
 const TOKEN_KEY = 'cs.token'
+const REFRESH_KEY = 'cs.refresh'
 
 function resolveBase(): string {
   const raw = (import.meta.env.VITE_API_URL ?? '').trim()
@@ -37,27 +40,45 @@ export class ApiError extends Error {
   }
 }
 
+function readKey(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeKey(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* storage unavailable (private mode) — session stays in memory only */
+  }
+}
+
+function removeKey(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Both halves of a session.
+ *
+ * The access token is short-lived; the refresh token is what keeps a signed-in
+ * user signed in past it. The two are stored and cleared together — clearing one
+ * without the other is how you get a session that can neither refresh nor end.
+ */
 export const tokenStore = {
-  get(): string | null {
-    try {
-      return localStorage.getItem(TOKEN_KEY)
-    } catch {
-      return null
-    }
-  },
-  set(token: string): void {
-    try {
-      localStorage.setItem(TOKEN_KEY, token)
-    } catch {
-      /* storage unavailable (private mode) — session stays in memory only */
-    }
-  },
+  get: () => readKey(TOKEN_KEY),
+  set: (token: string) => writeKey(TOKEN_KEY, token),
+  getRefresh: () => readKey(REFRESH_KEY),
+  setRefresh: (token: string) => writeKey(REFRESH_KEY, token),
   clear(): void {
-    try {
-      localStorage.removeItem(TOKEN_KEY)
-    } catch {
-      /* ignore */
-    }
+    removeKey(TOKEN_KEY)
+    removeKey(REFRESH_KEY)
   },
 }
 
@@ -90,18 +111,76 @@ async function readError(response: Response): Promise<{ message: string; body: u
   }
 }
 
-export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, anonymous = false } = options
+/**
+ * The in-flight refresh, shared by every caller.
+ *
+ * Rotation makes concurrency a correctness problem rather than an efficiency one.
+ * If three requests each 401'd and each spent the refresh token, the second would
+ * present one the first had already consumed and be rejected as revoked — signing
+ * the user out at the exact moment the app was trying to keep them in.
+ */
+let refreshInFlight: Promise<string | null> | null = null
 
+/**
+ * Exchange the refresh token for a new pair, or `null` if it will not.
+ *
+ * Called with bare `fetch`, deliberately: routing it through `request` would let a
+ * 401 on the refresh recurse into another refresh.
+ */
+async function performRefresh(): Promise<string | null> {
+  const refreshToken = tokenStore.getRefresh()
+  if (!refreshToken) return null
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    })
+    if (!response.ok) return null
+
+    const payload = (await response.json()) as Partial<RefreshResponse>
+    if (!payload.token) return null
+
+    tokenStore.set(payload.token)
+    // Rotation: the token we just sent is spent. Failing to store its replacement
+    // means the *next* refresh presents a dead token and signs the user out.
+    if (payload.refreshToken) tokenStore.setRefresh(payload.refreshToken)
+    return payload.token
+  } catch {
+    // Network failure or an unparseable body — either way, no new token.
+    return null
+  }
+}
+
+/**
+ * Share the in-flight attempt, and clear it once it settles so a later expiry can
+ * start a fresh one — a cached-forever promise would silently stop refreshing.
+ */
+function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = performRefresh().finally(() => {
+    refreshInFlight = null
+  })
+  return refreshInFlight
+}
+
+/** Build and send one attempt, reading the token fresh so a retry picks up a new one. */
+async function send(
+  path: string,
+  method: string,
+  body: unknown,
+  signal: AbortSignal | undefined,
+  anonymous: boolean,
+): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   const token = tokenStore.get()
   if (token && !anonymous) headers.Authorization = `Bearer ${token}`
 
-  let response: Response
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    return await fetch(`${API_BASE}${path}`, {
       method,
       headers,
       signal,
@@ -110,6 +189,21 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
     throw new ApiError(0, 'Network unavailable — check your connection.', cause)
+  }
+}
+
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body, signal, anonymous = false } = options
+
+  let response = await send(path, method, body, signal, anonymous)
+
+  // A 401 on an authenticated call usually means the access token aged out, not
+  // that the session is over. Try the refresh token once and replay — retrying
+  // more than once would loop, since a second 401 means the new token was
+  // rejected too, which is a genuine sign-out.
+  if (response.status === 401 && !anonymous) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) response = await send(path, method, body, signal, anonymous)
   }
 
   if (response.status === 401 && !anonymous) {
@@ -123,8 +217,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (!response.ok) {
-    const { message, body } = await readError(response)
-    throw new ApiError(response.status, message, body)
+    const { message, body: errorBody } = await readError(response)
+    throw new ApiError(response.status, message, errorBody)
   }
 
   if (response.status === 204) return undefined as T

@@ -2,27 +2,27 @@
 @import 'leaflet/dist/leaflet.css';
 
 /*
-  Nativity Guard — "Quiet Command" design tokens (Tailwind v4 CSS-first).
-  Deep operational surfaces, one authoritative signal accent, red reserved
-  strictly for emergency. See frontend/frontagent.md for the rationale.
+  Nativity Guard — "Dawn Canopy" design tokens (Tailwind v4 CSS-first).
+  Forest shelter, dawn warmth and readable operational surfaces.
+  Red stays reserved for emergency. See frontend/frontReadme.md §0.5.
 */
 @theme {
   /* Surfaces */
-  --color-void: #070a10;
-  --color-base: #0b0f17;
-  --color-surface: #111725;
-  --color-surface-hi: #18202f;
-  --color-border: #1e293b;
-  --color-border-hi: #2c3a52;
+  --color-void: #091613;
+  --color-base: #10221d;
+  --color-surface: #193129;
+  --color-surface-hi: #254137;
+  --color-border: #355348;
+  --color-border-hi: #527466;
 
   /* Text */
-  --color-ink: #e8edf6;
-  --color-ink-muted: #97a5bc;
-  --color-ink-faint: #5f6e88;
+  --color-ink: #f8f5e9;
+  --color-ink-muted: #c2d4c7;
+  --color-ink-faint: #9db9a8;
 
   /* Signal + semantics */
-  --color-signal: #38bdf8;
-  --color-signal-ink: #04121c;
+  --color-signal: #f4cb78;
+  --color-signal-ink: #19251c;
   --color-emergency: #ef4444;
   --color-warn: #f59e0b;
   --color-ok: #22c55e;
@@ -84,6 +84,30 @@
 }
 
 @layer components {
+  /* A quiet dawn sky above a forest horizon: atmosphere only, never behind form fields. */
+  .dawn-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 82% 18%, rgb(244 203 120 / 0.78) 0 1px, transparent 2px),
+      radial-gradient(circle at 68% 39%, rgb(248 245 233 / 0.65) 0 1px, transparent 2px),
+      radial-gradient(circle at 93% 54%, rgb(248 245 233 / 0.68) 0 1px, transparent 2px),
+      radial-gradient(ellipse at 82% 85%, rgb(238 167 103 / 0.22), transparent 42%),
+      linear-gradient(145deg, #10221d 12%, #26473e 67%, #586f60 100%);
+  }
+
+  .dawn-hero::after {
+    position: absolute;
+    z-index: -1;
+    inset: auto -8% -38% 45%;
+    height: 64%;
+    border-radius: 50% 50% 0 0;
+    background: linear-gradient(180deg, rgb(21 55 42 / 0.65), #10221d);
+    content: '';
+    pointer-events: none;
+  }
+
   /* Keep Leaflet beneath app chrome (modals, toasts, nav). */
   .leaflet-container {
     z-index: 0;

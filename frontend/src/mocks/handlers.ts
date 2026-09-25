@@ -20,9 +20,20 @@
  */
 
 import { sleep, type MockRoute } from './adapter'
+import { communityRoutes } from './community'
 import { USERS, seedDatabase, type MockDatabase } from './seed'
-import { MOCK_ACCOUNTS, mockTokenFor, mockUid, userIdFromToken } from './config'
+import {
+  MOCK_ACCOUNTS,
+  MOCK_RESET_CODE,
+  mockRefreshFor,
+  mockTokenFor,
+  mockUid,
+  userIdFromRefreshToken,
+  userIdFromToken,
+} from './config'
 import { ISO_WEEK_MS, startOfIsoWeekUtc } from '@/lib/week'
+import { MIN_SIGNUP_AGE, ageOn } from '@/lib/signup'
+import { normaliseResetCode, MIN_RESET_PASSWORD_LENGTH } from '@/lib/passwordReset'
 import type {
   Case,
   CaseReview,
@@ -30,10 +41,20 @@ import type {
   CreateCaseInput,
   PriorityLevel,
   Progress,
+  SendSosInput,
+  SosAlert,
   User,
 } from '@/types/api'
 
 const db: MockDatabase = seedDatabase()
+const sosAlerts: SosAlert[] = []
+const demoTransactions = [
+  { id: 'tx-1', label: 'Community support pledge', amount: 25000, status: 'pending' },
+  { id: 'tx-2', label: 'Equipment allocation', amount: 12000, status: 'approved' },
+]
+const demoFinance = { account: 'Surulere demo operating account', donations: 25000, budget: 100000 }
+const demoSettings = { incidentTemplate: 'Record location, incident details and response actions.', retentionDays: 90 }
+const demoAudit: { id: string; actor: string; action: string; entity: string; time: string }[] = []
 
 function currentUser(request: Request): User | null {
   const header = request.headers.get('Authorization') ?? ''
@@ -120,7 +141,157 @@ const nowIso = () => new Date().toISOString()
  */
 const ZERO_UNIT_ID = '00000000-0000-0000-0000-000000000000'
 
+/**
+ * Accounts created through `POST /auth/register` during this session.
+ *
+ * Kept apart from `MOCK_ACCOUNTS` on purpose: that list is the login screen's
+ * one-tap demo buttons, and a registered account landing in it would add a
+ * duplicate "Citizen" button. Registration still has to be *usable*, though — the
+ * point of the flow is signing in with what you just created — so login consults
+ * both lists. Session-only, like the rest of the mock state.
+ */
+const registeredAccounts = new Map<string, { password: string; userId: string }>()
+
+/**
+ * Advances on every rotation. The real service invalidates the refresh token it
+ * just consumed; this mock only moves the generation forward, which is enough to
+ * catch a client that stores the access token but drops the replacement refresh
+ * token — the failure mode rotation exists to expose — but not a double-spend.
+ */
+let refreshGeneration = 0
+
+/**
+ * The account the most recent password-reset request resolved to.
+ *
+ * The real flow's indirection matters and is modelled: `/auth/reset-password` is
+ * handed only a code, and the server finds the user through the persisted reset
+ * row — it never sees the identifier again. This stands in for that row. Only the
+ * most recent request is kept because the mock recognises a single code; the real
+ * service would still honour an earlier, unexpired one.
+ */
+let pendingReset: { userId: string } | null = null
+
+/**
+ * Mirrors `RequestReset`'s lookup: email is case-insensitive, phone matches on
+ * digits alone. Unknown identifiers resolve to `null` — the caller must not be
+ * able to tell that apart from a match.
+ */
+function findUserId(identifier: string): string | null {
+  const trimmed = identifier.trim()
+  if (trimmed.includes('@')) {
+    const email = trimmed.toLowerCase()
+    const demo = MOCK_ACCOUNTS.find((account) => account.email.toLowerCase() === email)
+    if (demo) return demo.userId
+    return registeredAccounts.get(email)?.userId ?? null
+  }
+
+  const digits = normaliseResetCode(trimmed)
+  if (!digits) return null
+  // Comparison is on the stored number's digits, like the `phone = ?` clause.
+  const match = Object.values(USERS).find(
+    (user) => normaliseResetCode(user.phone ?? '') === digits,
+  )
+  return match?.id ?? null
+}
+
+/**
+ * Replace a password wherever that account lives.
+ *
+ * Without this the walk-through would be a lie about the one thing it exists to
+ * show: reset the password, then be refused at sign-in for using it.
+ */
+function setPasswordFor(userId: string, password: string): void {
+  const demo = MOCK_ACCOUNTS.find((account) => account.userId === userId)
+  if (demo) {
+    demo.password = password
+    return
+  }
+  for (const [email, record] of registeredAccounts) {
+    if (record.userId === userId) registeredAccounts.set(email, { ...record, password })
+  }
+}
+
+/** The registration body, field for field from `Register`'s input struct. */
+interface RegisterInput {
+  email: string
+  phone: string
+  firstName: string
+  lastName: string
+  password: string
+  dateOfBirth: string
+}
+
 export const handlers: MockRoute[] = [
+  ...communityRoutes,
+  {
+    method: 'GET', path: '/demo/admin/state',
+    respond({ request }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      if (!['unit_admin', 'super_admin'].includes(user.role)) return forbidden('Administrator access required')
+      const unit = db.units[0]
+      const cases = user.role === 'super_admin' ? db.cases : db.cases.filter((c) => c.unitId === unit.id)
+      const officers = user.role === 'super_admin' ? db.officers : db.officers.filter((o) => o.unitId === unit.id)
+      return { body: { cases, officers, units: user.role === 'super_admin' ? db.units : [unit], transactions: demoTransactions, finance: demoFinance, settings: demoSettings, audit: user.role === 'super_admin' ? demoAudit : undefined, demo: true } }
+    },
+  },
+  {
+    method: 'PUT', path: '/demo/admin/:section',
+    async respond({ request, params }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      if (!['unit_admin', 'super_admin'].includes(user.role)) return forbidden('Administrator access required')
+      if (['units', 'settings'].includes(params.section) && user.role !== 'super_admin') return forbidden('Platform administrator access required')
+      const input = await request.json() as Record<string, unknown>
+      const value = (key: string) => typeof input[key] === 'string' ? String(input[key]).trim() : ''
+      const bad = (message: string) => ({ status: 400, body: { error: message } })
+      let entity = ''
+      if (params.section === 'officers') {
+        const name = value('name'), badgeNumber = value('badgeNumber')
+        if (!name || !badgeNumber) return bad('Officer name and badge number are required')
+        const officer = db.officers.find((o) => o.id === input.id)
+        if (officer && officer.unitId !== db.units[0].id && user.role !== 'super_admin') return forbidden('Officer belongs to another unit')
+        if (!officer && db.officers.some((o) => o.badgeNumber === badgeNumber)) return bad('Badge number already exists')
+        const updated = { ...(officer ?? { id: crypto.randomUUID(), unitId: db.units[0].id, joinedDate: new Date().toISOString() }), name, badgeNumber, rank: value('rank') || 'Officer', role: value('role') || 'patrol', status: value('status') || 'active', phone: value('phone') }
+        if (officer) Object.assign(officer, updated)
+        else db.officers.push(updated)
+        entity = updated.id
+      } else if (params.section === 'unit' || params.section === 'units') {
+        const unit = params.section === 'unit' ? db.units[0] : db.units.find((u) => u.id === input.id)
+        if (input.delete === true) {
+          if (!unit || db.cases.some((c) => c.unitId === unit.id) || db.officers.some((o) => o.unitId === unit.id)) return bad('Only empty units can be deleted')
+          db.units.splice(db.units.indexOf(unit), 1)
+          entity = unit.id
+        } else {
+          const radius = Number(input.operationalRadius)
+          if (!value('name') || !Number.isFinite(radius) || radius <= 0 || radius > 100) return bad('Name and radius between 0 and 100 km are required')
+          const latitude = Number(input.latitude), longitude = Number(input.longitude)
+          if (!Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return bad('Valid latitude and longitude are required')
+          const updated = { ...(unit ?? { ...db.units[0], id: crypto.randomUUID(), isVerified: false, verificationStatus: 'pending' }), name: value('name'), operationalRadius: radius, latitude, longitude, state: value('state'), city: value('city'), contactPhone: value('contactPhone'), contactEmail: value('contactEmail'), status: value('status') || 'active' }
+          if (unit) Object.assign(unit, updated)
+          else db.units.push(updated)
+          entity = updated.id
+        }
+      } else if (params.section === 'finance') {
+        const budget = Number(input.budget)
+        if (!Number.isFinite(budget) || budget < 0) return bad('Budget must be a nonnegative number')
+        demoFinance.budget = budget
+        entity = 'budget'
+      } else if (params.section === 'transactions') {
+        const tx = demoTransactions.find((t) => t.id === input.id)
+        if (!tx || tx.status !== 'pending' || !['approved', 'rejected'].includes(value('status'))) return bad('Select a pending transaction and a decision')
+        tx.status = value('status')
+        entity = tx.id
+      } else if (params.section === 'settings') {
+        const retentionDays = Number(input.retentionDays)
+        if (!value('incidentTemplate') || !Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 3650) return bad('Template and retention between 1 and 3650 days are required')
+        Object.assign(demoSettings, { incidentTemplate: value('incidentTemplate'), retentionDays })
+        entity = 'settings'
+      } else return notFound('Unknown demo section')
+      demoAudit.unshift({ id: crypto.randomUUID(), actor: user.email, action: `${params.section} updated`, entity, time: new Date().toISOString() })
+      return { body: { ok: true } }
+    },
+  },
   /* ---------------------------------------------------------------- auth */
 
   {
@@ -129,20 +300,29 @@ export const handlers: MockRoute[] = [
     async respond({ request }) {
       await sleep(250)
       const body = (await request.json().catch(() => ({}))) as {
+        identifier?: string
         email?: string
         password?: string
       }
-      const email = (body.email ?? '').trim().toLowerCase()
-      const account = MOCK_ACCOUNTS.find((a) => a.email === email)
+      // The real handler binds `identifier` and the legacy `email` and falls back
+      // from one to the other, so the mock accepts either spelling too.
+      const identifier = (body.identifier || body.email || '').trim().toLowerCase()
 
-      if (!account || account.password !== body.password) {
+      const account = MOCK_ACCOUNTS.find((a) => a.email.toLowerCase() === identifier)
+      const registered = registeredAccounts.get(identifier)
+      const userId = account?.userId ?? registered?.userId
+      const expected = account?.password ?? registered?.password
+
+      if (!userId || expected !== body.password) {
         return { status: 401, body: { error: 'invalid credentials' } }
       }
 
-      const user = USERS[account.userId]
+      const user = USERS[userId]
       return {
         body: {
           token: mockTokenFor(user.id),
+          // Login always issues a pair, and the backend 500s rather than omit it.
+          refreshToken: mockRefreshFor(user.id),
           user: {
             id: user.id,
             email: user.email,
@@ -156,12 +336,199 @@ export const handlers: MockRoute[] = [
   },
 
   {
+    method: 'POST',
+    path: '/auth/refresh',
+    async respond({ request }) {
+      await sleep(200)
+      const body = (await request.json().catch(() => ({}))) as { refreshToken?: string }
+
+      const userId = userIdFromRefreshToken(body.refreshToken ?? null)
+      const user = userId ? USERS[userId] : null
+      if (!user) {
+        return { status: 401, body: { error: 'invalid or expired refresh token' } }
+      }
+
+      refreshGeneration += 1
+      return {
+        body: {
+          token: mockTokenFor(user.id),
+          refreshToken: mockRefreshFor(user.id, refreshGeneration),
+        },
+      }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/auth/register',
+    async respond({ request }) {
+      await sleep(400)
+      const body = (await request.json().catch(() => ({}))) as Partial<RegisterInput>
+
+      const email = (body.email ?? '').trim().toLowerCase()
+      const phone = (body.phone ?? '').trim()
+      const firstName = (body.firstName ?? '').trim()
+      const lastName = (body.lastName ?? '').trim()
+      const password = body.password ?? ''
+      const dateOfBirth = (body.dateOfBirth ?? '').trim()
+
+      if (!email || !phone || !firstName || !lastName || !password || !dateOfBirth) {
+        return {
+          status: 400,
+          body: {
+            error:
+              'email, phone, firstName, lastName, password and dateOfBirth are required',
+          },
+        }
+      }
+
+      // `validateDOB` runs first on the real handler, then the uniqueness check,
+      // then the blank-phone guard. Mirrored in that order so a given request
+      // fails for the same reason in either mode.
+      const age = ageOn(dateOfBirth)
+      if (age === null) return { status: 400, body: { error: 'Invalid date of birth' } }
+      if (age < 0) {
+        return { status: 400, body: { error: 'Date of birth cannot be in the future' } }
+      }
+      if (age > 120) {
+        return { status: 400, body: { error: 'Date of birth is not valid' } }
+      }
+      if (age < MIN_SIGNUP_AGE) {
+        return {
+          status: 400,
+          body: { error: 'Registration refused: users under 16 are not permitted' },
+        }
+      }
+
+      // One account per email or phone, case-insensitive — and, like the real
+      // handler, the refusal never says which of the two matched.
+      const taken = (candidate: string) =>
+        Object.values(USERS).some(
+          (u) => u.email.toLowerCase() === candidate || u.phone === candidate,
+        )
+      if (taken(email) || taken(phone)) {
+        return {
+          status: 409,
+          body: { error: 'An account with that email or phone number already exists' },
+        }
+      }
+
+      const id = mockUid('aaaa2222', registeredAccounts.size + 1)
+      const timestamp = nowIso()
+      const user: User = {
+        id,
+        email,
+        phone,
+        firstName,
+        lastName,
+        // Hardcoded on the real handler too, which ignores any `role` sent.
+        role: 'citizen',
+        status: 'active',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }
+      USERS[id] = user
+      registeredAccounts.set(email, { password, userId: id })
+
+      // 201 with no token: registration deliberately does not sign you in.
+      return {
+        status: 201,
+        body: {
+          message: 'User registered successfully',
+          user: { id, email, firstName, lastName, role: user.role },
+        },
+      }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/auth/forgot-password',
+    async respond({ request }) {
+      await sleep(350)
+      const body = (await request.json().catch(() => ({}))) as { identifier?: string }
+      const identifier = (body.identifier ?? '').trim()
+      if (!identifier) return { status: 400, body: { error: 'identifier is required' } }
+
+      // An unknown identifier is a silent no-op in `RequestReset`, and the status
+      // is 200 either way — so nothing here can be used to discover whether an
+      // account exists. An earlier request is deliberately left standing, because
+      // the real service does not invalidate a code it already issued.
+      const userId = findUserId(identifier)
+      if (userId) pendingReset = { userId }
+
+      // The real 200 says "password reset link". Kept verbatim so the mock is a
+      // faithful stand-in — but the UI does not display it, because what arrives
+      // is a 6-digit code and promising a link sends people looking for one that
+      // never comes.
+      return {
+        body: {
+          message:
+            "If an account with that email or phone number exists, we've sent a password reset link.",
+        },
+      }
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/auth/reset-password',
+    async respond({ request }) {
+      await sleep(400)
+      const body = (await request.json().catch(() => ({}))) as {
+        token?: string
+        newPassword?: string
+      }
+      const code = normaliseResetCode(body.token ?? '')
+      const newPassword = body.newPassword ?? ''
+
+      // `ResetWithToken` checks the length before it looks the token up, so the
+      // shorter refusal is the one that wins in either mode.
+      if (newPassword.length < MIN_RESET_PASSWORD_LENGTH) {
+        return { status: 400, body: { error: 'password must be at least 8 characters' } }
+      }
+
+      const reset = pendingReset
+      if (code !== MOCK_RESET_CODE || !reset) {
+        return { status: 400, body: { error: 'invalid or expired reset token' } }
+      }
+
+      setPasswordFor(reset.userId, newPassword)
+      // The real service revokes every session and refresh token at this point.
+      // Mock tokens carry no revocation list, so that half is not modelled — the
+      // reset screen signs itself out on success, which it must do against the
+      // real API as well.
+      pendingReset = null
+
+      return {
+        body: {
+          message: 'Password reset successful. You can now log in with your new password.',
+        },
+      }
+    },
+  },
+
+  {
     method: 'GET',
     path: '/auth/profile',
     async respond({ request }) {
       await sleep(120)
       const user = currentUser(request)
       if (!user) return unauthorized
+      return { body: { user } }
+    },
+  },
+  {
+    method: 'PUT', path: '/demo/profile',
+    async respond({ request }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      const input = await request.json() as Record<string, unknown>
+      const firstName = String(input.firstName ?? '').trim(), lastName = String(input.lastName ?? '').trim()
+      const phone = String(input.phone ?? '').trim(), photoUrl = String(input.photoUrl ?? '').trim()
+      if (!firstName || !lastName || (phone && !/^\+?[0-9 ()-]{7,20}$/.test(phone))) return { status: 400, body: { error: 'Enter a name and a valid contact number' } }
+      if (photoUrl && (!/^https:\/\//.test(photoUrl) || photoUrl.length > 2048)) return { status: 400, body: { error: 'Photo must be an HTTPS image URL' } }
+      Object.assign(user, { firstName, lastName, phone, photoUrl, updatedAt: new Date().toISOString() })
       return { body: { user } }
     },
   },
@@ -324,6 +691,33 @@ export const handlers: MockRoute[] = [
   },
 
   /* ------------------------------------------------------- case workflow */
+
+  {
+    method: 'POST',
+    path: '/cases/:id/feedback',
+    async respond({ request, params }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      const caseItem = db.cases.find((item) => item.id === params.id)
+      if (!caseItem) return notFound('case not found')
+      if (caseItem.reportedBy !== user.id) return forbidden('only the reporter may leave feedback')
+      if (caseItem.status !== 'closed') return { status: 409, body: { error: 'feedback is available when the case is closed' } }
+      if (db.feedback.some((item) => item.caseId === params.id && item.userId === user.id)) {
+        return { status: 409, body: { error: 'feedback already recorded' } }
+      }
+      const body = await request.json() as { rating?: number; comment?: string }
+      if (!Number.isInteger(body.rating) || (body.rating ?? 0) < 1 || (body.rating ?? 0) > 5) {
+        return { status: 400, body: { error: 'rating must be between 1 and 5' } }
+      }
+      const feedback = {
+        id: crypto.randomUUID(), caseId: caseItem.id, userId: user.id,
+        rating: body.rating as number, comment: typeof body.comment === 'string' ? body.comment.trim().slice(0, 1000) : '',
+        createdAt: new Date().toISOString(),
+      }
+      db.feedback.push(feedback)
+      return { status: 201, body: { feedback } }
+    },
+  },
 
   {
     method: 'POST',
@@ -980,6 +1374,61 @@ export const handlers: MockRoute[] = [
         .sort((a, b) => a.distance - b.distance)
 
       return { body: { units } }
+    },
+  },
+
+  /* ------------------------------------------------------- emergency SOS */
+
+  {
+    method: 'POST',
+    path: '/sos/send',
+    async respond({ request }) {
+      await sleep(180)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      if (user.role !== 'citizen') return forbidden('only citizens may send an SOS')
+      const input = (await request.json()) as SendSosInput
+      if (!Number.isFinite(input.latitude) || !Number.isFinite(input.longitude) ||
+          Math.abs(input.latitude) > 90 || Math.abs(input.longitude) > 180 ||
+          (input.latitude === 0 && input.longitude === 0)) {
+        return { status: 400, body: { error: 'a valid location is required' } }
+      }
+      const id = crypto.randomUUID()
+      const alert: SosAlert = {
+        id,
+        userId: user.id,
+        trackingId: `SOS-${Date.now().toString(36).toUpperCase()}`,
+        status: 'pending',
+        latitude: input.latitude,
+        longitude: input.longitude,
+        priority: input.priority === 'critical' ? 'critical' : 'high',
+        ...(input.unitId ? { unitId: input.unitId } : {}),
+        ...(input.emergencyContacts ? { emergencyContacts: input.emergencyContacts } : {}),
+        ...(input.medicalInfo ? { medicalInfo: input.medicalInfo } : {}),
+        createdAt: new Date().toISOString(),
+      }
+      sosAlerts.unshift(alert)
+      return { status: 201, body: { alert } }
+    },
+  },
+  {
+    method: 'GET',
+    path: '/sos/my',
+    async respond({ request }) {
+      await sleep(120)
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      return { body: { alerts: sosAlerts.filter((a) => a.userId === user.id) } }
+    },
+  },
+  {
+    method: 'GET',
+    path: '/sos/:id',
+    async respond({ request, params }) {
+      const user = currentUser(request)
+      if (!user) return unauthorized
+      const alert = sosAlerts.find((a) => a.id === params.id && a.userId === user.id)
+      return alert ? { body: { alert } } : notFound('SOS request not found')
     },
   },
 
