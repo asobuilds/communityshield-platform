@@ -7,12 +7,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
+"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	"security-solution/config"
 	"security-solution/models"
 	"security-solution/services"
+	"security-solution/utils"
 )
 
 // Generate tracking ID
@@ -25,7 +26,7 @@ func CreateCase(c *gin.Context) {
 	if !requireMinorApproved(c) {
 		return
 	}
-	var input struct {
+var input struct {
 		UnitID      string  `json:"unitId" binding:"required"`
 		Title       string  `json:"title" binding:"required"`
 		Description string  `json:"description" binding:"required"`
@@ -34,6 +35,7 @@ func CreateCase(c *gin.Context) {
 		Location    string  `json:"location" binding:"required"`
 		Priority    string  `json:"priority"`
 		IsSOS       bool    `json:"isSOS"`
+		HideLocation bool   `json:"hideLocation"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -59,21 +61,37 @@ func CreateCase(c *gin.Context) {
 		priorityLevel = "P2" // High
 	}
 
-	// Create case
+// Create case
+	geohash := utils.EncodeGeohash(input.Latitude, input.Longitude, 5)
+	anon := input.HideLocation || !userObj.LocationSharingEnabled
+
 	caseObj := models.Case{
 		TrackingID:    trackingID,
 		Title:         input.Title,
 		Description:   input.Description,
-		Latitude:      input.Latitude,
-		Longitude:     input.Longitude,
-		GISLatitude:   input.Latitude,
-		GISLongitude:  input.Longitude,
-		Location:      input.Location,
+		LocationGeohash: geohash,
 		Status:        "pending",
 		Priority:      input.Priority,
 		PriorityLevel: priorityLevel,
 		IsPublic:      true,
 		ReportedBy:    userObj.ID,
+	}
+
+	if anon {
+		// Anonymous path: zero the precise coords and freeform location,
+		// keep only the coarse geohash for clustering/heatmap.
+		caseObj.Location = ""
+		caseObj.Latitude = 0
+		caseObj.Longitude = 0
+		caseObj.GISLatitude = 0
+		caseObj.GISLongitude = 0
+		caseObj.IsAnonymous = true
+	} else {
+		caseObj.Latitude = input.Latitude
+		caseObj.Longitude = input.Longitude
+		caseObj.GISLatitude = input.Latitude
+		caseObj.GISLongitude = input.Longitude
+		caseObj.Location = input.Location
 	}
 
 	if input.UnitID != "" {
@@ -83,7 +101,7 @@ func CreateCase(c *gin.Context) {
 		}
 	}
 
-	if err := config.DB.Create(&caseObj).Error; err != nil {
+if err := config.DB.Create(&caseObj).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create case"})
 		return
 	}
@@ -100,6 +118,21 @@ func CreateCase(c *gin.Context) {
 		c.ClientIP(),
 		c.GetHeader("User-Agent"),
 	)
+
+	// Compliance audit for anonymous reports: we need to know anonymized
+	// reports happened without storing who filed them precisely.
+	if anon {
+		go auditService.LogAction(
+			userObj.ID,
+			"case.created_anonymous",
+			"case",
+			caseObj.ID.String(),
+			nil,
+			map[string]interface{}{"geohash": geohash},
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+		)
+	}
 
 	// If P1 (SOS), trigger immediate dispatch
 	if priorityLevel == "P1" {

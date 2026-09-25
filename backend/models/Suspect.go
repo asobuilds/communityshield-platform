@@ -83,6 +83,8 @@ type SuspectSighting struct {
 	Latitude    float64        `json:"latitude"`
 	Longitude   float64        `json:"longitude"`
 	Location    string         `json:"location"`
+	LocationGeohash string       `gorm:"type:varchar(12);index:idx_sighting_geohash" json:"locationGeohash,omitempty"`
+	IsAnonymous bool         `gorm:"default:false;index:idx_sighting_anonymous" json:"isAnonymous"`
 	Description string         `json:"description"`
 	Timestamp   time.Time      `json:"timestamp"`
 	CreatedAt   time.Time      `json:"createdAt"`

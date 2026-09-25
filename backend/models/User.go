@@ -19,6 +19,7 @@ type User struct {
 	UnitID        *uuid.UUID     `gorm:"type:uuid" json:"unitId,omitempty"`
 	Status        string         `gorm:"default:pending" json:"status"`
 	IsSuperAdmin          bool           `gorm:"default:false" json:"isSuperAdmin"`
+	LocationSharingEnabled bool          `gorm:"default:false;index:idx_user_location_sharing" json:"locationSharingEnabled"`
 	DateOfBirth           *time.Time     `gorm:"type:date;index:idx_user_dob" json:"dateOfBirth,omitempty"`
 	MinorStatus           string         `gorm:"type:varchar(16);default:'adult';index:idx_user_minor_status" json:"minorStatus"` // minor | adult
 	DOBVerified           bool           `gorm:"default:false;index:idx_user_dob_verified" json:"dobVerified"`

@@ -82,12 +82,14 @@ func SetupTestDB() error {
 		&models.SuspectCase{},
 		&models.SuspectSighting{},
 		&models.SuspectAssociation{},
+		&models.UserLocation{},
 		&models.UserSession{},
 		&models.RefreshToken{},
 		&models.RevokedToken{},
 		&models.IdempotencyRecord{},
 		&models.AgeAudit{},
 		&models.AuditLog{},
+		&models.SOSAlert{},
 	); err != nil {
 		return fmt.Errorf("automigrate test db: %w", err)
 	}

@@ -27,6 +27,8 @@ type Case struct {
 	PriorityLevel string     `gorm:"default:P3" json:"priorityLevel"`
 	GISLatitude   float64    `json:"gisLatitude"`
 	GISLongitude  float64    `json:"gisLongitude"`
+	LocationGeohash string    `gorm:"type:varchar(12);index:idx_case_geohash" json:"locationGeohash,omitempty"`
+	IsAnonymous   bool      `gorm:"default:false;index:idx_case_anonymous" json:"isAnonymous"`
 	AssignedAt    *time.Time `json:"assignedAt,omitempty"`
 	DispatchedAt  *time.Time `json:"dispatchedAt,omitempty"`
 	ArrivedAt     *time.Time `json:"arrivedAt,omitempty"`

@@ -12,6 +12,8 @@ type SOSAlert struct {
 	UnitID      *uuid.UUID     `gorm:"type:uuid" json:"unitId,omitempty"`
 	Latitude    float64        `json:"latitude"`
 	Longitude   float64        `json:"longitude"`
+	LocationGeohash string      `gorm:"type:varchar(12);index:idx_sos_geohash" json:"locationGeohash,omitempty"`
+	IsAnonymous bool        `gorm:"default:false;index:idx_sos_anonymous" json:"isAnonymous"`
 	Description string         `json:"description"`
 	Status      string         `gorm:"default:pending" json:"status"` // pending, dispatched, resolved, cancelled
 	Priority    string         `gorm:"default:high" json:"priority"`  // high, medium, low

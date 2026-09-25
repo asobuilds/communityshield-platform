@@ -158,6 +158,8 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 		location := api.Group("/location")
 		{
 			location.POST("", middleware.AuthMiddleware(), middleware.RateLimitMap(), handlers.UpdateMyLocation)
+			location.GET("/sharing", middleware.AuthMiddleware(), handlers.GetLocationSharing)
+			location.PUT("/sharing", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.UpdateLocationSharing)
 		}
 
 		// Evidence routes

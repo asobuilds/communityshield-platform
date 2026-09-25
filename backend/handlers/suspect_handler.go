@@ -10,6 +10,7 @@ import (
 	"security-solution/config"
 	"security-solution/models"
 	"security-solution/services"
+	"security-solution/utils"
 )
 
 // maskIfExpunged blanks PII on a suspect when ExpungedAt is set, preserving
@@ -491,6 +492,7 @@ func ReportSighting(c *gin.Context) {
 		Location    string  `json:"location"`
 		Description string  `json:"description"`
 		UnitID      string  `json:"unitId"`
+		HideLocation bool   `json:"hideLocation"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -537,20 +539,49 @@ func ReportSighting(c *gin.Context) {
 		unitID = *userObj.UnitID
 	}
 
+	geohash := utils.EncodeGeohash(input.Latitude, input.Longitude, 5)
+	anon := input.HideLocation || !userObj.LocationSharingEnabled
+
 	sighting := models.SuspectSighting{
-		SuspectID:   suspectID,
-		ReportedBy:  userObj.ID,
-		UnitID:      unitID,
-		Latitude:    input.Latitude,
-		Longitude:   input.Longitude,
-		Location:    input.Location,
-		Description: input.Description,
-		Timestamp:   time.Now(),
+		SuspectID:     suspectID,
+		ReportedBy:    userObj.ID,
+		UnitID:        unitID,
+		LocationGeohash: geohash,
+		Description:   input.Description,
+		Timestamp:     time.Now(),
+	}
+
+	if anon {
+		// Anonymous sighting: zero precise coords and freeform location,
+		// keep only the coarse geohash.
+		sighting.Location = ""
+		sighting.Latitude = 0
+		sighting.Longitude = 0
+		sighting.IsAnonymous = true
+	} else {
+		sighting.Latitude = input.Latitude
+		sighting.Longitude = input.Longitude
+		sighting.Location = input.Location
 	}
 
 	if err := config.DB.Create(&sighting).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to report sighting"})
 		return
+	}
+
+	// Compliance audit for anonymous sightings.
+	if anon {
+		auditSvc := services.NewAuditService()
+		_ = auditSvc.LogAction(
+			userObj.ID,
+			"sighting.created_anonymous",
+			"suspect_sighting",
+			sighting.ID.String(),
+			nil,
+			map[string]interface{}{"geohash": geohash},
+			c.ClientIP(),
+			c.Request.UserAgent(),
+		)
 	}
 
 	suspect.Status = "active"

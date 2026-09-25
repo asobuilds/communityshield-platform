@@ -11,6 +11,8 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
+	"security-solution/utils"
 )
 
 // SendSOSAlert - Enhanced with emergency contacts and escalation
@@ -26,6 +28,7 @@ func SendSOSAlert(c *gin.Context) {
 		EmergencyContacts []string `json:"emergencyContacts"`
 		MedicalInfo       string   `json:"medicalInfo"`
 		Priority          string   `json:"priority"`
+		HideLocation      bool     `json:"hideLocation"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -44,6 +47,9 @@ func SendSOSAlert(c *gin.Context) {
 		input.Priority = "high"
 	}
 
+	geohash := utils.EncodeGeohash(input.Latitude, input.Longitude, 5)
+	anon := input.HideLocation || !userObj.LocationSharingEnabled
+
 	sos := models.SOSAlert{
 		UserID:      userObj.ID,
 		Latitude:    input.Latitude,
@@ -51,6 +57,14 @@ func SendSOSAlert(c *gin.Context) {
 		Description: input.Description,
 		Status:      "pending",
 		Priority:    input.Priority,
+		LocationGeohash: geohash,
+	}
+
+	// SOS is time-critical: even in coarse mode we keep the precise
+	// coordinates so responders can reach the person. Only the public
+	// display path strips them.
+	if anon {
+		sos.IsAnonymous = true
 	}
 
 	if input.UnitID != "" {
@@ -63,6 +77,21 @@ func SendSOSAlert(c *gin.Context) {
 	if err := config.DB.Create(&sos).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send SOS alert"})
 		return
+	}
+
+	// Compliance audit for anonymous SOS.
+	if anon {
+		auditSvc := services.NewAuditService()
+		_ = auditSvc.LogAction(
+			userObj.ID,
+			"sos.created_anonymous",
+			"sos_alert",
+			sos.ID.String(),
+			nil,
+			map[string]interface{}{"geohash": geohash},
+			c.ClientIP(),
+			c.Request.UserAgent(),
+		)
 	}
 
 	// Notify emergency contacts
