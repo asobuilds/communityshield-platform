@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layers, MapPin, Search } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import { MapView } from '@/components/map/MapView'
 import { useCases } from '@/hooks/useCases'
 import { useUnits } from '@/hooks/useUnits'
+import { useLocation } from '@/hooks/useLocation'
 import { useAuth } from '@/auth/AuthContext'
 import { CASE_STATUS_ORDER, statusMeta } from '@/lib/status'
 import { relativeTime } from '@/lib/format'
@@ -26,12 +27,22 @@ export function MapPage() {
   const { role } = useAuth()
   const casesQuery = useCases()
   const unitsQuery = useUnits()
+  const { latitude, longitude, permission, request } = useLocation()
 
   const [selected, setSelected] = useState<string | null>(null)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   const [showCoverage, setShowCoverage] = useState(true)
   const [showHotspots, setShowHotspots] = useState(false)
+
+  // Only the prompt path auto-arms: wait until the map has painted, then let
+  // the browser ask. A granted/denied state is resolved without one.
+  useEffect(() => {
+    if (permission === 'prompt') {
+      const id = setTimeout(() => request(), 500)
+      return () => clearTimeout(id)
+    }
+  }, [permission, request])
 
   const allCases = useMemo(() => casesQuery.data ?? [], [casesQuery.data])
 
@@ -146,6 +157,8 @@ export function MapPage() {
               units={unitsQuery.data ?? []}
               showUnitCoverage={showCoverage}
               showHotspots={showHotspots}
+              userLocation={latitude != null && longitude != null ? { latitude, longitude } : null}
+              allowLocate
               height="60vh"
               selectedCaseId={selected}
               onSelectCase={(caseItem) => setSelected(caseItem.id)}

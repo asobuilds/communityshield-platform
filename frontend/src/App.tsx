@@ -4,9 +4,11 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { AuthProvider, useAuth } from '@/auth/AuthContext'
 import { RequireRole, homePathForRole } from '@/auth/RequireRole'
 import { AppShell } from '@/components/layout/AppShell'
+import { LoadingBanner } from '@/components/layout/LoadingBanner'
 import { FullPageSpinner } from '@/components/ui/States'
 import { ToastProvider } from '@/components/ui/Toast'
 import { queryClient } from '@/lib/queryClient'
+import { useRouteLoading } from '@/hooks/useRouteLoading'
 import { LandingPage } from '@/pages/LandingPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignupPage } from '@/pages/auth/SignupPage'
@@ -93,11 +95,23 @@ function LoginAlias() {
   return <Navigate to="/auth/login" replace state={location.state} />
 }
 
+/**
+ * The route-loading indicator, hoisted to the top of the router so it overlays
+ * the signed-in shell and can render on every route — including the guarded
+ * ones that decide whether the shell is shown at all. `useRouteLoading` reads
+ * react-router's location, so it must live inside `<BrowserRouter>`.
+ */
+function RouteLoadingBanner() {
+  const { loading, message } = useRouteLoading()
+  return <LoadingBanner show={loading} message={message} />
+}
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter>
+          <RouteLoadingBanner />
           <AuthProvider>
             <Routes>
               <Route path="/auth/login" element={<LoginPage />} />

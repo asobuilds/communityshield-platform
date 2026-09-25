@@ -213,6 +213,9 @@ export function ReportIncidentPage() {
       unitId: draft.unitId ?? undefined,
       // Only the literal "high" is honoured; anything else is P3. Never `isSOS`.
       priority: draft.urgent ? 'high' : undefined,
+      // Sent only when checked; omitted otherwise, so the backend default (false)
+      // applies and a normal (signed) report is created.
+      hideLocation: draft.hideLocation || undefined,
     }
 
     let response: CreateCaseResponse
@@ -447,15 +450,16 @@ export function ReportIncidentPage() {
           ) : null}
 
           {step.key === 'where' ? (
-            <WhereStep
-              draft={draft}
-              onLocationChange={(value) => update('location', value)}
-              onPick={placePin}
-              onClearPin={() =>
-                setDraft((current) => ({ ...current, latitude: null, longitude: null }))
-              }
-              onUnitChange={(unitId) => update('unitId', unitId)}
-            />
+          <WhereStep
+            draft={draft}
+            onLocationChange={(value) => update('location', value)}
+            onPick={placePin}
+            onClearPin={() =>
+              setDraft((current) => ({ ...current, latitude: null, longitude: null }))
+            }
+            onHideLocationChange={(value) => update('hideLocation', value)}
+            onUnitChange={(unitId) => update('unitId', unitId)}
+          />
           ) : null}
 
           {step.key === 'evidence' ? (
@@ -648,12 +652,14 @@ function WhereStep({
   onLocationChange,
   onPick,
   onClearPin,
+  onHideLocationChange,
   onUnitChange,
 }: {
   draft: ReportDraft
   onLocationChange: (value: string) => void
   onPick: (lat: number, lng: number) => void
   onClearPin: () => void
+  onHideLocationChange: (value: boolean) => void
   onUnitChange: (unitId: string) => void
 }) {
   const hasPin = draft.latitude !== null && draft.longitude !== null
@@ -713,6 +719,35 @@ function WhereStep({
           />
         )}
       </Field>
+
+      {/* hideLocation: file the report against a coarse geohash instead of the
+          precise coordinates. Matches the `POST /cases` field added alongside the
+          location-sharing toggle. */}
+      <label
+        htmlFor="report-hide-location"
+        className={cn(
+          'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+          draft.hideLocation
+            ? 'border-warn/40 bg-warn/10'
+            : 'border-border-hi bg-surface-hi',
+        )}
+      >
+        <input
+          id="report-hide-location"
+          type="checkbox"
+          checked={draft.hideLocation}
+          onChange={(event) => onHideLocationChange(event.target.checked)}
+          className="mt-0.5 size-4 shrink-0 accent-warn"
+        />
+        <span>
+          <span className="block text-sm font-medium text-ink">
+            File this report anonymously (hide my exact location)
+          </span>
+          <span className="mt-0.5 block text-xs text-ink-muted">
+            Your report is kept against a coarse area instead of precise coordinates. Units still see the area to respond.
+          </span>
+        </span>
+      </label>
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-xs font-medium text-ink-muted">

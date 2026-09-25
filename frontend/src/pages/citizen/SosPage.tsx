@@ -31,6 +31,7 @@ export function SosPage() {
   const [medical, setMedical] = useState('')
   const [priority, setPriority] = useState<'high' | 'critical'>('high')
   const [unitId, setUnitId] = useState('')
+  const [hideLocation, setHideLocation] = useState(false)
   const [receipt, setReceipt] = useState<{ trackingId: string; status: string } | null>(null)
   const alerts = useMySos(USE_MOCKS)
   const units = useUnits()
@@ -77,6 +78,9 @@ export function SosPage() {
         ...(unitId ? { unitId } : {}),
         ...(contacts.trim() ? { emergencyContacts: contacts.trim() } : {}),
         ...(medical.trim() ? { medicalInfo: medical.trim() } : {}),
+        // SOS keeps the precise coordinates internally for responders; this only
+        // strips the reporter's identity from public feeds.
+        ...(hideLocation ? { hideLocation: true } : {}),
       })
       setReceipt({ trackingId: alert.trackingId, status: alert.status })
       setConfirming(false)
@@ -178,6 +182,30 @@ export function SosPage() {
         <label className="block text-xs text-ink-muted">Medical information to share with responders (optional)
           <Textarea value={medical} maxLength={500} onChange={(e) => setMedical(e.target.value)} placeholder="Only what responders need to know" />
         </label>
+
+        {/* hideLocation: SOS keeps precise coords internally for responders; this
+            only hides the reporter's identity from public feeds (POST /sos). */}
+        <label
+          htmlFor="sos-hide-location"
+          className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${hideLocation ? 'border-warn/40 bg-warn/10' : 'border-border-hi bg-surface-hi'}`}
+        >
+          <input
+            id="sos-hide-location"
+            type="checkbox"
+            checked={hideLocation}
+            onChange={(event) => setHideLocation(event.target.checked)}
+            className="mt-0.5 size-4 shrink-0 accent-warn"
+          />
+          <span>
+            <span className="block text-sm font-medium text-ink">
+              Hide my identity from the public feed (responders still see you)
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-muted">
+              Your location is still sent to responding units; only public displays mask who reported it.
+            </span>
+          </span>
+        </label>
+
         <p className="text-xs text-ink-muted">The optional details are sent only when you confirm; they are cleared from this form after success.</p>
         <Button variant="danger" size="lg" disabled={!USE_MOCKS || !hasLocation} onClick={() => setConfirming(true)} icon={<AlertTriangle className="size-5" />}>
           Prepare SOS

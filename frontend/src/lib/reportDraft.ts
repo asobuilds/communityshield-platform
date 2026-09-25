@@ -43,6 +43,8 @@ export interface ReportDraft {
   longitude: number | null
   /** The unit the reporter asked for; honoured only if the id resolves. */
   unitId: string | null
+  /** File anonymously: send a coarse geohash instead of precise coordinates. */
+  hideLocation: boolean
   evidence: DraftEvidenceLink[]
 }
 
@@ -55,6 +57,7 @@ export function emptyReportDraft(): ReportDraft {
     latitude: null,
     longitude: null,
     unitId: null,
+    hideLocation: false,
     evidence: [],
   }
 }
@@ -75,6 +78,7 @@ export function isReportDraftEmpty(draft: ReportDraft): boolean {
     draft.latitude === null &&
     draft.longitude === null &&
     draft.unitId === null &&
+    !draft.hideLocation &&
     draft.evidence.every((link) => link.fileUrl.trim() === '')
   )
 }
@@ -126,6 +130,7 @@ export function parseReportDraft(raw: string | null): ReportDraft | null {
     latitude: hasPoint ? latitude : null,
     longitude: hasPoint ? longitude : null,
     unitId: typeof value.unitId === 'string' && value.unitId !== '' ? value.unitId : null,
+    hideLocation: value.hideLocation === true,
     evidence: Array.isArray(value.evidence)
       ? value.evidence
           .filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null)

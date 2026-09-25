@@ -136,3 +136,17 @@
     letter-spacing: -0.01em;
   }
 }
+
+/* Loading banner mark: a gentle scale pulse, scoped to the component. */
+@keyframes loading-banner-pulse {
+  0%,
+  100% {
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+.loading-banner-pulse {
+  animation: loading-banner-pulse 1.6s ease-in-out infinite;
+}

@@ -61,6 +61,9 @@ export interface MapViewProps {
   onPickLocation?: (lat: number, lng: number) => void
   /** Ask the browser for the user's position and recentre. */
   allowLocate?: boolean
+  /** The reporter's live position, when already known. Recentres the map on mount
+   *  and whenever the fix updates — used by `MapPage` to auto-anchor to the user. */
+  userLocation?: { latitude: number; longitude: number } | null
   className?: string
   label?: string
 }
@@ -203,6 +206,7 @@ export function MapView({
   pickLocation = null,
   onPickLocation,
   allowLocate = false,
+  userLocation = null,
   className,
   label = 'Map of cases and security units',
 }: MapViewProps) {
@@ -232,8 +236,13 @@ export function MapView({
     [casePoints, unitPoints],
   )
 
+  const userLocationCenter: LatLngTuple | null = userLocation
+    ? [userLocation.latitude, userLocation.longitude]
+    : null
+
   const initialCenter: LatLngTuple =
     center ??
+    userLocationCenter ??
     (pickLocation as LatLngTuple | null) ??
     casePoints[0] ??
     unitPoints[0] ??
@@ -296,6 +305,7 @@ export function MapView({
 
         {mode === 'view' ? (
           <>
+            {userLocationCenter ? <Recenter target={userLocationCenter} /> : null}
             <FitToContent points={plotted} enabled={plotted.length > 0} />
 
             {showUnitCoverage

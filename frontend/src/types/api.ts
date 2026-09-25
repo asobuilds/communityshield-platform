@@ -128,6 +128,12 @@ export interface SendSosInput {
   unitId?: string
   emergencyContacts?: string
   medicalInfo?: string
+  /**
+   * Opt out of exposing the reporter's identity on the public feed. Responders
+   * still see the precise coordinates; the toggle only strips identifying
+   * context from displays the public can reach (see `POST /sos`).
+   */
+  hideLocation?: boolean
 }
 
 export interface Case {
@@ -385,6 +391,13 @@ export interface CreateCaseInput {
   priority?: string
   /** Bands P1 and triggers an immediate dispatch attempt. Only SOS sets it. */
   isSOS?: boolean
+  /**
+   * File this report anonymously: the precise coordinates and freeform location
+   * are zeroed, leaving only a coarse geohash for clustering. Honoured only when
+   * the reporter has also enabled location sharing; otherwise the backend treats
+   * every report as anonymous (see `POST /cases`).
+   */
+  hideLocation?: boolean
 }
 
 /**
