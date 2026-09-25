@@ -9,6 +9,7 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
 )
 
 // maskIfExpunged blanks PII on a suspect when ExpungedAt is set, preserving
@@ -195,6 +196,18 @@ func CreateSuspect(c *gin.Context) {
 		return
 	}
 
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		userObj.ID,
+		"suspect.create",
+		"suspect",
+		suspect.ID.String(),
+		nil,
+		suspect,
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":   "Suspect created successfully",
 		"suspect":   suspect,
@@ -329,6 +342,9 @@ func UpdateSuspect(c *gin.Context) {
 		return
 	}
 
+	// Snapshot pre-update values for the audit trail.
+	oldSuspect := suspect
+
 	if !checkSuspectAccess(userObj, &suspect) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update this suspect"})
 		return
@@ -399,6 +415,18 @@ func UpdateSuspect(c *gin.Context) {
 		return
 	}
 
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		userObj.ID,
+		"suspect.update",
+		"suspect",
+		suspectID.String(),
+		oldSuspect,
+		suspect,
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Suspect updated successfully",
 		"suspect": suspect,
@@ -426,10 +454,28 @@ func DeleteSuspect(c *gin.Context) {
 		return
 	}
 
+	var suspect models.Suspect
+	if err := config.DB.First(&suspect, "id = ?", suspectID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Suspect not found"})
+		return
+	}
+
 	if err := config.DB.Delete(&models.Suspect{}, "id = ?", suspectID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete suspect"})
 		return
 	}
+
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		userObj.ID,
+		"suspect.delete",
+		"suspect",
+		suspectID.String(),
+		suspect,
+		nil,
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Suspect deleted successfully",

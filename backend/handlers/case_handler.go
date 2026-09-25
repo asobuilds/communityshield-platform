@@ -344,11 +344,13 @@ func UpdateCaseStatus(c *gin.Context) {
 		return
 	}
 
-	var caseObj models.Case
+var caseObj models.Case
 	if err := config.DB.First(&caseObj, "id = ?", caseID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
 		return
 	}
+
+	oldStatus := caseObj.Status
 
 	caseObj.Status = input.Status
 	if err := config.DB.Save(&caseObj).Error; err != nil {
@@ -364,6 +366,18 @@ func UpdateCaseStatus(c *gin.Context) {
 		Status:      input.Status,
 	}
 	config.DB.Create(&timeline)
+
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		userObj.ID,
+		"case.status_change",
+		"case",
+		caseID.String(),
+		map[string]string{"status": oldStatus},
+		map[string]string{"status": input.Status},
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Case status updated successfully",

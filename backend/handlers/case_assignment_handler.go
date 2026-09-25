@@ -8,6 +8,7 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
 )
 
 type assignCaseRequest struct {
@@ -110,11 +111,33 @@ func AssignCase(c *gin.Context) {
 			caseRecord.Status = "assigned"
 		}
 
-		if err := config.DB.Save(&caseRecord).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "assignment created but case update failed",
-			})
-			return
+if err := config.DB.Save(&caseRecord).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "assignment created but case update failed",
+		})
+		return
+	}
+	}
+
+	if actorValue, exists := c.Get("user"); exists {
+		if actor, ok := actorValue.(*models.User); ok && actor != nil {
+			auditSvc := services.NewAuditService()
+			_ = auditSvc.LogAction(
+				actor.ID,
+				"case.assign",
+				"case",
+				caseID.String(),
+				map[string]interface{}{
+					"officerId": caseRecord.AssignedTo,
+					"role":      role,
+				},
+				map[string]interface{}{
+					"officerId": &req.OfficerID,
+					"role":      role,
+				},
+				c.ClientIP(),
+				c.Request.UserAgent(),
+			)
 		}
 	}
 

@@ -32,15 +32,15 @@ func AuditMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		auditLog := models.AuditLog{
-			UserID:     user.ID,
-			Action:     c.Request.Method,
-			EntityType: c.Request.URL.Path,
-			EntityID:   c.Request.URL.RawQuery,
-			IPAddress:  c.ClientIP(),
-			UserAgent:  c.GetHeader("User-Agent"),
-			Timestamp:  time.Now(),
-		}
+auditLog := models.AuditLog{
+		UserID:     user.ID,
+		Action:     c.Request.Method,
+		EntityType: c.Request.URL.Path,
+		EntityID:   c.Request.URL.Path,
+		IPAddress:  c.ClientIP(),
+		UserAgent:  c.GetHeader("User-Agent"),
+		Timestamp:  time.Now(),
+	}
 
 		if len(c.Errors) > 0 {
 			auditLog.OldValue = c.Errors.String()

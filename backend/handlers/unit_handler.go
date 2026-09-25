@@ -10,6 +10,7 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
 )
 
 // GetNearbyUnits returns units near a location
@@ -225,10 +226,22 @@ func CreateUnit(c *gin.Context) {
 		IsVerified:         false,
 	}
 
-	if err := config.DB.Create(&unit).Error; err != nil {
+if err := config.DB.Create(&unit).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create unit"})
 		return
 	}
+
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		userObj.ID,
+		"unit.create",
+		"unit",
+		unit.ID.String(),
+		nil,
+		unit,
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Unit created successfully",
@@ -278,11 +291,14 @@ func UpdateUnit(c *gin.Context) {
 		return
 	}
 
-	var unit models.SecurityUnit
+var unit models.SecurityUnit
 	if err := config.DB.First(&unit, "id = ?", unitID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Unit not found"})
 		return
 	}
+
+	// Snapshot pre-update values for the audit trail.
+	oldUnit := unit
 
 	if input.Name != "" {
 		unit.Name = input.Name
@@ -324,10 +340,22 @@ func UpdateUnit(c *gin.Context) {
 		unit.Status = input.Status
 	}
 
-	if err := config.DB.Save(&unit).Error; err != nil {
+if err := config.DB.Save(&unit).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update unit"})
 		return
 	}
+
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		userObj.ID,
+		"unit.update",
+		"unit",
+		unitID.String(),
+		oldUnit,
+		unit,
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Unit updated successfully",

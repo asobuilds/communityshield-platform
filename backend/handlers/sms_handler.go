@@ -60,8 +60,7 @@ func HandleIncomingSMS(c *gin.Context) {
 	cmd := parseSMSCommand(input.Message, input.From)
 
 	// Log incoming SMS
-	log.Printf("📩 SMS Received: From=%s, Command=%s, Params=%v",
-		input.From, cmd.Command, cmd.Params)
+	log.Printf("sms webhook: received")
 
 	// Process command
 	response := processSMSCommand(cmd)
@@ -107,8 +106,7 @@ func HandleUSSD(c *gin.Context) {
 	parts := strings.Split(input.Text, "*")
 	step := len(parts)
 
-	log.Printf("📱 USSD Request: Phone=%s, Step=%d, Text=%s",
-		input.Phone, step, input.Text)
+	log.Printf("ussd: received (step=%d)", step)
 
 	var response string
 
@@ -488,14 +486,14 @@ func notifyUnitsAboutSOS(sos models.SOSAlert, phone string) {
 	config.DB.Where("status = ?", "active").Find(&units)
 
 	// Log notification
-	log.Printf("🚨 SOS Alert: %s from %s", sos.ID.String()[:8], phone)
+	log.Printf("sos via sms: received (id=%s)", sos.ID.String()[:8])
 
 	for _, unit := range units {
 		if unit.ContactPhone != "" {
 			message := fmt.Sprintf("🚨 SOS Alert!\nID: %s\nFrom: %s\n%s\nPlease respond immediately.",
 				sos.ID.String()[:8], phone, sos.Description)
 			go services.SendSMS(unit.ContactPhone, message)
-			log.Printf("📱 Notified unit %s at %s", unit.Name, unit.ContactPhone)
+			log.Printf("sms: notified unit %s", unit.Name)
 		}
 	}
 }

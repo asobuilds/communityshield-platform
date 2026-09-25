@@ -8,6 +8,7 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
 )
 
 // callerIsSuperAdmin returns true if the authenticated caller is a super admin.
@@ -76,6 +77,14 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
+	// Snapshot pre-update values for the audit trail.
+	oldUser := map[string]string{
+		"firstName": user.FirstName,
+		"lastName":  user.LastName,
+		"phone":     user.Phone,
+		"status":    user.Status,
+	}
+
 	// A super admin must not be able to suspend/demote themselves by accident.
 	if user.ID == caller.ID && input.Status != "" && input.Status != user.Status {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You cannot change your own account status"})
@@ -99,6 +108,23 @@ func UpdateUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
 		return
 	}
+
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		caller.ID,
+		"user.update",
+		"user",
+		userID.String(),
+		oldUser,
+		map[string]string{
+			"firstName": user.FirstName,
+			"lastName":  user.LastName,
+			"phone":     user.Phone,
+			"status":    user.Status,
+		},
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "User updated successfully",
@@ -125,10 +151,37 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
+	var user models.User
+	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Revoke all active sessions and tokens before deleting the account.
+	_ = services.NewTokenService().RevokeAllForUser(userID, "account_deleted")
+	_ = services.NewRefreshTokenService().RevokeAllForUser(userID)
+	_ = services.NewSessionService().RevokeAll(userID, "account_deleted")
+
 	if err := config.DB.Delete(&models.User{}, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
 		return
 	}
+
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		caller.ID,
+		"user.delete",
+		"user",
+		userID.String(),
+		map[string]string{
+			"email":     user.Email,
+			"role":      user.Role,
+			"status":    user.Status,
+		},
+		nil,
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
 
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
 }

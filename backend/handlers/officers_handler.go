@@ -8,6 +8,7 @@ import (
 
 	"security-solution/config"
 	"security-solution/models"
+	"security-solution/services"
 )
 
 // canManageOfficersInUnit returns true if the caller may create, update,
@@ -196,6 +197,9 @@ func UpdateOfficer(c *gin.Context) {
 		return
 	}
 
+	// Snapshot pre-update values for the audit trail.
+	oldOfficer := officer
+
 	if !canManageOfficersInUnit(user, officer.UnitID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only admins of this unit may update officers"})
 		return
@@ -224,6 +228,18 @@ func UpdateOfficer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update officer"})
 		return
 	}
+
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		user.ID,
+		"officer.update",
+		"officer",
+		officerID.String(),
+		oldOfficer,
+		officer,
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Officer updated successfully",
@@ -259,6 +275,18 @@ func DeleteOfficer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete officer"})
 		return
 	}
+
+	auditSvc := services.NewAuditService()
+	_ = auditSvc.LogAction(
+		user.ID,
+		"officer.delete",
+		"officer",
+		officerID.String(),
+		officer,
+		nil,
+		c.ClientIP(),
+		c.Request.UserAgent(),
+	)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Officer deleted successfully"})
 }

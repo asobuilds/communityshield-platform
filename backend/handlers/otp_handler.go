@@ -88,7 +88,7 @@ func SendOTP(c *gin.Context) {
 	if user.Email != "" {
 		go func() {
 			// Email sending logic
-			log.Printf("📧 OTP %s sent to %s (background)", code, user.Email)
+			log.Printf("otp: issued for user %s (background)", userID.String())
 		}()
 	}
 

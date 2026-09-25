@@ -178,7 +178,12 @@ func UpdateEmailTemplate(c *gin.Context) {
 	})
 }
 
-// CreateDataExport creates a data export request
+// CreateDataExport creates a data export request.
+//
+// The export worker does not exist yet, so this endpoint is honest about
+// that: it returns 501 instead of fabricating a "completed" export with a
+// fake FileURL. The DataExport row is no longer created, so the data_exports
+// table cannot accumulate phantom records.
 func CreateDataExport(c *gin.Context) {
 	var input struct {
 		Type    string `json:"type" binding:"required"`
@@ -191,39 +196,13 @@ func CreateDataExport(c *gin.Context) {
 		return
 	}
 
-	user, exists := c.Get("user")
-	if !exists {
+	if _, exists := c.Get("user"); !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
-	userObj := user.(*models.User)
 
-	if input.Format == "" {
-		input.Format = "json"
-	}
-
-	export := models.DataExport{
-		UserID:  userObj.ID,
-		Type:    input.Type,
-		Format:  input.Format,
-		Filters: input.Filters,
-		Status:  "pending",
-	}
-
-	if err := config.DB.Create(&export).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create export"})
-		return
-	}
-
-	now := time.Now()
-	export.Status = "completed"
-	export.CompletedAt = &now
-	export.FileURL = "/exports/" + export.ID.String() + "." + input.Format
-	config.DB.Save(&export)
-
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "Export created successfully",
-		"export":  export,
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"error": "Data export is not yet available",
 	})
 }
 

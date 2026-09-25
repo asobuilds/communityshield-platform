@@ -254,6 +254,29 @@ func SuspendUser(c *gin.Context) {
 	user.Status = "suspended"
 	config.DB.Save(&user)
 
+	// Revoke all active sessions and tokens so the suspended user's
+	// existing credentials stop working immediately.
+	_ = services.NewTokenService().RevokeAllForUser(userID, "account_suspended")
+	_ = services.NewRefreshTokenService().RevokeAllForUser(userID)
+	_ = services.NewSessionService().RevokeAll(userID, "account_suspended")
+
+	// Audit the suspension.
+	if actorValue, exists := c.Get("user"); exists {
+		if actor, ok := actorValue.(*models.User); ok && actor != nil {
+			auditSvc := services.NewAuditService()
+			_ = auditSvc.LogAction(
+				actor.ID,
+				"user.suspend",
+				"user",
+				userID.String(),
+				map[string]string{"status": "active"},
+				map[string]string{"status": "suspended"},
+				c.ClientIP(),
+				c.Request.UserAgent(),
+			)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "User suspended",
 		"user":    user,
@@ -277,6 +300,23 @@ func ActivateUser(c *gin.Context) {
 
 	user.Status = "active"
 	config.DB.Save(&user)
+
+	// Audit the activation.
+	if actorValue, exists := c.Get("user"); exists {
+		if actor, ok := actorValue.(*models.User); ok && actor != nil {
+			auditSvc := services.NewAuditService()
+			_ = auditSvc.LogAction(
+				actor.ID,
+				"user.activate",
+				"user",
+				userID.String(),
+				map[string]string{"status": "suspended"},
+				map[string]string{"status": "active"},
+				c.ClientIP(),
+				c.Request.UserAgent(),
+			)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "User activated",

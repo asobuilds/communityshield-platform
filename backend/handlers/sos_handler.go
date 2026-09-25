@@ -294,8 +294,10 @@ func startEscalationTimer(sosID uuid.UUID) {
 
 // Helper: Save medical info
 func saveMedicalInfo(userID uuid.UUID, info string) {
-	// Store medical info for the user
-	log.Printf("💊 Medical info saved for user %s: %s", userID.String(), info)
+	// info is intentionally not logged: medical content must never appear
+	// in stdout. The parameter is retained to keep the call signature stable.
+	_ = info
+	log.Printf("sos: medical info saved for user %s", userID.String())
 }
 
 // Helper: Notify user
