@@ -299,7 +299,10 @@ func EndCall(c *gin.Context) {
 		Quality string `json:"quality"`
 	}
 
-	c.ShouldBindJSON(&input)
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	_, exists := c.Get("user")
 	if !exists {

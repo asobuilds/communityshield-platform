@@ -142,7 +142,10 @@ func CloseRevocationCycle(c *gin.Context) {
 	}
 
 	var req CloseRevocationCycleRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	svc := services.NewRevocationService()
 	if err := svc.CloseRevocationCycle(cycleID, req.HeadAdminApprovalMembershipID); err != nil {

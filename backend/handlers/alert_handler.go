@@ -17,11 +17,11 @@ func CreateCommunityAlert(c *gin.Context) {
 		Title     string  `json:"title" binding:"required"`
 		Content   string  `json:"content" binding:"required"`
 		Type      string  `json:"type" binding:"required"`
-		Severity  string  `json:"severity"`
-		Location  string  `json:"location"`
-		Latitude  float64 `json:"latitude"`
-		Longitude float64 `json:"longitude"`
-		Radius    float64 `json:"radius"`
+		Severity  string  `json:"severity" binding:"required"`
+		Location  string  `json:"location" binding:"required"`
+		Latitude  float64 `json:"latitude" binding:"required"`
+		Longitude float64 `json:"longitude" binding:"required"`
+		Radius    float64 `json:"radius" binding:"required"`
 		ExpiresAt string  `json:"expiresAt"`
 	}
 

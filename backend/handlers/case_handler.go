@@ -26,12 +26,12 @@ func CreateCase(c *gin.Context) {
 		return
 	}
 	var input struct {
-		UnitID      string  `json:"unitId"`
+		UnitID      string  `json:"unitId" binding:"required"`
 		Title       string  `json:"title" binding:"required"`
 		Description string  `json:"description" binding:"required"`
-		Latitude    float64 `json:"latitude"`
-		Longitude   float64 `json:"longitude"`
-		Location    string  `json:"location"`
+		Latitude    float64 `json:"latitude" binding:"required"`
+		Longitude   float64 `json:"longitude" binding:"required"`
+		Location    string  `json:"location" binding:"required"`
 		Priority    string  `json:"priority"`
 		IsSOS       bool    `json:"isSOS"`
 	}
@@ -204,6 +204,9 @@ func GetAllCases(c *gin.Context) {
 		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
 			page = parsed
 		}
+	}
+	if page > 10000 {
+		page = 10000
 	}
 
 	var cases []models.Case

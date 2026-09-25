@@ -37,9 +37,29 @@ func GetNearbyUnits(c *gin.Context) {
 		return
 	}
 
+	if lat < -90 || lat > 90 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Latitude out of range (-90 to 90)"})
+		return
+	}
+	if lng < -180 || lng > 180 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Longitude out of range (-180 to 180)"})
+		return
+	}
+
 	radius := 20.0
 	if radiusStr != "" {
-		radius, _ = parseFloat(radiusStr)
+		r, err := parseFloat(radiusStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid radius"})
+			return
+		}
+		radius = r
+	}
+	if radius <= 0 {
+		radius = 20
+	}
+	if radius > 500 {
+		radius = 500
 	}
 
 	var units []models.SecurityUnit

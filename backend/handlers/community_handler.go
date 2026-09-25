@@ -343,12 +343,12 @@ func CreateCommunityEvent(c *gin.Context) {
 		UnitID       string  `json:"unitId"`
 		Title        string  `json:"title" binding:"required"`
 		Description  string  `json:"description" binding:"required"`
-		Location     string  `json:"location"`
+		Location     string  `json:"location" binding:"required"`
 		Latitude     float64 `json:"latitude"`
 		Longitude    float64 `json:"longitude"`
 		EventDate    string  `json:"eventDate" binding:"required"`
-		EndDate      string  `json:"endDate"`
-		Type         string  `json:"type"`
+		EndDate      string  `json:"endDate" binding:"required"`
+		Type         string  `json:"type" binding:"required"`
 		MaxAttendees int     `json:"maxAttendees"`
 	}
 
