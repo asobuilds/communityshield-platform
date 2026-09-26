@@ -240,6 +240,9 @@ export function MapView({
     ? [userLocation.latitude, userLocation.longitude]
     : null
 
+  /** The user's own position for display: the reported fix, or the locate button's. */
+  const ownPosition: LatLngTuple | null = userLocationCenter ?? userCenter
+
   const initialCenter: LatLngTuple =
     center ??
     userLocationCenter ??
@@ -302,6 +305,35 @@ export function MapView({
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           eventHandlers={{ tileerror: () => setTileFailed(true) }}
         />
+
+        {/* User's own position — always visible when available */}
+        {ownPosition ? (
+          <>
+            {/* Outer pulse ring */}
+            <CircleMarker
+              center={ownPosition}
+              radius={18}
+              pathOptions={{
+                color: '#3b82f6',
+                weight: 1,
+                opacity: 0.4,
+                fillColor: '#3b82f6',
+                fillOpacity: 0.15,
+              }}
+            />
+            {/* Inner solid dot */}
+            <CircleMarker
+              center={ownPosition}
+              radius={7}
+              pathOptions={{
+                color: '#ffffff',
+                weight: 2,
+                fillColor: '#3b82f6',
+                fillOpacity: 1,
+              }}
+            />
+          </>
+        ) : null}
 
         {mode === 'view' ? (
           <>

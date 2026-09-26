@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
 /** Show the banner for at least this long so a fast navigation isn't a flash. */
-const MIN_VISIBLE_MS = 350
+const MIN_VISIBLE_MS = 600
 /** ...and at most this long, so it can never stick if a page never settles. */
-const MAX_VISIBLE_MS = 4000
+const MAX_VISIBLE_MS = 6000
 
 /** Map a pathname to the banner message that fits the page loading. */
 function routeMessage(pathname: string): string {
