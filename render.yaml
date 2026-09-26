@@ -25,6 +25,18 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         value: https://nativityguard-frontend.onrender.com
+      - key: MEDIA_ENDPOINT
+        sync: false
+      - key: MEDIA_REGION
+        value: eu-west-2
+      - key: MEDIA_ACCESS_KEY_ID
+        sync: false
+      - key: MEDIA_SECRET_ACCESS_KEY
+        sync: false
+      - key: MEDIA_BUCKET
+        value: nativityguard-media
+      - key: MEDIA_PUBLIC_BASE
+        sync: false
     healthCheckPath: /health
     numInstances: 1
     plan: free

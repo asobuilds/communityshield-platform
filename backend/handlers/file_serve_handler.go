@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -14,13 +15,25 @@ import (
 	"security-solution/services"
 )
 
-// ServeFile streams a stored file by category and relative hash path.
+// privateReadTTL is how long a presigned GET for a private object stays valid.
+const privateReadTTL = 10 * time.Minute
+
+// ServeFile resolves a stored file by category and bare hash and hands the
+// caller off to the right place.
+//
+// Stored keys use <category>/<yyyy>/<mm>/<hash>.<ext>. The route only carries
+// :category and :hash, so resolution walks the yyyy/mm levels: ListObjectsV2 on
+// R2, filepath.Glob on local disk.
+//
+// Delivery depends on the prefix:
+//   - public  (avatars, covers, units, news, community) -> 302 to R2_PUBLIC_BASE
+//   - private (evidence, gov_ids, voice_notes)           -> 302 to a short-lived
+//     presigned GET URL. A public URL is never returned for these.
 //
 // Access rules:
-//   - avatars/* and covers/*  : any authenticated user (public-safe identity)
-//   - evidence/*              : requires case access via caseId query param
-//   - gov_ids/*               : admin only (super admin / head admin / unit admin)
-//   - voice_notes/*           : requires case access via caseId query param
+//   - avatars/*, covers/*, units/*, news/*, community/*  : any authenticated user
+//   - evidence/*, voice_notes/*  : requires case access via caseId query param
+//   - gov_ids/*                  : admin only
 func ServeFile(c *gin.Context) {
 	userInterface, exists := c.Get("user")
 	if !exists {
@@ -45,84 +58,109 @@ func ServeFile(c *gin.Context) {
 		return
 	}
 
-	switch category {
-	case "avatars", "covers":
-		// public-safe: any authed user may read
-	case "evidence", "voice_notes":
-		caseIDStr := c.Query("caseId")
-		if caseIDStr == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "caseId query param required for evidence"})
-			return
-		}
-		caseID, err := uuid.Parse(caseIDStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid caseId"})
-			return
-		}
-
-		accessLevel := c.GetString("case_access_level")
-		if accessLevel == "" {
-			// fall back to an explicit check
-			var membership models.UnitMembership
-			var caseObj models.Case
-			if err := config.DB.First(&caseObj, "id = ?", caseID).Error; err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
-				return
-			}
-			isReporter := caseObj.ReportedBy == userObj.ID
-			hasMembership := config.DB.
-				Where("unit_id = ? AND user_id = ? AND status = ?", caseObj.UnitID, userObj.ID, models.MembershipActive).
-				First(&membership).Error == nil
-			if !isReporter && !hasMembership && !userObj.IsSuperAdmin && userObj.Role != "super_admin" {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
-				return
-			}
-		}
-	case "gov_ids":
-		if !userObj.IsSuperAdmin && userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
-			return
-		}
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown category"})
-		return
-	}
-
-	// Find the full stored path by scanning — the hash is the prefix, extension unknown
-	fullRelPath, err := findStoredByHash(category, hash)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+	if !authorizeFileCategory(c, category, userObj) {
 		return
 	}
 
 	storageSvc := services.NewFileStorageService()
-	reader, err := storageSvc.Open(fullRelPath)
+	key, err := storageSvc.FindByHash(category, strings.ToLower(hash))
+	if err != nil || key == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	r2 := storageSvc.R2()
+	if r2 == nil {
+		// Local disk mode: stream straight from disk.
+		serveStoredFile(c, storageSvc, key)
+		return
+	}
+
+	if services.IsPublicStorageKey(key) {
+		target := r2.PublicURL(key)
+		if target == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "R2_PUBLIC_BASE is not configured"})
+			return
+		}
+		c.Redirect(http.StatusFound, target)
+		return
+	}
+
+	// Private prefix: short-lived presigned GET instead of a public URL.
+	target, err := r2.PresignGet(c.Request.Context(), key, privateReadTTL)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+	c.Redirect(http.StatusFound, target)
+}
+
+// serveStoredFile streams a key out of the local disk backend.
+func serveStoredFile(c *gin.Context, storageSvc *services.FileStorageService, key string) {
+	reader, err := storageSvc.Open(key)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
 	defer reader.Close()
 
-	contentType := contentTypeFromExt(fullRelPath)
-	c.Header("Content-Type", contentType)
+	c.Header("Content-Type", contentTypeFromExt(key))
 	c.Header("Cache-Control", "private, max-age=3600")
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Status(http.StatusOK)
 	_, _ = io.Copy(c.Writer, reader)
 }
 
-// findStoredByHash scans the storage folder for a file whose name starts with the given hash.
-func findStoredByHash(category string, hash string) (string, error) {
-	storageSvc := services.NewFileStorageService()
-
-	// Try common extensions first
-	for _, ext := range []string{".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf", ".mp4", ".webm", ".mov", ".mp3", ".wav", ".ogg", ".m4a", ".bin"} {
-		rel := filepath.Join(category, hash+ext)
-		if storageSvc.Exists(rel) {
-			return rel, nil
+// authorizeFileCategory applies the per-category access rules. It writes the
+// error response itself and returns false when access is denied.
+func authorizeFileCategory(c *gin.Context, category string, userObj *models.User) bool {
+	switch category {
+	case "avatars", "covers", "units", "news", "community":
+		// public-safe: any authed user may read
+		return true
+	case "evidence", "voice_notes":
+		caseIDStr := c.Query("caseId")
+		if caseIDStr == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "caseId query param required for evidence"})
+			return false
 		}
+		caseID, err := uuid.Parse(caseIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid caseId"})
+			return false
+		}
+
+		accessLevel := c.GetString("case_access_level")
+		if accessLevel != "" {
+			return true
+		}
+
+		// fall back to an explicit check
+		var membership models.UnitMembership
+		var caseObj models.Case
+		if err := config.DB.First(&caseObj, "id = ?", caseID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Case not found"})
+			return false
+		}
+		isReporter := caseObj.ReportedBy == userObj.ID
+		hasMembership := config.DB.
+			Where("unit_id = ? AND user_id = ? AND status = ?", caseObj.UnitID, userObj.ID, models.MembershipActive).
+			First(&membership).Error == nil
+		if !isReporter && !hasMembership && !userObj.IsSuperAdmin && userObj.Role != "super_admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return false
+		}
+		return true
+	case "gov_ids":
+		if !userObj.IsSuperAdmin && userObj.Role != "super_admin" && userObj.Role != "unit_admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			return false
+		}
+		return true
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown category"})
+		return false
 	}
-	return "", http.ErrMissingFile
 }
 
 func contentTypeFromExt(path string) string {
