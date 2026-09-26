@@ -338,7 +338,7 @@ export function MapView({
         {mode === 'view' ? (
           <>
             {userLocationCenter ? <Recenter target={userLocationCenter} /> : null}
-            <FitToContent points={plotted} enabled={plotted.length > 0} />
+            <FitToContent points={plotted} enabled={plotted.length > 0 && !ownPosition} />
 
             {showUnitCoverage
               ? units
