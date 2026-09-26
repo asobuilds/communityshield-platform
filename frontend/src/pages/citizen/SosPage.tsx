@@ -7,6 +7,8 @@ import { Input, Select, Textarea } from '@/components/ui/Field'
 import { ErrorState, Skeleton } from '@/components/ui/States'
 import { useMySos, useSendSos } from '@/hooks/useSos'
 import { useUnits } from '@/hooks/useUnits'
+import { useLocation } from '@/hooks/useLocation'
+import { useReverseGeocode, formatAddress } from '@/hooks/useReverseGeocode'
 import { MapView } from '@/components/map/MapView'
 import { ApiError } from '@/lib/apiClient'
 import { USE_MOCKS } from '@/mocks/config'
@@ -36,6 +38,9 @@ export function SosPage() {
   const alerts = useMySos(USE_MOCKS)
   const units = useUnits()
   const send = useSendSos()
+
+  const { latitude: userLat, longitude: userLng } = useLocation()
+  const { data: geo, isLoading: geoLoading } = useReverseGeocode(userLat, userLng)
 
   const latitude = Number(lat)
   const longitude = Number(lng)
@@ -210,6 +215,18 @@ export function SosPage() {
         <Button variant="danger" size="lg" disabled={!USE_MOCKS || !hasLocation} onClick={() => setConfirming(true)} icon={<AlertTriangle className="size-5" />}>
           Prepare SOS
         </Button>
+
+        {(userLat != null && userLng != null) && (
+          <p className="text-sm text-ink-muted" aria-live="polite">
+            {geoLoading ? (
+              'Locating address…'
+            ) : geo ? (
+              <span>Your location: {formatAddress(geo)}</span>
+            ) : (
+              'Using GPS coordinates'
+            )}
+          </p>
+        )}
       </Card>
 
       <section aria-label="Your SOS history">

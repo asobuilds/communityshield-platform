@@ -24,6 +24,8 @@ import { useToast } from '@/components/ui/Toast'
 import { caseKeys, useCreateCase } from '@/hooks/useCases'
 import { evidenceKeys } from '@/hooks/useEvidence'
 import { useUnits, useNearbyUnits } from '@/hooks/useUnits'
+import { useLocation } from '@/hooks/useLocation'
+import { useReverseGeocode, formatAddress } from '@/hooks/useReverseGeocode'
 import { ApiError, api } from '@/lib/apiClient'
 import { cn } from '@/lib/cn'
 import { formatCoord } from '@/lib/format'
@@ -128,6 +130,11 @@ export function ReportIncidentPage() {
   const queryClient = useQueryClient()
   const { notify } = useToast()
 
+  const { latitude: userLat, longitude: userLng } = useLocation()
+  const geoLat = draft.latitude ?? userLat
+  const geoLng = draft.longitude ?? userLng
+  const { data: geo, isLoading: geoLoading } = useReverseGeocode(geoLat, geoLng)
+
   const step = STEPS[stepIndex]
 
   /**
@@ -153,6 +160,13 @@ export function ReportIncidentPage() {
     }
     headingRef.current?.focus()
   }, [stepIndex])
+
+  // Prefill location from reverse geocode when the field is empty and we have a result
+  useEffect(() => {
+    if (geo && draft.location.trim() === '' && !geoLoading) {
+      update('location', formatAddress(geo))
+    }
+  }, [geo, geoLoading, draft.location, update])
 
   function update<K extends keyof ReportDraft>(key: K, value: ReportDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -459,6 +473,15 @@ export function ReportIncidentPage() {
             }
             onHideLocationChange={(value) => update('hideLocation', value)}
             onUnitChange={(unitId) => update('unitId', unitId)}
+            geoLoading={geoLoading}
+            userLat={userLat}
+            userLng={userLng}
+            onUseCurrentLocation={() => {
+              if (userLat != null && userLng != null) {
+                placePin(userLat, userLng)
+                if (geo) update('location', formatAddress(geo))
+              }
+            }}
           />
           ) : null}
 
@@ -654,6 +677,10 @@ function WhereStep({
   onClearPin,
   onHideLocationChange,
   onUnitChange,
+  geoLoading,
+  userLat,
+  userLng,
+  onUseCurrentLocation,
 }: {
   draft: ReportDraft
   onLocationChange: (value: string) => void
@@ -661,6 +688,10 @@ function WhereStep({
   onClearPin: () => void
   onHideLocationChange: (value: boolean) => void
   onUnitChange: (unitId: string) => void
+  geoLoading: boolean
+  userLat: number | null
+  userLng: number | null
+  onUseCurrentLocation: () => void
 }) {
   const hasPin = draft.latitude !== null && draft.longitude !== null
   const nearby = useNearbyUnits(draft.latitude ?? undefined, draft.longitude ?? undefined)
@@ -719,6 +750,18 @@ function WhereStep({
           />
         )}
       </Field>
+
+      {(userLat != null && userLng != null) && (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-full sm:w-auto"
+          onClick={onUseCurrentLocation}
+          disabled={geoLoading}
+        >
+          {geoLoading ? 'Locating…' : 'Use my current location'}
+        </Button>
+      )}
 
       {/* hideLocation: file the report against a coarse geohash instead of the
           precise coordinates. Matches the `POST /cases` field added alongside the

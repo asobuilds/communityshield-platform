@@ -11,6 +11,7 @@ import { MapView } from '@/components/map/MapView'
 import { useCases } from '@/hooks/useCases'
 import { useUnits } from '@/hooks/useUnits'
 import { useLocation } from '@/hooks/useLocation'
+import { useReverseGeocode, formatAddress } from '@/hooks/useReverseGeocode'
 import { useAuth } from '@/auth/AuthContext'
 import { CASE_STATUS_ORDER, statusMeta } from '@/lib/status'
 import { relativeTime } from '@/lib/format'
@@ -28,6 +29,7 @@ export function MapPage() {
   const casesQuery = useCases()
   const unitsQuery = useUnits()
   const { latitude, longitude, permission, request } = useLocation()
+  const { data: geo, isLoading: geoLoading } = useReverseGeocode(latitude, longitude)
 
   const [selected, setSelected] = useState<string | null>(null)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
@@ -151,18 +153,32 @@ export function MapPage() {
           ) : loading ? (
             <Skeleton className="h-[60vh] w-full rounded-panel" />
           ) : (
-            <MapView
-              mode="view"
-              cases={visibleCases}
-              units={unitsQuery.data ?? []}
-              showUnitCoverage={showCoverage}
-              showHotspots={showHotspots}
-              userLocation={latitude != null && longitude != null ? { latitude, longitude } : null}
-              allowLocate
-              height="60vh"
-              selectedCaseId={selected}
-              onSelectCase={(caseItem) => setSelected(caseItem.id)}
-            />
+            <>
+              <MapView
+                mode="view"
+                cases={visibleCases}
+                units={unitsQuery.data ?? []}
+                showUnitCoverage={showCoverage}
+                showHotspots={showHotspots}
+                userLocation={latitude != null && longitude != null ? { latitude, longitude } : null}
+                allowLocate
+                height="60vh"
+                selectedCaseId={selected}
+                onSelectCase={(caseItem) => setSelected(caseItem.id)}
+              />
+              {(latitude != null && longitude != null && permission !== 'denied') && (
+                <p className="mt-2 text-sm text-ink-muted" aria-live="polite">
+                  {geoLoading ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="size-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden />
+                      Locating address…
+                    </span>
+                  ) : (
+                    <span>Near {formatAddress(geo)}</span>
+                  )}
+                </p>
+              )}
+            </>
           )}
         </div>
 
