@@ -15,11 +15,14 @@ export const officerKeys = {
 /**
  * The roster of a unit, used to pick someone to assign.
  *
- * CONTRACT GAP: the backend implements `GetOfficersByUnit` in
- * `handlers/officers_handler.go` but never registers it in `routes/routes.go`,
- * so against the live API this 404s. `retry: false` is deliberate — a 404 here
- * is a permanent contract gap, not a transient blip — and callers are expected
- * to treat a 404 as "no roster available" rather than as a failure
+ * `GET /units/:id/officers` is registered as of 2026-09-26 — the handler sat
+ * implemented but unrouted in `handlers/officers_handler.go` for a long time, and
+ * `routes/routes.go` now mounts it. A deployment running an older build may
+ * still 404.
+ *
+ * `retry: false` is deliberate either way: a 404 means the route is absent from
+ * that deployment's router, which retrying cannot fix — not a transient blip.
+ * Callers treat a 404 as "no roster available" rather than as a failure
  * (see components/admin/AssignOfficerDialog.tsx).
  */
 export function useUnitOfficers(unitId: string | undefined) {

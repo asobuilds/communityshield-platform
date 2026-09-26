@@ -81,6 +81,7 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
     units.POST("/:id/revocations", middleware.AuthMiddleware(), middleware.IdempotencyMiddleware(), handlers.OpenRevocationCycle)
     units.GET("/:id/auth", middleware.AuthMiddleware(), handlers.GetUnitAuth)
     units.PUT("/:id/auth", middleware.AuthMiddleware(), handlers.UpsertUnitAuth)
+    units.GET("/:id/officers", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetOfficersByUnit)
     units.GET("/:id/officers/ranking", middleware.AuthMiddleware(), middleware.RateLimitGeneral(), handlers.GetOfficersInUnitRanking)
     units.GET("/:id/governance-audit", middleware.AuthMiddleware(), handlers.GetGovernanceAudit)
 	}

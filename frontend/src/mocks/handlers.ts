@@ -1339,16 +1339,16 @@ export const handlers: MockRoute[] = [
 
   {
     method: 'GET',
-    path: '/units/:unitId/officers',
+    path: '/units/:id/officers',
     async respond({ request, params }) {
       await sleep(150)
       const user = currentUser(request)
       if (!user) return unauthorized
 
-      // Mirrors handlers.GetOfficersByUnit — a handler that exists in the
-      // backend but is NOT registered in routes/routes.go, so this 404s against
-      // the live API. AssignOfficerDialog treats that as a contract gap.
-      const officers = db.officers.filter((o) => o.unitId === params.unitId)
+      // Mirrors handlers.GetOfficersByUnit. The handler was implemented long
+      // before it was routed; as of 2026-09-26 `GET /units/:id/officers` is
+      // registered in routes/routes.go, so this path now matches the live API.
+      const officers = db.officers.filter((o) => o.unitId === params.id)
       return { body: { officers } }
     },
   },
