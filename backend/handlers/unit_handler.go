@@ -78,6 +78,15 @@ func validateShiftPattern(pattern string) (string, bool) {
 	}
 }
 
+// derefBool unwraps an optional JSON bool. A nil pointer means the caller
+// omitted the field on create, which defaults to false.
+func derefBool(raw *bool) bool {
+	if raw == nil {
+		return false
+	}
+	return *raw
+}
+
 // GetNearbyUnits returns units near a location
 func GetNearbyUnits(c *gin.Context) {
 	latStr := c.Query("lat")
@@ -264,11 +273,11 @@ func CreateUnit(c *gin.Context) {
 		CommanderPriorExperience string `json:"commanderPriorExperience"`
 
 		// Section C — operational profile.
-		HasUniform         bool   `json:"hasUniform"`
+		HasUniform         *bool  `json:"hasUniform"`
 		UniformDescription string `json:"uniformDescription"`
 		ShiftPattern       string `json:"shiftPattern"`
 		PermittedTools     string `json:"permittedTools"`
-		WeaponsRegistered  bool   `json:"weaponsRegistered"`
+		WeaponsRegistered  *bool  `json:"weaponsRegistered"`
 
 		// Section D — traditional endorsement.
 		KindredHeadName  string `json:"kindredHeadName"`
@@ -343,11 +352,11 @@ func CreateUnit(c *gin.Context) {
 		CommanderOccupation:      input.CommanderOccupation,
 		CommanderPriorExperience: input.CommanderPriorExperience,
 
-		HasUniform:         input.HasUniform,
+		HasUniform:         derefBool(input.HasUniform),
 		UniformDescription: input.UniformDescription,
 		ShiftPattern:       input.ShiftPattern,
 		PermittedTools:     input.PermittedTools,
-		WeaponsRegistered:  input.WeaponsRegistered,
+		WeaponsRegistered:  derefBool(input.WeaponsRegistered),
 
 		KindredHeadName:  input.KindredHeadName,
 		KindredHeadPhone: input.KindredHeadPhone,
@@ -422,11 +431,11 @@ func UpdateUnit(c *gin.Context) {
 		CommanderPriorExperience string `json:"commanderPriorExperience"`
 
 		// Section C — operational profile.
-		HasUniform         bool   `json:"hasUniform"`
+		HasUniform         *bool  `json:"hasUniform"`
 		UniformDescription string `json:"uniformDescription"`
 		ShiftPattern       string `json:"shiftPattern"`
 		PermittedTools     string `json:"permittedTools"`
-		WeaponsRegistered  bool   `json:"weaponsRegistered"`
+		WeaponsRegistered  *bool  `json:"weaponsRegistered"`
 
 		// Section D — traditional endorsement.
 		KindredHeadName  string `json:"kindredHeadName"`
@@ -519,8 +528,8 @@ func UpdateUnit(c *gin.Context) {
 	}
 
 	// Registration form fields. Strings follow the same "non-zero means set"
-	// guard used above; the bools are plain values with no pointer, so they
-	// are written through as sent.
+	// guard used above; the bools are pointers so an absent key leaves the
+	// stored value alone, and only an explicit `false` clears it.
 	if input.CommanderName != "" {
 		unit.CommanderName = input.CommanderName
 	}
@@ -536,7 +545,9 @@ func UpdateUnit(c *gin.Context) {
 	if input.CommanderPriorExperience != "" {
 		unit.CommanderPriorExperience = input.CommanderPriorExperience
 	}
-	unit.HasUniform = input.HasUniform
+	if input.HasUniform != nil {
+		unit.HasUniform = *input.HasUniform
+	}
 	if input.UniformDescription != "" {
 		unit.UniformDescription = input.UniformDescription
 	}
@@ -546,7 +557,9 @@ func UpdateUnit(c *gin.Context) {
 	if input.PermittedTools != "" {
 		unit.PermittedTools = input.PermittedTools
 	}
-	unit.WeaponsRegistered = input.WeaponsRegistered
+	if input.WeaponsRegistered != nil {
+		unit.WeaponsRegistered = *input.WeaponsRegistered
+	}
 	if input.KindredHeadName != "" {
 		unit.KindredHeadName = input.KindredHeadName
 	}
