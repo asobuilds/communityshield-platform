@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Shield } from 'lucide-react'
+import { AnimatedLogo } from '@/components/brand/AnimatedLogo'
 import { cn } from '@/lib/cn'
 
 export interface LoadingBannerProps {
@@ -15,7 +15,7 @@ const FADE_OUT_MS = 400
  *
  * It can never block forever: after 15s of a continuous `show` it offers a
  * Retry that hard-reloads, and it always fades out on `show=false`. The mark
- * reuses the shell's `Shield` brand icon.
+ * is the NGS animated logo.
  */
 export function LoadingBanner({ show, message = 'Loading…' }: LoadingBannerProps) {
   const [mounted, setMounted] = useState(show)
@@ -49,9 +49,7 @@ export function LoadingBanner({ show, message = 'Loading…' }: LoadingBannerPro
           : 'opacity-0 transition-opacity duration-400 ease-in',
       )}
     >
-      <div className="loading-banner-pulse">
-        <Shield className="size-16 text-signal" aria-hidden="true" />
-      </div>
+      <AnimatedLogo size={72} variant="full" theme="dark" />
       <p className="text-sm text-ink-muted">
         {troubled ? 'Trouble connecting — poor network?' : message}
       </p>

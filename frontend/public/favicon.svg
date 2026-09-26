@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="WardGuard">
-  <path d="M32 4 L58 14 V38 C58 52 46 60 32 64 C18 60 6 52 6 38 V14 Z"
-        fill="#0F172A" stroke="#D4AF37" stroke-width="2"/>
-  <path d="M22 26 L26 42 L30 34 L32 44 L34 34 L38 42 L42 26"
-        stroke="#D4AF37" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 36" fill="none" role="img" aria-label="NGS">
+  <path d="M 6 4 L 26 4 L 30 14 L 22 30 L 16 34 L 10 30 L 2 14 Z" stroke="#c2d4c7" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+  <circle cx="16" cy="18" r="10" stroke="#f4cb78" stroke-width="1.2" fill="none"/>
+  <path d="M 11 22 L 15 26 L 23 18" stroke="#f4cb78" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>

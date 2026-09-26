@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/auth/AuthContext'
 import { fullName, initials } from '@/lib/format'
+import { Logo } from '@/components/brand/Logo'
 import { NotificationBell } from './NotificationBell'
 import type { Role } from '@/types/api'
 
@@ -150,7 +151,7 @@ export function AppShell({ children }: { children?: ReactNode } = {}) {
       {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
         <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-          <Shield className="size-6 text-signal" aria-hidden />
+          <Logo size={32} variant="icon" theme="dark" />
           <div>
             <p className="text-sm font-bold tracking-wide text-ink">NATIVITY GUARD</p>
             <p className="text-[11px] text-ink-muted">{role ? ROLE_LABEL[role] : ''} console</p>
@@ -190,10 +191,15 @@ export function AppShell({ children }: { children?: ReactNode } = {}) {
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-base/90 px-4 py-3 backdrop-blur">
           <div className="flex items-center gap-2 md:hidden">
-            <Shield className="size-5 text-signal" aria-hidden />
-            <span className="text-sm font-bold tracking-wide text-ink">NATIVITY GUARD</span>
+            <Logo size={28} variant="icon" theme="dark" />
+            <span className="text-sm font-bold tracking-wide text-ink">NGS</span>
           </div>
-          <div className="hidden md:block" />
+          <div className="hidden md:flex items-center gap-2">
+            <Logo size={28} variant="icon" theme="dark" />
+            <span className="text-sm font-bold tracking-wide text-ink hidden lg:inline">
+              NATIVITY GUARD SYSTEM
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <NotificationBell />
             <NavLink to="/profile" aria-label="Profile" className="grid size-9 place-items-center rounded-lg border border-border-hi bg-surface-hi text-ink-muted md:hidden">

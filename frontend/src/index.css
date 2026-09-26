@@ -150,3 +150,91 @@
 .loading-banner-pulse {
   animation: loading-banner-pulse 1.6s ease-in-out infinite;
 }
+
+/* ============================ NGS brand mark ===========================
+   SVG logo motion: shield draw, sonar rings + rotating sweep, checkmark
+   draw, twinkling compass dots, wordmark fade-up. All pure CSS — no
+   third-party animation libraries. Durations honour a [data-speed="fast"]
+   multiplier via the inherited --ng-speed custom property.
+*/
+.ng-logo-mark {
+  --ng-speed: 1;
+}
+.ng-logo-mark[data-speed='fast'] {
+  --ng-speed: 0.7;
+}
+
+@keyframes ng-shield-draw {
+  from { stroke-dashoffset: var(--ng-draw-offset, 400); }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes ng-checkmark-draw {
+  from { stroke-dashoffset: var(--ng-check-offset, 30); }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes ng-ring-pulse {
+  0%   { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.15); opacity: 0.2; }
+}
+@keyframes ng-sweep-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes ng-dot-twinkle {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+@keyframes ng-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ng-logo-shield-draw {
+  stroke-dasharray: var(--ng-draw-offset, 400);
+  stroke-dashoffset: var(--ng-draw-offset, 400);
+  animation: ng-shield-draw calc(1200ms * var(--ng-speed, 1)) ease-out forwards;
+}
+.ng-logo-check-draw {
+  stroke-dasharray: var(--ng-check-offset, 30);
+  stroke-dashoffset: var(--ng-check-offset, 30);
+  animation: ng-checkmark-draw calc(600ms * var(--ng-speed, 1)) ease-out calc(1000ms * var(--ng-speed, 1)) forwards;
+}
+.ng-logo-ring-pulse {
+  transform-origin: center;
+  animation: ng-ring-pulse calc(2000ms * var(--ng-speed, 1)) ease-out infinite;
+}
+.ng-logo-ring-pulse[data-ring='3'] { animation-delay: 0ms; }
+.ng-logo-ring-pulse[data-ring='2'] { animation-delay: 200ms; }
+.ng-logo-ring-pulse[data-ring='1'] { animation-delay: 400ms; }
+.ng-logo-sweep {
+  transform-origin: center;
+  animation: ng-sweep-rotate calc(3000ms * var(--ng-speed, 1)) linear infinite;
+}
+.ng-logo-dot {
+  animation: ng-dot-twinkle calc(1800ms * var(--ng-speed, 1)) ease-in-out infinite;
+}
+.ng-logo-word {
+  opacity: 0;
+  animation: ng-fade-up calc(400ms * var(--ng-speed, 1)) ease-out forwards;
+}
+.ng-logo-word[data-line='1'] { animation-delay: 1200ms; }
+.ng-logo-word[data-line='2'] { animation-delay: 1300ms; }
+.ng-logo-word[data-line='3'] { animation-delay: 1400ms; }
+
+/* Respect reduced-motion preference: disable all motion and ensure the
+   mark is fully visible (drawn, static). */
+@media (prefers-reduced-motion: reduce) {
+  .ng-logo-shield-draw,
+  .ng-logo-check-draw,
+  .ng-logo-ring-pulse,
+  .ng-logo-sweep,
+  .ng-logo-dot,
+  .ng-logo-word {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    stroke-dasharray: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
+
