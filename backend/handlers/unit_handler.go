@@ -9,9 +9,32 @@ import (
 	"github.com/google/uuid"
 
 	"security-solution/config"
+	"security-solution/data"
 	"security-solution/models"
 	"security-solution/services"
 )
+
+// validateGeography checks a submitted state/LGA pair against the
+// embedded Nigeria dataset. It returns (errorMessage, true) when the
+// pair is acceptable.
+//
+// An empty state is always accepted: older rows and older clients may
+// legitimately carry no geography, and rejecting them would break
+// backwards compatibility. A non-empty state must exist, and a non-empty
+// LGA must exist within that state.
+func validateGeography(state, lga string) (string, bool) {
+	if state == "" {
+		return "", true
+	}
+	st, ok := data.FindState(state)
+	if !ok {
+		return "unknown state: " + state, false
+	}
+	if lga != "" && !data.IsValidLGA(st.Name, lga) {
+		return "unknown LGA " + lga + " for state " + st.Name, false
+	}
+	return "", true
+}
 
 // GetNearbyUnits returns units near a location
 func GetNearbyUnits(c *gin.Context) {
@@ -192,6 +215,14 @@ func CreateUnit(c *gin.Context) {
 		return
 	}
 
+	// Wave 10.2a — reject unknown states/LGAs, but never reject empty
+	// values (backwards compatibility with rows created before the
+	// Nigeria dataset existed).
+	if msg, ok := validateGeography(input.State, input.LGA); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+
 	user, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
@@ -276,6 +307,12 @@ func UpdateUnit(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Wave 10.2a — same geography validation as CreateUnit.
+	if msg, ok := validateGeography(input.State, input.LGA); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
 

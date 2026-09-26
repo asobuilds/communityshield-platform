@@ -158,6 +158,8 @@ units.POST("/:id/elections", middleware.AuthMiddleware(), middleware.Idempotency
 		geo := api.Group("/geo")
 		{
 			geo.GET("/reverse", middleware.RateLimitMap(), handlers.ReverseGeocode)
+			geo.GET("/states", middleware.RateLimitMap(), handlers.ListStates)
+			geo.GET("/lgas", middleware.RateLimitMap(), handlers.ListLGAs)
 		}
 
 		// Location routes

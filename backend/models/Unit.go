@@ -15,6 +15,9 @@ type SecurityUnit struct {
 	OperationalRadius       float64        `gorm:"default:10" json:"operationalRadius"` // in km
 	State                   string         `json:"state"`
 	LGA                     string         `json:"lga"` // Local Government Area
+	Ward                    string         `gorm:"type:varchar(120);index" json:"ward,omitempty"`
+	FormationDate           *time.Time     `gorm:"type:date" json:"formationDate,omitempty"`
+	TotalMembers            int            `gorm:"default:0" json:"totalMembers"`
 	City                    string         `json:"city"`
 	CoverageArea            string         `json:"coverageArea"`
 	ContactPerson           string         `json:"contactPerson"`

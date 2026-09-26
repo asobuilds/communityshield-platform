@@ -4,12 +4,24 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"security-solution/data"
 	"security-solution/services"
 )
+
+// stateSummary is the compact per-state shape returned by ListStates.
+// The LGA array is deliberately omitted to keep the payload small —
+// clients that need LGAs call /geo/lgas?state=.
+type stateSummary struct {
+	Name     string `json:"name"`
+	Capital  string `json:"capital"`
+	Zone     string `json:"zone"`
+	LGACount int    `json:"lgaCount"`
+}
 
 // geoResponse is the public reverse-geocode payload. Field names match
 // the frontend contract; empty strings are omitted so the UI can render
@@ -70,6 +82,57 @@ func ReverseGeocode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// ListStates returns every state with its capital, zone and LGA count.
+// GET /api/v1/geo/states
+// Public, cached (the dataset is embedded and parsed once at first use).
+func ListStates(c *gin.Context) {
+	n, err := data.NigeriaData()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Nigeria data"})
+		return
+	}
+
+	out := make([]stateSummary, 0, len(n.States))
+	for _, st := range n.States {
+		out = append(out, stateSummary{
+			Name:     st.Name,
+			Capital:  st.Capital,
+			Zone:     st.Zone,
+			LGACount: len(st.LGAs),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"states": out})
+}
+
+// ListLGAs returns the Local Government Areas of one state.
+// GET /api/v1/geo/lgas?state=Benue
+// Public, cached. 400 when the state param is missing, 404 when the
+// state is not a known Nigerian state.
+func ListLGAs(c *gin.Context) {
+	stateName := strings.TrimSpace(c.Query("state"))
+	if stateName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "state query parameter is required"})
+		return
+	}
+
+	st, ok := data.FindState(stateName)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "unknown state: " + stateName})
+		return
+	}
+
+	lgas := st.LGAs
+	if lgas == nil {
+		lgas = []string{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"state": st.Name,
+		"lgas":  lgas,
+	})
 }
 
 // parseCoordinate reads and range-checks the lat/lng query parameters.
