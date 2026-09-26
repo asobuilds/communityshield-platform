@@ -139,7 +139,9 @@ export function App() {
                 <Route path="/news" element={<RequireRole roles={['citizen']}><NewsPage /></RequireRole>} />
                 <Route path="/subscriptions" element={<RequireRole roles={['citizen']}><SubscriptionsPage /></RequireRole>} />
                 <Route path="/community" element={<RequireRole roles={['citizen']}><CommunityPage /></RequireRole>} />
-                <Route path="/sos" element={<RequireRole roles={['citizen']}><SosPage /></RequireRole>} />
+                {/* SOS is for everyone signed in — an officer in trouble needs the
+                    same button a citizen does, so no role gate beyond the shell. */}
+                <Route path="/sos" element={<SosPage />} />
                 {/* A citizen's own report — the curated detail view, deliberately
                     narrower than the staff case page. Citizen-only, so an officer
                     who lands here is sent to their own queue rather than shown a
@@ -153,17 +155,10 @@ export function App() {
                   }
                 />
 
-                {/* Filing a report. Citizen-only: the endpoint creates a case
-                    owned by the authenticated reporter, so there is no staff
-                    equivalent to route — staff create nothing here. */}
-                <Route
-                  path="/report"
-                  element={
-                    <RequireRole roles={['citizen']}>
-                      <ReportIncidentPage />
-                    </RequireRole>
-                  }
-                />
+                {/* Filing a report. Open to every signed-in role: the endpoint
+                    creates a case owned by the authenticated reporter, and staff
+                    reporting an incident is a real event, not a misuse. */}
+                <Route path="/report" element={<ReportIncidentPage />} />
 
                 {/* Officer workspace — the operational core (staff only). */}
                 <Route
