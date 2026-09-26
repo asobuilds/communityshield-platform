@@ -1,5 +1,5 @@
-﻿import type { ReactNode } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+﻿import { useEffect, useState, type ReactNode } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import {
   BarChart3,
@@ -9,10 +9,12 @@ import {
   LogOut,
   Map as MapIcon,
   Megaphone,
+  Menu,
   Shield,
   ShieldAlert,
   UserCircle,
   Users,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/auth/AuthContext'
@@ -83,7 +85,17 @@ const ROLE_LABEL: Record<Role, string> = {
   super_admin: 'Super admin',
 }
 
-function NavItems({ items, variant }: { items: NavItem[]; variant: 'sidebar' | 'bottom' }) {
+function NavItems({
+  items,
+  variant,
+  onNavigate,
+}: {
+  items: NavItem[]
+  variant: 'sidebar' | 'bottom'
+  /** Drawer-only: close the mobile sidebar after a tap. Never wired to the
+   *  bottom nav, which must keep behaving exactly as it does today. */
+  onNavigate?: () => void
+}) {
   return (
     <>
       {items.filter((item) => variant !== 'bottom' || item.to !== '/sos').map((item) => {
@@ -113,6 +125,9 @@ function NavItems({ items, variant }: { items: NavItem[]; variant: 'sidebar' | '
             key={item.to}
             to={item.to}
             end={item.to === '/'}
+            onClick={() => {
+              if (variant === 'sidebar') onNavigate?.()
+            }}
             className={({ isActive }) =>
               cn(
                 'flex items-center rounded-lg transition-colors',
@@ -135,11 +150,39 @@ function NavItems({ items, variant }: { items: NavItem[]; variant: 'sidebar' | '
 /**
  * Application shell: desktop sidebar + top bar, mobile bottom nav.
  * Role-aware, and honest about what isn't built yet.
+ *
+ * Below `md` the same sidebar becomes an off-canvas drawer: hidden by
+ * default, opened from the top bar, dismissed by the backdrop, the close
+ * button, Escape, or any nav link. At `md` and up it is the permanent
+ * sidebar it always was, and the drawer affordances are all `md:hidden`.
  */
 export function AppShell({ children }: { children?: ReactNode } = {}) {
   const { user, role, logout } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const items = role ? NAV[role] : []
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  function closeMobileNav() {
+    setMobileNavOpen(false)
+  }
+
+  // A route change dismisses the drawer. Plain state only — never scroll
+  // here, or the browser's own scroll restoration fights it on mobile.
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [pathname])
+
+  // Escape closes the drawer while it is open; the listener only exists
+  // for as long as it is.
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMobileNavOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [mobileNavOpen])
 
   function handleLogout() {
     logout()
@@ -148,22 +191,45 @@ export function AppShell({ children }: { children?: ReactNode } = {}) {
 
   return (
     <div className="flex min-h-screen bg-base">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
+      {/* Scrim behind the drawer. `md:hidden` keeps it off desktop entirely. */}
+      {mobileNavOpen ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={closeMobileNav}
+          aria-hidden="true"
+        />
+      ) : null}
+
+      {/* Sidebar: off-canvas drawer below md, permanent rail at md and up. */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[80vw] shrink-0 flex-col border-r border-border bg-surface transition-transform duration-200',
+          mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
+          'md:static md:z-auto md:w-60 md:translate-x-0',
+        )}
+      >
         <div className="flex items-center gap-2 border-b border-border px-4 py-4">
           <Logo size={32} variant="icon" theme="dark" />
           <div>
             <p className="text-sm font-bold tracking-wide text-ink">NATIVITY GUARD</p>
             <p className="text-[11px] text-ink-muted">{role ? ROLE_LABEL[role] : ''} console</p>
           </div>
+          <button
+            type="button"
+            className="ml-auto rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-hi hover:text-ink md:hidden"
+            aria-label="Close navigation"
+            onClick={closeMobileNav}
+          >
+            <X className="size-5" aria-hidden />
+          </button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Primary">
-          <NavItems items={items} variant="sidebar" />
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Primary">
+          <NavItems items={items} variant="sidebar" onNavigate={closeMobileNav} />
         </nav>
 
         <div className="border-t border-border p-3">
-          <NavLink to="/profile" className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:text-signal"><UserCircle className="size-4" /> Profile</NavLink>
+          <NavLink to="/profile" onClick={closeMobileNav} className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:text-signal"><UserCircle className="size-4" /> Profile</NavLink>
           <div className="flex items-center gap-2">
             <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-hi text-xs font-semibold text-ink">
               {initials(user?.firstName, user?.lastName)}
@@ -191,6 +257,15 @@ export function AppShell({ children }: { children?: ReactNode } = {}) {
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-base/90 px-4 py-3 backdrop-blur">
           <div className="flex items-center gap-2 md:hidden">
+            <button
+              type="button"
+              className="rounded-md p-2 text-ink-muted transition-colors hover:bg-surface-hi hover:text-ink"
+              aria-label="Open navigation"
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu className="size-5" aria-hidden />
+            </button>
             <Logo size={28} variant="icon" theme="dark" />
             <span className="text-sm font-bold tracking-wide text-ink">NGS</span>
           </div>
