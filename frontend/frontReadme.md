@@ -8,45 +8,64 @@
 
 ---
 
-## Python backend contract — current source of truth
+## Go backend contract — current source of truth
 
-The backend in this repository is **Python (FastAPI and SQLAlchemy)**. Its mounted routes are
-declared in `backend/app/main.py` and `backend/app/routers/`. The browser app currently targets a
-different API shape: its client defaults to `/api/v1`, while the Python app mounts routes such as
-`/incidents/`, `/locations/`, `/organizations/`, `/emergency-resources/`,
-`/response-assignments/` and `/live-locations/` without that prefix. The mock API supplies
-`/api/v1/cases`, `/api/v1/units`, `/api/v1/auth/*`, `/api/v1/sos/*` and
-`/api/v1/mobile/notifications*` to the frontend; these are **not mounted Python routes**.
+The backend in this repository is **Go** — Gin + GORM + PostgreSQL, mounted in
+`backend/routes/routes.go` under `/api/v1`. There is **no Python service**: `find . -name '*.py'`
+returns nothing anywhere in the repo, and the `backend/app/` tree named by earlier revisions of this
+file has never existed here.
 
-The Python `IncidentCreate` requires `incident_type`, `severity`, `location_id` and `reported_at`;
-the current report wizard submits a different shape. The Python incident model uses integer IDs,
-while the frontend's case model uses UUIDs. `/emergency-resources/` manages responder resources;
-it is **not** an SOS submission route. No auth, SOS submission or notification router is mounted
-in the Python app inspected here.
+The browser client's `/api/v1` root is therefore **correct**, not a mismatch. Every route the mock
+serves is a real mounted route:
 
-**Interpretation of the rest of this document:** its long-standing API examples, lifecycle notes,
-mock authorization rules and Appendices A/B record a *legacy frontend target contract*. They are
-useful design history and backlog, but no claim there about a live backend is verified against the
-current Python service. The `x` marks describe browser/mock implementation only. Before using any
-flow live, agree on the Python endpoint and DTO, implement authentication and server-side access
-rules, adapt the frontend, then test it end to end. Setting `VITE_USE_MOCKS=false` alone is not an
-integration step.
-
-**Effect on the recent ten frontend items:** all ten UI items remain implemented against the mock:
-seven SOS controls, map marker grouping, aggregated activity areas, and the notification centre.
-The SOS send button is already disabled outside mock mode. Map and notification requests also need
-Python adapters or backend endpoints before live use. The ten are **not ten completed live
-integrations**. An SOS receipt in the mock never represents real dispatch.
-
-| Python backend | Current frontend expectation | Work before live use |
+| Mock route | Mounted at | Auth |
 |---|---|---|
-| `/incidents/` with integer ID and `IncidentCreate` | `/api/v1/cases` with UUID and different fields | Agree on status and reporting DTOs; adapt or implement |
-| `/locations/`, `/organizations/`, `/emergency-resources/` | `/api/v1/units` with coverage and nearby-unit envelope | Map models and scoping |
-| `/response-assignments/` and `/live-locations/` | Case assignment and progress routes | Reconcile workflows and authorization |
-| No mounted auth, SOS or notifications routers | `/api/v1/auth/*`, `/api/v1/sos/*`, `/api/v1/mobile/notifications*` | Define and implement secure contracts before live use |
+| `POST /cases`, `GET /cases`, `GET /cases/:id` | `routes.go:118`, `:117`, `:120` | `AuthMiddleware`; per-case adds `CanAccessCase` |
+| `GET /units`, `GET /units/:id` | `routes.go:70`, `:76` | `AuthMiddleware` |
+| `/auth/*` | `routes.go:38-55` | mixed — `login`, `register`, `refresh`, `forgot-password`, `reset-password` are public |
+| `/sos/*` | `routes.go:193-200` | `AuthMiddleware` |
+| `/mobile/notifications*` | `routes.go:358-360` | `AuthMiddleware` |
 
-**Next priority:** reconcile these API contracts before adding another flow that depends on the
-legacy mock service. Keep the catalogue below as a feature plan, with the mock/live boundary visible.
+`/health` is mounted at the **root**, outside `/api/v1` (`routes.go:13`), as are `/ws` (`:430`) and
+`/metrics` (`:436`, super-admin only).
+
+**The mock is a mirror, not a fiction.** `src/mocks/handlers.ts:3-19` states that it "deliberately
+mirror[s] the *real* backend contract — turning `VITE_USE_MOCKS` off changes only where the data
+comes from, never how the frontend talks to it." Its documented guards match the Go handlers:
+`POST /cases` requires a title and a description, bands priority from `isSOS` / `priority`, attaches
+a unit only if the UUID parses, and always stores the case public — which is `case_handler.go:29-102`
+verbatim.
+
+**What that means for the rest of this document:** the long-standing API examples, lifecycle notes,
+mock authorization rules and Appendices A/B are not "legacy targets awaiting reconciliation." They
+describe the API that is actually mounted. The `x` marks in the catalogue record browser/mock
+implementation — a statement about **where the data comes from**, not about whether the contract is
+right.
+
+**The real integration gaps are small and behavioural**, not a matter of contract shape. Verified
+against the Go handlers:
+
+| Delta | What the live backend does | Frontend handling |
+|---|---|---|
+| Role strings are **underscore** | `citizen` · `officer` · `unit_admin` · `super_admin`. `head_admin` is **not** a user role — it is `UnitMembership.IsHeadAdmin`. Super-admin is *also* the boolean `models.User.IsSuperAdmin`; several guards accept either. | `lib/role.ts` normalises at the boundary and renders a designed screen for unknown values (T1) |
+| `POST /auth/register` issues **no token** | 201 `{ message, user }`. It also **ignores the `role` input** — `Role: "citizen"` is hardcoded. | Signup has no role selector and no auto-login; success redirects to `/auth/login` (T2) |
+| `POST /auth/login` accepts `identifier` **or** `email` | Either works. The existing `{ email, password }` call was never a bug. | unchanged |
+| Password reset is a **6-digit code**, not a link | `services/password_reset_service.go:54` mints 100000–999999 and rejects all-same-digit codes. Delivery is **wired**: `main.go:74` installs `handlers.NewEmailNotifier()`, which sends by SMTP or SMS (`handlers/email_handler.go:166-180`), and the email body shows the code inline rather than as a link (`:191-198`). Only the handler's 200 copy still says "reset link" (`auth_handler.go:516`) — **that copy is wrong**. | reset screens say "code"; email-copy fix reported to Agene |
+| Reset needs **8** characters, registration **6** | `ResetPassword` binds `min=8` (`auth_handler.go:526`) and `ResetWithToken` refuses anything shorter again (`services/password_reset_service.go:142`); signup accepts 6 (`auth_handler.go:32`). | reset hint states 8; reported to Agene |
+| **Stale TODO in `ForgotPassword`** | `auth_handler.go:489-492` and `:509-512` claim "email delivery is not yet wired" and that the code is sent to the user's phone instead. **Both are false** — delivery is wired and the service dispatches it. The `_ = rawToken` at `:513` is deliberate and correct, because the service sends internally. | no frontend effect; backend comment cleanup — as written it tells the next reader that reset is broken when it is not |
+| `/cases` pagination | `?limit=` capped at **100**, default **50**. | page through; never assume "get all" |
+| Error envelope | `{ "error": "..." }` — the whole message. | do not invent a wrapper |
+| `GET /units/:id/officers` | Handler is fully implemented, authorises via `canViewOfficersInUnit`, returns `{ officers: [...] }` — but is **unrouted** in `routes.go`. Only `/:id/officers/ranking` is registered. | `AssignOfficerDialog` keeps its contract-gap branch until it is registered (T6) |
+| `/public/cases`, `/public/units` | Registered with **no auth middleware** and neither handler narrows the query, so whole models serialise to anonymous callers. | the landing page ships without its map preview (B3.2) |
+
+**Effect on the recent ten frontend items:** unchanged in substance — they are mock-verified, and an
+SOS receipt in the mock never represents real dispatch. But they are **not** blocked on agreeing a
+contract with a Python service. The endpoints are mounted; what remains is pointing the client at a
+running Go instance and confirming each flow end to end.
+
+**Next priority:** stop treating the mock/live boundary as a contract negotiation. Register the
+unrouted handlers, fix the backend copy and the password-length asymmetry, then verify each flow
+against the live service.
 
 ---
 
@@ -74,15 +93,15 @@ The detailed checklists in §3 explain the boundaries of each partial feature.
 | F2 SOS | Citizen SOS console, confirm/cancel, map or manual location, optional responder details, status/history and persistent entry point (mock verified) | Verify request/response and dispatch semantics against the live SOS service; mock does not simulate dispatch |
 | F3 Reporting | Four-step report wizard, unit/pin selection, evidence links, draft restore, receipt | Binary uploads require a backend route; offline submit queue remains open |
 | F4 Tracking | Citizen case list/detail, status rail and review loop, shared weekly updates, staff evidence view, mock feedback submission | Push status updates, privacy review of live responses |
-| F5 Awareness | Notification centre, demo alert feed/detail/confirmation, news, subscriptions and permission opt-in | Python APIs and real push delivery |
-| F6 Community | Demo forum/replies, announcements, event RSVP, post reporting | Python APIs, durable moderation workflow and AI-assisted tips |
+| F5 Awareness | Notification centre, demo alert feed/detail/confirmation, news, subscriptions and permission opt-in | Live integration and real push delivery |
+| F6 Community | Demo forum/replies, announcements, event RSVP, post reporting | Live integration, durable moderation workflow and AI-assisted tips |
 | F7 Officer | Queue, dispatch/arrive, progress, evidence, weekly narrative, review submission | Investigate transition (backend route required), team view and communications |
-| F8 Unit admin | Triage/assignment, case review, closure decisions, evidence verification; demo overview, roster, analytics, finance and settings | Python integrations for demo screens; full verification |
-| F9 Super admin | Demo overview, unit registry, audit, analytics/health and settings/export | Python integrations, user governance and impersonation |
+| F8 Unit admin | Triage/assignment, case review, closure decisions, evidence verification; demo overview, roster, analytics, finance and settings | Live integration for demo screens; full verification |
+| F9 Super admin | Demo overview, unit registry, audit, analytics/health and settings/export | Live integration, user governance and impersonation |
 | F10 Maps | Case map, marker grouping, aggregated activity areas, unit coverage, report pin picker and basic filters | Advanced filters and offline map fallback; activity overlay live data verification |
 | F11 Communication | No frontend screens | Rooms, messaging, calls, presence and sync |
 | F12 AI | No frontend screens | Assistant, tips, warnings and labelled case summaries |
-| F13 Settings | Demo profile edit (name, phone and HTTPS photo URL) | Python profile write/photo upload, preferences, consent, language, export and deletion |
+| F13 Settings | Demo profile edit (name, phone and HTTPS photo URL) | Live profile write/photo upload, preferences, consent, language, export and deletion |
 | F14 PWA | No installable app | Service worker, offline reads/writes, sync and low-bandwidth mode |
 
 Also open from Appendix B: governance (T10), suspect self-view (T11), invites (T12),
@@ -97,9 +116,9 @@ as a separate feature.
 **Following ten frontend checklist items (`feature/frontend-awareness-community`):** F4 feedback
 submission; F5 alert feed, alert detail/confirmation/share, news, subscriptions and push permission
 opt-in; F6 forum/replies, announcements, event RSVP and reporting a post. All are browser/mock
-features. Demo content is visibly labelled and stored in memory. The Python backend has no mounted
-API for these flows; push permission does not imply delivery, and reporting a post does not reach a
-live moderation team. The static preparedness copy is not AI-assisted, so F6 tips stay open.
+features. Demo content is visibly labelled and stored in memory. The routes these screens target are
+mounted (`/alerts`, `/news`, `/community`), but they have not been exercised against a live server;
+push permission does not imply delivery, and reporting a post does not reach a live moderation team. The static preparedness copy is not AI-assisted, so F6 tips stay open.
 >
 > **M4.5 (mock lifecycle re-alignment) is done.** The former target contract moved the case lifecycle underneath this
 > frontend — a post-frontend commit (`36a94ec feat: add accountable case review workflow`) added three
@@ -191,7 +210,7 @@ and is where `homePathForRole('unit_admin')` lands.
 src/
   App.tsx                  route table (public → protected shell → role-gated)
   main.tsx                 installs the mock API, then renders
-  types/api.ts             types for the legacy mock contract; not the Python schemas
+  types/api.ts             types for the mock API contract; mirror the Go handler schemas
   lib/apiClient.ts         typed fetch: bearer token, ApiError, 401 → logout
   lib/queryClient.ts       React Query defaults (no retry on 4xx)
   lib/status.ts            case-status + priority metadata, field rail vs review phase (single source)
@@ -278,7 +297,9 @@ to withhold from, so subset-by-omission does not apply and sharing is the safer 
 | **`POST /cases` accepts a `unitId` that attaches nothing**, and `models.Case.UnitID` is `not null`, so a case whose unit does not parse is stored against the zero UUID. `GetAllCases` scopes officers and unit admins by `unit_id`, so **that case is returned to nobody but its reporter and a super admin** — no unit's queue shows it, and no admin can triage it | The wizard requires a unit (and a location pin) before it will submit, and says why: the endpoint allows omitting both, but a report no unit can see is not a feature. If the backend ever grows a triage pool for unattached cases, the requirement can be relaxed — not before |
 | **`GET /cases/:id` returns a reporter more than they should read** — the progress feed, the evidence list, and timeline `description` strings that name officers and administrators ("Assigned to Officer Tunde Balogun.") | The citizen view curates by **omission**: it does not fetch progress or evidence, and `lib/caseLog.ts` renders an actor *role* instead of a name. This is presentation, not enforcement — the same token gets the rest with `curl`. **A real boundary means the backend stops sending it**; until then, do not describe the citizen view as private |
 
-**Backend readiness:** the Python routes do not match the mock contract. Live integration is pending; turning mocks off does not connect these screens.
+**Backend readiness:** the mounted Go routes match the mock contract — see the opening section. What
+is pending is pointing the client at a running instance and verifying each flow. Turning mocks off
+switches the data source; it does not by itself prove integration.
 
 ### 0.4 Lifecycle drift — the backend changed the case workflow under this frontend
 
@@ -286,8 +307,7 @@ to withhold from, so subset-by-omission does not apply and sharing is the safer 
 frontend catching up to a contract that already shipped. What remains below is the record of what
 moved and the one item still blocked on the backend.
 
-This section describes the former frontend target contract; it has not been verified against the
-Python routers in this checkout.
+This section describes the case lifecycle as the Go handlers implement it.
 
 **What moved**
 
@@ -552,10 +572,10 @@ Checklist marks build progress. `[ ]` to build · `[~]` partial · `[x]` done.
 - [x] SOS history and per-alert status (`pending`, `dispatched`, `resolved`, `escalated`)
 - [x] Persistent, labelled SOS entry in the citizen shell on desktop and mobile
 
-**Live integration gate:** these seven frontend items work against the in-browser mock. The
-checkout contains no Python SOS submission route to verify the mock contract, so the live payload and
-response shape, consent/storage handling for medical details, and real dispatch lifecycle must be
-checked before enabling SOS in a pilot. With `VITE_USE_MOCKS=false`, send is disabled and the page
+**Live integration gate:** these seven frontend items work against the in-browser mock. The SOS
+routes are mounted (`routes.go:193-200`) but have not been exercised against a live server, so the
+live payload and response shape, consent/storage handling for medical details, and real dispatch
+lifecycle must be checked before enabling SOS in a pilot. With `VITE_USE_MOCKS=false`, send is disabled and the page
 explains that the service is unavailable. The mock stores new SOS requests as `pending` and never
 pretends a unit was dispatched. A receipt confirms submission only. The optional details stay out
 of local storage. The `GET /sos/:id` mock exists for contract exploration; the console reads the
@@ -673,7 +693,7 @@ fact rather than a design preference:
       still open" has an answer addressed to the person who asked it. A closed case with no recorded
       decision is described as such rather than as "not decided yet"
 - [x] Feedback: a reporter can rate and comment on their closed case once in the demo; the mock
-      rejects non-reporters, open cases and duplicate submissions. Live Python integration pending
+      rejects non-reporters, open cases and duplicate submissions. Live integration pending
 - [ ] Push/in-app updates on every status change
 
 **States:** empty · loading · not-found · forbidden · closed-readonly · awaiting-review · changes-requested
@@ -688,11 +708,6 @@ fact rather than a design preference:
 > they can obtain, because the same token gets the rest with `curl`. If this must be enforced, the
 > backend has to stop sending it.
 
-**States:** empty · loading · not-found · forbidden · closed-readonly · awaiting-review · changes-requested
-**APIs:** `GET /cases`, `GET /cases/:id`, `GET /cases/:id/timeline`, `GET /cases/:id/progress`,
-`GET /cases/:id/review`, `GET /cases/:id/weekly-updates`, `GET /evidence/case/:caseId`,
-`POST /cases/:id/feedback`, `POST /ratings`, `GET /ratings/units/:unitId`
-
 ---
 
 ### F5 — Alerts, news & notifications
@@ -705,8 +720,8 @@ fact rather than a design preference:
 - [x] Notification center — bell + popover and `/notifications` page with all entries, individual
       mark-read, bulk mark-read and loading/empty/error states
 - [x] Demo subscription management for areas, categories and preferred channels
-- [x] Browser permission opt-in and demo device register/unregister; no push delivery until a
-      Python service implements it
+- [x] Browser permission opt-in and demo device register/unregister; no push delivery until the
+      push transport is wired
 
 **APIs:** `GET /alerts`, `GET /alerts/:id`, `POST /alerts/:id/confirm`, `POST /alerts/subscribe`,
 `GET /alerts/subscriptions`, `GET /alerts/news`, `GET /news`, `GET /news/:id`,
@@ -776,14 +791,14 @@ so the demo will *not* reveal a mismatch. Confirm against the handler before rel
 
 ---
 
-**Demo boundary for the next ten items:** The checked admin and profile workflows below run only with `VITE_USE_MOCKS=true`; they are session-scoped sample screens. Their actions do not persist to Python, move money, provision real officers, change live dispatch, or provide live monitoring. Profile photo uses an HTTPS URL, not an uploaded image. Live integrations remain open.
+**Demo boundary for the next ten items:** The checked admin and profile workflows below run only with `VITE_USE_MOCKS=true`; they are session-scoped sample screens. Their actions do not persist to the backend, move money, provision real officers, change live dispatch, or provide live monitoring. Profile photo uses an HTTPS URL, not an uploaded image. Live integrations remain open.
 
 ### F8 — Unit admin console
 
 **Screens:** overview, dispatch board, case management, officers, verification queue, analytics,
 finance, unit settings.
 
-- [x] Ops overview: open/assigned/dispatched cards, response-time KPIs **(session demo only; Python API integration pending)**
+- [x] Ops overview: open/assigned/dispatched cards, response-time KPIs **(session demo only; live integration pending)**
 - [x] Dispatch board: unassigned queue → assign to officer
       *(`/admin/cases` — attention counters are filters, not decoration: each one toggles the list)*
 - [~] Case review: facts, progress, weekly, evidence, assignment, **the closure decision and its
@@ -803,11 +818,11 @@ finance, unit settings.
 - [x] `pending_admin_review` in the triage counters — **"Awaiting your decision"** is now the first
       attention card on `/admin/cases`, with the hint "Submitted for closure — only an admin can move
       these", and it filters the list like the other counters (`Focus = 'to_decide'`)
-- [x] Officer roster: add/edit, status, workload *(blocked by the unrouted `GetOfficersByUnit`)* **(session demo only; Python API integration pending)**
+- [x] Officer roster: add/edit, status, workload *(blocked by the unrouted `GetOfficersByUnit`)* **(session demo only; live integration pending)**
 - [~] Verification queue: evidence verify shipped inside case review; memberships and gov IDs open
-- [x] Analytics: volume, response/dispatch/arrival, resolution, workload **(session demo only; Python API integration pending)**
-- [x] Finance: accounts, donations, transactions + approvals, budgets, reports **(session demo only; Python API integration pending)**
-- [x] Unit config, operational radius, contact info **(session demo only; Python API integration pending)**
+- [x] Analytics: volume, response/dispatch/arrival, resolution, workload **(session demo only; live integration pending)**
+- [x] Finance: accounts, donations, transactions + approvals, budgets, reports **(session demo only; live integration pending)**
+- [x] Unit config, operational radius, contact info **(session demo only; live integration pending)**
 
 **APIs:** `GET /cases`, `POST /cases/:id/assign`, `GET /cases/:id/review`,
 `POST /cases/:id/review/approve`, `POST /cases/:id/review/request-changes`, `GET /cases/analytics`,
@@ -821,10 +836,10 @@ finance, unit settings.
 **Screens:** governance dashboard, users, user detail, units, audit search, analytics, health, settings.
 
 - [ ] Users: list, search, role change, suspend/activate, impersonate/stop
-- [x] Units: registry CRUD **(session demo only; Python API integration pending)**
-- [x] Audit: searchable activity + audit logs (actor, action, entity, time) **(session demo only; Python API integration pending)**
-- [x] Platform analytics + system health **(session demo only; Python API integration pending)**
-- [x] System settings, templates, data exports **(session demo only; Python API integration pending)**
+- [x] Units: registry CRUD **(session demo only; live integration pending)**
+- [x] Audit: searchable activity + audit logs (actor, action, entity, time) **(session demo only; live integration pending)**
+- [x] Platform analytics + system health **(session demo only; live integration pending)**
+- [x] System settings, templates, data exports **(session demo only; live integration pending)**
 - [ ] Impersonation banner (unmissable "you are impersonating") + one-click exit
 
 **APIs:** `GET /admin/users`, `GET /admin/users/:id`, `PUT /admin/users/:id/role`,
@@ -887,7 +902,7 @@ finance, unit settings.
 
 **Screens:** profile, notification prefs, privacy, language, data export, delete account.
 
-- [x] Profile edit (name, contact, photo) **(session demo only; Python API integration pending)**
+- [x] Profile edit (name, contact, photo) **(session demo only; live integration pending)**
 - [ ] Notification channel prefs (push/SMS/email/in-app)
 - [ ] Privacy controls + consent explanations in plain language
 - [ ] Language selector (English + Nigerian languages, Pidgin)
@@ -966,7 +981,7 @@ generate or hand-write types from it. No hand-typed endpoint strings in componen
       status-change log with names and internal notes withheld. Draft auto-save is in; **SOS UI is
       mock-verified with a live integration gate; feedback is now available in the demo only**
 - [~] **M3 — Awareness:** case/unit map, notification centre, demo alerts/news and subscription
-      controls shipped in the browser; Python integration and real push delivery remain open
+      controls shipped in the browser; live integration and real push delivery remain open
 - [~] **M4 — Officer console:** queue and case workspace (details/progress/weekly/evidence) shipped,
       with weekly narratives served by the real endpoints (M4.5); dispatch → arrive shipped;
       **closure moved to the review workflow**; team view and comms open
@@ -1141,15 +1156,14 @@ reappear.
 
 ---
 
-## Appendix A — Historical target-contract notes (not Python backend evidence)
+## Appendix A — Post-M4.5 change log
 
 This appendix records every change made to the platform after the M4.5 milestone
 was written. The catalogue above reflects the state at M4.5; this section tracks
 what shipped after it.
 
-### A1 — Rebrand
+### A1 — Brand assets
 
-Platform renamed **Nativity Guard → Nativity Guard**.
 Logo, favicon, and wordmark shipped in `frontend/public/logo.svg` and `favicon.svg`.
 Backend display strings, email templates, SMS copy, and AI prompts all say Nativity Guard.
 
@@ -1173,8 +1187,8 @@ access token expires, and treat a revoked-token 401 as a hard logout. See F1 abo
 
 ### A3 — Case authorization hardening
 
-The former target contract described the rule **unit access is NOT case access**. The mounted Python
-routes must implement and verify their own access control before this can be relied on:
+The rule **unit access is NOT case access** is enforced server-side. `AGENT.md` states it, the
+`CanAccessCase` middleware applies it, and these are the boundaries it draws:
 
 - Officers only see cases they are assigned to (as `primary` or `paired`)
 - Support officers see a limited view
@@ -1188,10 +1202,10 @@ the public-safe DTO (no evidence list, no progress list, no officer identity). T
 existing citizen case page already renders a subset — no code change required, but the
 data returned is now also safe by contract, not just by UI curation.
 
-### A4 — Governance UI (historical target; Python availability unverified)
+### A4 — Governance UI (routes mounted; no screens yet)
 
-The former target described a governance layer. The Python app inspected here does not mount
-these endpoints, and no corresponding frontend screens exist yet.
+The governance layer is mounted — elections and revocations at `routes.go:142-155`, UnitAuth and the
+unit-scoped openers at `routes.go:79-85`. No corresponding frontend screens exist yet.
 
 | Feature | Endpoints | UI status |
 |---|---|---|
@@ -1209,7 +1223,7 @@ these endpoints, and no corresponding frontend screens exist yet.
 - UnitAuth policy editor (head admin / admin only)
 - Term and cooling-off status per admin
 
-### A5 — Suspect self-view (historical target; Python availability unverified)
+### A5 — Suspect self-view (route mounted; no screen yet)
 
 A citizen linked as a suspect via `SuspectCase` can fetch their own case list:
 
@@ -1261,28 +1275,29 @@ uses `/invites/validate` to show the join-or-stay-citizen choice.
 
 ---
 
-## Appendix B — Historical integration brief (not applicable to the current Python routes)
+## Appendix B — Integration brief (verified against the Go routes)
 
-This appendix preserves an older integration brief. It was not validated against the Python
-service in this checkout. **The Python backend contract at the top of this file takes precedence**
-over all endpoint, deployment and authorization claims below.
+This appendix preserves an older integration brief. Its endpoint, deployment and authorization
+claims were re-checked against the Go handlers on 2026-09-26 and **hold** — what was wrong was the
+labelling of their provenance, not their content. The brief was written against this backend; a
+later revision of this file mistook it for unverified history.
 
-### B1 — Former live environment (historical)
+### B1 — Live environment
 
-The old deployment URLs and CORS instructions were removed because they do not establish that
-the current Python service implements the frontend API. Verify any deployment separately.
+The old deployment URLs and CORS instructions were removed as stale. Verify the current deployment
+separately — the routes in `routes.go` are the contract, not any URL recorded here.
 
-### B2 — Former target contract (unverified against Python)
+### B2 — Contract reference (verified against the Go handlers)
 
-| Item | Former target behavior, unverified for Python | Historical source |
+| Item | Behavior | Verified at |
 |---|---|---|
-| **Role strings** | **Underscore** — `citizen` · `officer` · `unit_admin` · `super_admin`. Compared in ~40 places. Super-admin is *also* a separate boolean, `models.User.IsSuperAdmin`; several guards accept either. A hyphenated DB value is an outlier to fix in the data, not a convention to adopt. `head_admin` is **not** a user role — it is `UnitMembership.IsHeadAdmin`. | former identity contract; not a Python source reference |
-| **`POST /auth/register`** | Returns **201 `{ message, user }` and NO token.** It also **ignores the `role` input** — `Role: "citizen"` is hardcoded — so a role selector on signup would collect an answer the server discards. `dateOfBirth` (YYYY-MM-DD) is `binding:"required"`. | former auth contract; no mounted Python equivalent |
-| **`POST /auth/login`** | Accepts **either** `identifier` **or** legacy `email`. The brief implies `identifier` is required; the existing `{ email, password }` call is fine and was never a bug. | former auth contract; no mounted Python equivalent |
-| **Route params** | `:id` everywhere — never `:unitId`, never `:userId`. | former route registry; not in this checkout |
-| **`GET /units/:id/officers`** | **Unrouted**, but the handler is fully implemented, already reads `c.Param("id")`, already authorises via `canViewOfficersInUnit`, and already returns `{ officers: [...] }` — the exact shape `useOfficers.ts` expects. Registering it is one line. Only `/:id/officers/ranking` is registered today. | former officers contract; not in this checkout |
-| **`/cases` pagination** | `?limit=` is capped at **100**, default **50**. Never assume "get all"; page through. Other list endpoints follow in a later wave. | brief §5 |
-| **Error envelope** | `{ "error": "..." }` — that is the whole message. Do not add or invent a wrapper. | handlers |
+| **Role strings** | **Underscore** — `citizen` · `officer` · `unit_admin` · `super_admin`. Compared in ~40 places. Super-admin is *also* a separate boolean, `models.User.IsSuperAdmin`; several guards accept either. A hyphenated DB value is an outlier to fix in the data, not a convention to adopt. `head_admin` is **not** a user role — it is `UnitMembership.IsHeadAdmin`. | `models.User`, `models.UnitMembership` |
+| **`POST /auth/register`** | Returns **201 `{ message, user }` and NO token.** It also **ignores the `role` input** — `Role: "citizen"` is hardcoded — so a role selector on signup would collect an answer the server discards. `dateOfBirth` (YYYY-MM-DD) is `binding:"required"`. | `handlers/auth_handler.go` |
+| **`POST /auth/login`** | Accepts **either** `identifier` **or** legacy `email`. The brief implies `identifier` is required; the existing `{ email, password }` call is fine and was never a bug. | `handlers/auth_handler.go` |
+| **Route params** | `:id` everywhere — never `:unitId`, never `:userId`. | `routes.go` |
+| **`GET /units/:id/officers`** | **Unrouted**, but the handler is fully implemented, already reads `c.Param("id")`, already authorises via `canViewOfficersInUnit`, and already returns `{ officers: [...] }` — the exact shape `useOfficers.ts` expects. Registering it is one line. Only `/:id/officers/ranking` is registered today. | `handlers/officers_handler.go:295` (unrouted) |
+| **`/cases` pagination** | `?limit=` is capped at **100**, default **50**. Never assume "get all"; page through. Other list endpoints follow in a later wave. | `handlers/case_handler.go` |
+| **Error envelope** | `{ "error": "..." }` — that is the whole message. Do not add or invent a wrapper. | `handlers/` throughout |
 
 `ranking` is **not** a substitute for the roster: it is an ordered leaderboard, whereas
 `AssignOfficerDialog` needs every assignable officer in the unit.
@@ -1345,8 +1360,8 @@ open question in B2.
 
 ### B4 — Task backlog
 
-The Python API agreement in the opening section now precedes all tasks below. Their endpoint
-assumptions must be rechecked before implementation.
+The contract in the opening section precedes all tasks below. Its endpoint assumptions were
+re-checked against the Go routes on 2026-09-26.
 
 Ordered. One task per branch-push, each verified locally before it ships. Every task ships only
 when its Definition of Done (§7) is met.
@@ -1387,9 +1402,14 @@ when its Definition of Done (§7) is met.
 
 **P1 — contract alignment**
 
-- [ ] **T6 — Officer roster.** Ask Agene to register `GET /units/:id/officers` (handler exists, shape
-      already matches). `AssignOfficerDialog` then loses its contract-gap branch (§0.3). Rename the
-      mock's `:unitId` → `:id` in the same change (cosmetic; B3 #8).
+- [x] **T6 — Officer roster.** *Route registered 2026-09-26: `routes/routes.go` now mounts
+      `GET /units/:id/officers`, and the mock's `:unitId` was renamed to `:id` (B3 #8).*
+      The handler already existed and already returned the shape `useOfficers.ts` expects — only the
+      route was missing. **`AssignOfficerDialog` keeps its contract-gap branch deliberately**:
+      `rosterMissing` is false whenever the route exists, so it costs nothing against a current
+      deployment, and it is what keeps the screen usable against a build whose router predates the
+      route. Removing it would trade a live fallback for nothing.
+      *DoD:* the live API serves the roster and the admin picks a person by name.
 
 - [x] **T7 — Refresh token flow** (F1 / A2) — *done, verified 2026-09-24 (`apiClient.test.ts` 9 → 15
       tests, 109 passing). Rotating refresh, one shared attempt, hard logout on a rejected refresh.*

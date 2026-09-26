@@ -27,14 +27,19 @@ import type { Case, CaseOfficer } from '@/types/api'
  * effect.
  *
  * The awkward part is the officer list. `POST /cases/:id/assign` wants an id
- * from the backend's `officers` table, but the API exposes no route that lists
- * them: `GetOfficersByUnit` exists in `handlers/officers_handler.go` and was
- * never registered in `routes/routes.go`. So:
+ * from the backend's `officers` table. `GET /units/:id/officers` is what lists
+ * them, and it was routed on 2026-09-26 after a long spell of being implemented
+ * but unregistered — so a current deployment serves the picker by name. So:
  *
- *  - when the roster is available (mocks, or once the route is registered), the
- *    admin picks a person by name;
- *  - when it 404s, we say so plainly and fall back to entering the officer id,
- *    instead of pretending the list is empty or showing a generic error.
+ *  - when the roster is available, the admin picks a person by name;
+ *  - when it 404s (an older deployment, whose router lacks the route), we say so
+ *    plainly and fall back to entering the officer id, instead of pretending the
+ *    list is empty or showing a generic error.
+ *
+ * The fallback is kept deliberately, not left behind. `rosterMissing` is false
+ * whenever the route exists, so it costs nothing on a current deployment — and it
+ * is the difference between a usable screen and a dead end on one that predates
+ * the route. Frontend code cannot know which build it is talking to.
  */
 export function AssignOfficerDialog({
   caseItem,
