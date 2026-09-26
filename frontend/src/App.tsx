@@ -29,6 +29,8 @@ import { NotificationsPage } from '@/pages/NotificationsPage'
 import { AlertsPage, AlertDetailPage, NewsPage, SubscriptionsPage } from '@/pages/AwarenessPage'
 import { CommunityPage } from '@/pages/CommunityPage'
 import { AdminDemoPage } from '@/pages/AdminDemoPage'
+import { UnitsRegistryPage } from '@/pages/super/UnitsRegistryPage'
+import { UnitRegistrationPage } from '@/pages/super/UnitRegistrationPage'
 import { ProfileDemoPage } from '@/pages/ProfileDemoPage'
 import type { Role } from '@/types/api'
 
@@ -201,7 +203,39 @@ export function App() {
 
                 {/* Scheduled, not yet built — named rather than 404'd. */}
                 {['overview','officers','analytics','finance','settings'].map((section) => <Route key={section} path={`/admin/${section}`} element={<RequireRole roles={ADMIN_ROLES}><AdminDemoPage section={section} /></RequireRole>} />)}
-                {['overview','units','audit','analytics','settings'].map((section) => <Route key={section} path={`/super/${section}`} element={<RequireRole roles={['super_admin']}><AdminDemoPage section={section} platform /></RequireRole>} />)}
+                {['overview','audit','analytics','settings'].map((section) => <Route key={section} path={`/super/${section}`} element={<RequireRole roles={['super_admin']}><AdminDemoPage section={section} platform /></RequireRole>} />)}
+                {/* The unit registry is built — it left the demo stub and reads real
+                    data. Listed before the `/super/*` fallback so the real page
+                    wins, and named ahead of the `:id` route so "new" is never read
+                    as a unit id. */}
+                <Route
+                  path="/super/units"
+                  element={
+                    <RequireRole roles={['super_admin']}>
+                      <UnitsRegistryPage />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/super/units/new"
+                  element={
+                    <RequireRole roles={['super_admin']}>
+                      <UnitRegistrationPage />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/super/units/:id"
+                  element={
+                    <RequireRole roles={['super_admin']}>
+                      <ComingSoonPage
+                        title="Unit record"
+                        description="The single-unit record — verification, roster and the full registration as submitted — is designed but not yet implemented. The registry list and the registration form are available."
+                        milestone="M7"
+                      />
+                    </RequireRole>
+                  }
+                />
                 <Route
                   path="/admin/*"
                   element={
