@@ -8,6 +8,35 @@
 
 ---
 
+## Scope — frontend only
+
+**Everything in this document is frontend work.** The remit is building pages — screens,
+components, hooks, types, mocks and tests. There are no backend tasks here, and nothing in the
+backlog below is one.
+
+**The Go backend is the contract, not the work.** The frontend builds to match what is mounted
+today: the routes in `backend/routes/routes.go`, the binding structs and status codes in
+`backend/handlers/`. Where this document and a handler disagree, the handler wins and the frontend
+changes. Never invent an endpoint, never design against a route that is not registered, and never
+wait on a backend feature before shipping a page the current contract already supports.
+
+**Backend defects are handoffs, not tasks.** A wrong error string, a missing route, an authorization
+hole or a stale comment is recorded once in **Appendix C** and reported to Agene. It is not
+scheduled here, and it blocks frontend work only where a page cannot exist without it — in which case
+the page ships without that block, the way `LandingPage` ships without its map preview.
+
+**What a page owes the contract.** Every screen is built from the real response shapes: the
+`{ "error": "..." }` envelope, `?limit=` capped at 100, underscore role strings, the eight-state
+lifecycle with its review loop at the end. The mock in `src/mocks/` mirrors those shapes deliberately,
+so a page that works under mocks is a page that is shaped correctly for the live service.
+
+**Elegance is the deliverable, not a polish pass.** `frontagent.md` governs how a page looks, feels
+and moves: the design DNA, the ten experience laws, the four states every data surface owes, the
+quality bar in its §7. A page that satisfies the contract but reads as a generic admin template is
+not finished. Build the page, then run `frontagent` §7 against it before calling it done.
+
+---
+
 ## Go backend contract — current source of truth
 
 The backend in this repository is **Go** — Gin + GORM + PostgreSQL, mounted in
@@ -55,7 +84,7 @@ against the Go handlers:
 | **Stale TODO in `ForgotPassword`** | `auth_handler.go:489-492` and `:509-512` claim "email delivery is not yet wired" and that the code is sent to the user's phone instead. **Both are false** — delivery is wired and the service dispatches it. The `_ = rawToken` at `:513` is deliberate and correct, because the service sends internally. | no frontend effect; backend comment cleanup — as written it tells the next reader that reset is broken when it is not |
 | `/cases` pagination | `?limit=` capped at **100**, default **50**. | page through; never assume "get all" |
 | Error envelope | `{ "error": "..." }` — the whole message. | do not invent a wrapper |
-| `GET /units/:id/officers` | Handler is fully implemented, authorises via `canViewOfficersInUnit`, returns `{ officers: [...] }` — but is **unrouted** in `routes.go`. Only `/:id/officers/ranking` is registered. | `AssignOfficerDialog` keeps its contract-gap branch until it is registered (T6) |
+| `GET /units/:id/officers` | **Routed since 2026-09-26.** `routes.go:84` mounts it; the handler authorises via `canViewOfficersInUnit` and returns `{ officers: [...] }`. `/:id/officers/ranking` sits beside it at `:85`. | the roster picker resolves by name; `AssignOfficerDialog` keeps its 404 branch for older deployments (T6) |
 | `/public/cases`, `/public/units` | Registered with **no auth middleware** and neither handler narrows the query, so whole models serialise to anonymous callers. | the landing page ships without its map preview (B3.2) |
 
 **Effect on the recent ten frontend items:** unchanged in substance — they are mock-verified, and an
@@ -63,9 +92,10 @@ SOS receipt in the mock never represents real dispatch. But they are **not** blo
 contract with a Python service. The endpoints are mounted; what remains is pointing the client at a
 running Go instance and confirming each flow end to end.
 
-**Next priority:** stop treating the mock/live boundary as a contract negotiation. Register the
-unrouted handlers, fix the backend copy and the password-length asymmetry, then verify each flow
-against the live service.
+**Next priority:** verify each built flow against the live service. The backend work named in this
+section — registering the remaining unrouted handlers, the reset copy, the password-length asymmetry
+— is recorded in **Appendix C** and belongs to Agene. What the frontend owes is the verification
+pass: point the client at a running Go instance and confirm each flow end to end.
 
 ---
 
@@ -167,7 +197,7 @@ push permission does not imply delivery, and reporting a post does not reach a l
 | API layer | ✅ typed client, mock adapter, 401 handling | Complete |
 | State | ✅ React Query (server) + auth context | Complete |
 | Design system | ✅ primitives + tokens + 4 states | Grow with features |
-| Tests | ✅ 6 unit modules (ISO weeks, API client, assignment rules, status vocabulary, reporter case-log disclosure, report draft) — 83 tests | Component + E2E |
+| Tests | ✅ 17 modules (ISO weeks, API client, assignment rules, status vocabulary, reporter case-log disclosure, report draft, role normalising, signup, password reset, geo and location hooks, mocks) — **158 tests** | Component + E2E |
 | Mocks | ✅ in-browser mock API (`VITE_USE_MOCKS`), covering the full review loop **and case creation** | Contract tests |
 | Case lifecycle | ✅ **all 8 states rendered; the review loop walks end-to-end** (officer submits → admin decides → resubmit → approve → closed). Weekly narratives are read from the real entity, and the reporter now reads their own case through a curated view | Full lifecycle (§0.4) |
 
@@ -175,8 +205,10 @@ push permission does not imply delivery, and reporting a post does not reach a l
 
 **Run it:** `cd frontend && npm install && npm run dev` — mocks are on by default
 (`.env.development`), so every screen below works with **no backend**. Sign in with any demo
-account: `officer@nativityguard.ng`, `admin@nativityguard.ng`, `citizen@nativityguard.ng`, `super@nativityguard.ng`
-(password `password`).
+account: `officer@shield.ng`, `admin@shield.ng`, `citizen@shield.ng`, `super@shield.ng`
+(password `password`). These are the addresses the login screen offers, taken from
+`src/mocks/config.ts:28-31` — an earlier revision of this line said `@nativityguard.ng`, which the
+mock does not list.
 
 | Route | Screen | State |
 |---|---|---|
@@ -284,7 +316,7 @@ to withhold from, so subset-by-omission does not apply and sharing is the safer 
 
 | Gap | How the UI handles it |
 |---|---|
-| **`GetOfficersByUnit` is implemented but never routed** — assigning a case needs an `officers`-table id and nothing on this API lists officers | `AssignOfficerDialog` treats a 404 as a first-class "contract gap" state: it says so plainly and offers a manual officer-ID field. Never an empty roster, never a generic error. Mocks mirror the *unregistered handler's* shape so the flow is walkable today. One-line backend fix: register the route |
+| ~~**`GetOfficersByUnit` is implemented but never routed**~~ — **closed 2026-09-26:** `routes.go:84` mounts `GET /units/:id/officers`. | `AssignOfficerDialog` **keeps** its 404 branch on purpose: `rosterMissing` is false whenever the route exists, so it costs nothing on a current deployment, and it is what keeps the screen usable against a build whose router predates the route. Frontend code cannot know which build it is talking to |
 | `POST /cases/:id/assign` takes an **`officers` id, not a user id** (`officer.UnitID` must equal the case's unit) | `lib/assignment.ts` mirrors the guard (`officerBelongsToUnit`, `assignmentBlocker`) so the dialog blocks a wrong-unit pick before the round trip; officers are a separate entity from `User` in `types/api.ts` |
 | `GET /cases/:id/assignments` may not exist on a given build | `AssignmentPanel` splits 404 (`missing` — endpoint not exposed) from network failure (`failed` — explicitly *does not* mean unassigned). Conflating them would let a dropped connection read as "nobody is assigned" |
 | `GET /auth/profile` carries no `unitId` | `inferAdminUnitId` derives the admin's unit from the scoped case list, and only when **exactly one** unit is present — a super admin's cross-unit list assumes no roster |
@@ -361,7 +393,7 @@ pending → assigned → dispatched → on_scene → investigating
 
 *"Case admin"* = a super admin, **or** any user with an active `UnitMembership` on the case's unit
 whose role is `admin`. Unit membership alone is **not** enough — that is the same principle as
-§0.3's unrouted-roster gap, applied to authorization.
+§0.3's roster gap, applied to authorization — a name on a list is not the right to act.
 
 **Weekly updates are now real**
 
@@ -436,9 +468,9 @@ cached officer view into a citizen view.
   `approve` and `request_changes`, but no route that records it has been found. Do not build a
   de-escalation affordance; the review history humanises it ("De-escalated") rather than pretending
   only two decisions exist.
-- Whether the orphaned `CloseCase` handler, the unrouted `GetCaseAccountability`
-  (model: `models.CaseAccountabilityEvent`), and `GetOfficersByUnit` are pending registration or
-  deliberately retired.
+- Whether the orphaned `CloseCase` handler and the unrouted `GetCaseAccountability`
+  (model: `models.CaseAccountabilityEvent`) are pending registration or deliberately retired.
+  `GetOfficersByUnit` is settled: routed 2026-09-26 (`routes.go:84`).
 
 ---
 
@@ -818,7 +850,7 @@ finance, unit settings.
 - [x] `pending_admin_review` in the triage counters — **"Awaiting your decision"** is now the first
       attention card on `/admin/cases`, with the hint "Submitted for closure — only an admin can move
       these", and it filters the list like the other counters (`Focus = 'to_decide'`)
-- [x] Officer roster: add/edit, status, workload *(blocked by the unrouted `GetOfficersByUnit`)* **(session demo only; live integration pending)**
+- [x] Officer roster: add/edit, status, workload *(unblocked 2026-09-26 — `GET /units/:id/officers` is routed)* **(session demo only; live integration pending)**
 - [~] Verification queue: evidence verify shipped inside case review; memberships and gov IDs open
 - [x] Analytics: volume, response/dispatch/arrival, resolution, workload **(session demo only; live integration pending)**
 - [x] Finance: accounts, donations, transactions + approvals, budgets, reports **(session demo only; live integration pending)**
@@ -1040,8 +1072,9 @@ cd frontend
 npm install
 npm run lint         # eslint, TS + hooks rules
 npm run typecheck    # tsc --noEmit
-npm run test         # vitest (ISO weeks, API client, assignment rules, status vocabulary,
-                     #         reporter case-log disclosure, report draft) — 83 tests
+npm run test         # vitest (role normalising, signup, password reset, API client, assignment
+                     #         rules, status vocabulary, case-log disclosure, report draft,
+                     #         geo/location hooks, mocks) — 158 tests, 17 files
 npm run build        # tsc --noEmit && vite build
 npm run dev          # mocks on by default
 ```
@@ -1262,15 +1295,18 @@ uses `/invites/validate` to show the join-or-stay-citizen choice.
   tracked for Wave 4b of the backend roadmap)
 - `CaseReviewDecisionDeescalate` — still no route records it
 - `GetCaseAccountability` — still unrouted
-- `GetOfficersByUnit` — still unrouted
+- ~~`GetOfficersByUnit` — still unrouted~~ — **routed 2026-09-26** (`routes.go:84`); see T6
 
 ### A8 — Outstanding frontend gaps
 
-- `npm install` must be run once — `node_modules/` is required for `npm run build`
+- ~~`npm install` must be run once~~ — **done 2026-09-26.** `node_modules/` is installed; `lint`,
+  `typecheck` and `test` (158, 17 files) are green. `npm run build` had not been run as of that date.
 - No component tests, only pure-function tests
 - Map marker grouping and aggregated activity overlay are built; advanced map filters remain open
 - SOS frontend is mock-verified; live service contract and dispatch behavior remain unverified
-- Feedback submission form still unbuilt
+- Feedback submission form still unbuilt *(**contradicted** by F4 §3, which ticks feedback as built
+  in the demo, and by §0.1's inventory. One of the two is wrong — resolve against the source before
+  scheduling T14.)*
 
 
 ---
@@ -1295,7 +1331,7 @@ separately — the routes in `routes.go` are the contract, not any URL recorded 
 | **`POST /auth/register`** | Returns **201 `{ message, user }` and NO token.** It also **ignores the `role` input** — `Role: "citizen"` is hardcoded — so a role selector on signup would collect an answer the server discards. `dateOfBirth` (YYYY-MM-DD) is `binding:"required"`. | `handlers/auth_handler.go` |
 | **`POST /auth/login`** | Accepts **either** `identifier` **or** legacy `email`. The brief implies `identifier` is required; the existing `{ email, password }` call is fine and was never a bug. | `handlers/auth_handler.go` |
 | **Route params** | `:id` everywhere — never `:unitId`, never `:userId`. | `routes.go` |
-| **`GET /units/:id/officers`** | **Unrouted**, but the handler is fully implemented, already reads `c.Param("id")`, already authorises via `canViewOfficersInUnit`, and already returns `{ officers: [...] }` — the exact shape `useOfficers.ts` expects. Registering it is one line. Only `/:id/officers/ranking` is registered today. | `handlers/officers_handler.go:295` (unrouted) |
+| **`GET /units/:id/officers`** | **Routed since 2026-09-26** (`routes.go:84`). The handler already read `c.Param("id")`, already authorised via `canViewOfficersInUnit`, and already returned `{ officers: [...] }` — the exact shape `useOfficers.ts` expects — so registering the route was the whole fix. `/:id/officers/ranking` is at `:85`. | `handlers/officers_handler.go:295`, `routes.go:84-85` |
 | **`/cases` pagination** | `?limit=` is capped at **100**, default **50**. Never assume "get all"; page through. Other list endpoints follow in a later wave. | `handlers/case_handler.go` |
 | **Error envelope** | `{ "error": "..." }` — that is the whole message. Do not add or invent a wrapper. | `handlers/` throughout |
 
@@ -1362,6 +1398,11 @@ open question in B2.
 
 The contract in the opening section precedes all tasks below. Its endpoint assumptions were
 re-checked against the Go routes on 2026-09-26.
+
+**Ownership: every task below is frontend work** — pages, hooks, types, mocks, tests. Where a task
+waits on a backend route, the gap lives in **Appendix C**; the task waits, it does not become a
+backend task here. T6 is the single entry that needed a backend line registered (`routes.go:84`),
+and it was an approved exception rather than the pattern.
 
 Ordered. One task per branch-push, each verified locally before it ships. Every task ships only
 when its Definition of Done (§7) is met.
@@ -1460,3 +1501,26 @@ Found while confirming these docs. Not corrected here, to keep this change to a 
    `lib/caseLog.ts`'s role-not-name redaction remains load-bearing, not cosmetic. §A3's "safe by
    contract" is half-right; §0.3's warning is half-stale.
 5. `frontagent` §2 rule 2 described a `lib/status.ts` fallback bug that is already fixed.
+
+---
+
+## Appendix C — Backend handoffs (Agene; not frontend tasks)
+
+Everything here is a **backend** defect or gap. None of it is scheduled as frontend work. It is
+consolidated here so it is recorded once and not lost, and it is reported to Agene. A frontend task
+is blocked by an entry only where a page genuinely cannot exist without it — and then the page ships
+without that block rather than waiting. Source: the verified notes in §0.3, §0.4, A7 and B2/B3.2.
+
+| Item | What is wrong | Where |
+|---|---|---|
+| Password-reset copy | The handler's 200 says "we've sent a password reset link". A **6-digit code** is what is sent and the email body shows the code inline, not a link. | `auth_handler.go:516`; `password_reset_service.go:54`; `email_handler.go:191-198` |
+| Stale reset TODO | Comments claim "email delivery is not yet wired" and that the code goes to the user's phone instead. **Both are false** — `main.go:74` installs `handlers.NewEmailNotifier()`. The worst of the three: it tells the next reader password reset is broken when it works. | `auth_handler.go:489-492`, `:509-512` |
+| Password-length asymmetry | Reset requires **8** characters; registration accepts **6**. A 6-character password can be set at signup and can never be reset. | `auth_handler.go:526`, `:32`; `password_reset_service.go:142` |
+| `on_scene → investigating` | No registered route performs it, and it is the **entry condition for the review workflow**. Reachable today only via the seed. | `routes.go` |
+| `PUT /cases/:id` status validation | `caseObj.Status = input.Status` — no validation, so the same call can set `closed` directly and bypass the entire approval workflow, self-approval guard included. An authorization hole, not just a missing guard. | `handlers.UpdateCaseStatus` |
+| `GetCaseAccountability` unrouted | Handler and `models.CaseAccountabilityEvent` exist; no route registers them. The per-case audit trail depends on it. | `handlers/` |
+| `canAddProgress` guard unconfirmed | The frontend widened `canAddProgress` to include `investigating` and `admin_changes_requested`, assuming the backend guard was widened too. **Unconfirmed.** A guard matching only `dispatched \| on_scene` would leave an investigating officer unable to log progress — emptying the evidence the reviewing admin judges. The mock mirrors the widened version, so the demo will not reveal a mismatch. | `lib/status.ts` vs the progress handler |
+| `CloseCase` orphaned | `handlers.CloseCase` still exists while `POST /cases/:id/close` is no longer routed. Register or retire. | `handlers/` |
+| `CaseReviewDecisionDeescalate` | The constant exists beside `approve` and `request_changes`, but no route records it. The review history humanises it ("De-escalated") rather than pretending only two decisions exist. Do not build a de-escalation affordance. | case-review model |
+| `/public/*` serialises whole models | No auth middleware and neither handler narrows the query, so reporter ids, exact coordinates and unit contact details reach anonymous callers. Needs a curated public DTO. **Blocks the landing page's map preview (B3.2).** | `routes.go`, `handlers/` |
+| `GET /cases/:id` over-returns to a reporter | The progress feed, the evidence list and timeline `description` strings naming officers still reach the reporter. `lib/caseLog.ts`'s role-not-name redaction is therefore **load-bearing, not cosmetic**, and the curated citizen view is presentation, not enforcement. | `handlers/` |
