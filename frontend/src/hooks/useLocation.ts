@@ -257,21 +257,26 @@ export function useLocation(): UseLocationResult {
       .then((status) => {
         if (cancelled) return
         dispatch({ type: 'permission_resolved', permission: toPermission(status.state) })
-        if (status.state === 'granted') {
+        if (status.state === 'granted' || status.state === 'prompt') {
           resolvePosition()
         }
         status.onchange = () => {
           if (cancelled) return
           const resolved = toPermission(status.state)
           dispatch({ type: 'permission_resolved', permission: resolved })
-          if (resolved === 'granted') {
+          if (resolved === 'granted' || resolved === 'prompt') {
             resolvePosition()
           }
         }
       })
       .catch(() => {
         if (cancelled) return
-        dispatch({ type: 'permission_resolved', permission: 'unavailable' })
+        if ('geolocation' in navigator) {
+          dispatch({ type: 'permission_resolved', permission: 'prompt' })
+          resolvePosition()
+        } else {
+          dispatch({ type: 'permission_resolved', permission: 'unavailable' })
+        }
       })
 
     return () => {

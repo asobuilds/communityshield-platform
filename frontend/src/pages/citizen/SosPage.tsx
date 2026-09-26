@@ -42,6 +42,13 @@ export function SosPage() {
   const { latitude: userLat, longitude: userLng } = useLocation()
   const { data: geo, isLoading: geoLoading } = useReverseGeocode(userLat, userLng)
 
+  // Auto-fill SOS coordinates from the device fix the moment they arrive.
+  useEffect(() => {
+    if (userLat == null || userLng == null) return
+    setLat((prev) => (prev.trim() === '' ? String(userLat) : prev))
+    setLng((prev) => (prev.trim() === '' ? String(userLng) : prev))
+  }, [userLat, userLng])
+
   const latitude = Number(lat)
   const longitude = Number(lng)
   const hasLocation = lat.trim() !== '' && lng.trim() !== '' && Number.isFinite(latitude) &&
@@ -162,6 +169,7 @@ export function SosPage() {
             className="mt-3"
             label="Choose the SOS location"
             pickLocation={hasLocation ? [latitude, longitude] : null}
+            userLocation={userLat != null && userLng != null ? { latitude: userLat, longitude: userLng } : null}
             onPickLocation={(nextLat, nextLng) => { setLat(String(nextLat)); setLng(String(nextLng)) }}
           />
           {!hasLocation ? <p className="mt-2 text-xs text-ink-muted">Valid coordinates are required; 0,0 is not a usable location.</p> : null}
