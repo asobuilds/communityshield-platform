@@ -31,7 +31,7 @@ import { CommunityPage } from '@/pages/CommunityPage'
 import { AdminDemoPage } from '@/pages/AdminDemoPage'
 import { UnitsRegistryPage } from '@/pages/super/UnitsRegistryPage'
 import { UnitRegistrationPage } from '@/pages/super/UnitRegistrationPage'
-import { ProfileDemoPage } from '@/pages/ProfileDemoPage'
+import { ProfilePage } from '@/pages/ProfilePage'
 import type { Role } from '@/types/api'
 
 const ALL_ROLES: Role[] = ['citizen', 'officer', 'unit_admin', 'super_admin']
@@ -135,7 +135,7 @@ export function App() {
 
               <Route element={<ProtectedShell />}>
                 <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/profile" element={<ProfileDemoPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/alerts" element={<RequireRole roles={['citizen']}><AlertsPage /></RequireRole>} />
                 <Route path="/alerts/:id" element={<RequireRole roles={['citizen']}><AlertDetailPage /></RequireRole>} />
                 <Route path="/news" element={<RequireRole roles={['citizen']}><NewsPage /></RequireRole>} />

@@ -5,6 +5,7 @@ export { BackLink } from './BackLink'
 export { Field, Input, Textarea, Select } from './Field'
 export { Tabs, TabPanel, type TabItem } from './Tabs'
 export { Modal } from './Modal'
+export { AvatarUpload } from './AvatarUpload'
 export {
   Spinner,
   FullPageSpinner,

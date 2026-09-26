@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Copy,
+  Image,
   Link2,
   MapPin,
   Paperclip,
@@ -39,7 +40,13 @@ import {
   type DraftEvidenceLink,
   type ReportDraft,
 } from '@/lib/reportDraft'
-import type { CreateCaseInput, CreateCaseResponse, EvidenceCreateResponse } from '@/types/api'
+import type { CreateCaseInput, CreateCaseResponse, EvidenceCreateResponse, PresignEvidenceResponse } from '@/types/api'
+
+interface PhotoFile {
+  file: File
+  preview: string
+  type: string
+}
 
 /**
  * Filing a report — the citizen's one long form, and the only place this app
@@ -125,6 +132,8 @@ export function ReportIncidentPage() {
   const [created, setCreated] = useState<CreateCaseResponse | null>(null)
   const [attachments, setAttachments] = useState<AttachmentState[]>([])
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // Photo files selected in the evidence step (not persisted to draft)
+  const [photos, setPhotos] = useState<PhotoFile[]>([])
 
   const createCase = useCreateCase()
   const queryClient = useQueryClient()
@@ -136,6 +145,80 @@ export function ReportIncidentPage() {
   const { data: geo, isLoading: geoLoading } = useReverseGeocode(geoLat, geoLng)
 
   const step = STEPS[stepIndex]
+
+  /**
+   * Generate SHA-256 hash of a file for the presign request.
+   */
+  async function sha256(file: File): Promise<string> {
+    const buffer = await file.arrayBuffer()
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  }
+
+  /**
+   * Presign → PUT → Confirm flow for a single photo file.
+   */
+  async function uploadPhoto(caseId: string, photo: PhotoFile): Promise<string> {
+    const hash = await sha256(photo.file)
+    const presign = await api.post<PresignEvidenceResponse>(`/evidence/case/${caseId}/presign`, {
+      filename: photo.file.name,
+      contentType: photo.file.type,
+      sizeBytes: photo.file.size,
+      sha256: hash,
+    })
+    // PUT the file to the presigned URL (no auth header — presigned URL carries auth)
+    const putResponse = await fetch(presign.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': photo.file.type },
+      body: photo.file,
+    })
+    if (!putResponse.ok) {
+      throw new Error(`Upload failed: ${putResponse.statusText}`)
+    }
+    // Confirm the upload
+    await api.post(`/evidence/case/${caseId}/confirm`, {
+      key: presign.key,
+      filename: photo.file.name,
+      contentType: photo.file.type,
+      sizeBytes: photo.file.size,
+    })
+    return presign.key
+  }
+
+  /**
+   * Attach photos after the case is created. Best-effort — failures are reported
+   * via toast but do not fail the report.
+   */
+  async function attachPhotos(caseId: string, photoFiles: PhotoFile[]) {
+    const linkCount = linksToSend.length
+    for (const [index, photo] of photoFiles.entries()) {
+      const attachmentIndex = linkCount + index
+      setAttachments((current) =>
+        current.map((item, i) => (i === attachmentIndex ? { ...item, status: 'sending' } : item)),
+      )
+      try {
+        await uploadPhoto(caseId, photo)
+        setAttachments((current) =>
+          current.map((item, i) => (i === attachmentIndex ? { ...item, status: 'done' } : item)),
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Upload failed'
+        setAttachments((current) =>
+          current.map((item, i) =>
+            i === attachmentIndex ? { ...item, status: 'failed', message } : item,
+          ),
+        )
+        notify(`Photo failed to upload: ${photo.file.name}`, 'error')
+      }
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: evidenceKeys.forCase(caseId) }),
+      queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) }),
+      queryClient.invalidateQueries({ queryKey: caseKeys.list() }),
+    ])
+  }
 
   /**
    * Written on every change, synchronously.
@@ -209,7 +292,7 @@ export function ReportIncidentPage() {
     blockedReason('what') ?? blockedReason('where') ?? blockedReason('evidence')
 
   /**
-   * Create the case, then attach the links, in that order and never the reverse.
+   * Create the case, then attach the links and photos, in that order.
    *
    * The draft is cleared the moment the create succeeds — *before* any evidence
    * is attempted — so a failed attachment can never leave a reporter able to
@@ -243,8 +326,22 @@ export function ReportIncidentPage() {
 
     clearReportDraft(storage)
     setCreated(response)
-    setAttachments(linksToSend.map((link) => ({ ...link, status: 'queued' })))
+
+    // Build attachment state for both links and photos
+    const linkAttachments = linksToSend.map((link) => ({ ...link, status: 'queued' as const }))
+    const photoAttachments = photos.map((photo) => ({
+      fileUrl: photo.file.name,
+      type: photo.type,
+      status: 'queued' as const,
+      isPhoto: true,
+      preview: photo.preview,
+    }))
+    setAttachments([...linkAttachments, ...photoAttachments])
+
+    // Attach links (existing flow)
     void attachEvidence(response.case.id, linksToSend)
+    // Attach photos (new flow) — best effort, non-blocking
+    void attachPhotos(response.case.id, photos)
   }
 
   /**
@@ -489,112 +586,172 @@ export function ReportIncidentPage() {
             <div className="flex flex-col gap-4">
               <p className="text-xs text-ink-muted">
                 Photographs or documents help the unit understand the report before they arrive.
-                Links are optional, and you can send the report without them.
+                Links and photos are optional, and you can send the report without them.
               </p>
 
-              {draft.evidence.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-border-hi px-3 py-6 text-center text-xs text-ink-faint">
-                  No links added.
-                </p>
-              ) : null}
+              {/* Photo upload section */}
+              <div className="rounded-lg border border-dashed border-border-hi bg-surface-hi p-3">
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(event) => {
+                      const files = Array.from(event.target.files ?? [])
+                      const validFiles = files
+                        .filter((file) => file.type.startsWith('image/') && file.size <= 5 * 1024 * 1024)
+                        .slice(0, 3 - photos.length)
+                      if (validFiles.length !== files.length) {
+                        notify('Some files were skipped: only images up to 5 MB, max 3 total', 'error')
+                      }
+                      validFiles.forEach((file) => {
+                        const preview = URL.createObjectURL(file)
+                        setPhotos((current) => [...current, { file, preview, type: 'image' }])
+                      })
+                      event.currentTarget.value = ''
+                    }}
+                    className="sr-only"
+                    id="photo-upload"
+                    disabled={photos.length >= 3}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {photos.map((photo, index) => (
+                      <div key={index} className="relative size-20 rounded-lg overflow-hidden">
+                        <img src={photo.preview} alt="Preview" className="size-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            URL.revokeObjectURL(photo.preview)
+                            setPhotos((current) => current.filter((_, i) => i !== index))
+                          }}
+                          className="absolute top-1 right-1 size-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                          aria-label="Remove photo"
+                        >
+                          <X className="size-3" aria-hidden />
+                        </button>
+                      </div>
+                    ))}
+                    {photos.length < 3 && (
+                      <div className="size-20 rounded-lg border-2 border-dashed border-border-hi flex flex-col items-center justify-center text-ink-muted hover:border-signal hover:bg-signal/10 transition-colors">
+                        <Image className="size-6 mb-1" aria-hidden />
+                        <span className="text-xs">Add photos</span>
+                        <span className="text-[10px]">Max 3 · 5 MB</span>
+                      </div>
+                    )}
+                  </div>
+                </label>
+                {photos.length > 0 && (
+                  <p className="mt-2 text-[11px] text-ink-muted">
+                    {photos.length}/3 photos selected
+                  </p>
+                )}
+              </div>
 
-              {draft.evidence.map((link, index) => (
-                <div key={index} className="rounded-lg border border-border-hi bg-surface-hi p-3">
-                  <div className="flex items-start gap-2">
-                    <Field
-                      className="flex-1"
-                      label={`Link ${index + 1}`}
-                      error={linkErrors[index]}
-                    >
-                      {({ id, ...aria }) => (
-                        <Input
+              {/* Links section (existing) */}
+              <div className="flex flex-col gap-4">
+                <h3 className="text-xs font-medium text-ink-muted uppercase tracking-wide">Links</h3>
+                {draft.evidence.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-border-hi px-3 py-6 text-center text-xs text-ink-faint">
+                    No links added.
+                  </p>
+                ) : null}
+
+                {draft.evidence.map((link, index) => (
+                  <div key={index} className="rounded-lg border border-border-hi bg-surface-hi p-3">
+                    <div className="flex items-start gap-2">
+                      <Field
+                        className="flex-1"
+                        label={`Link ${index + 1}`}
+                        error={linkErrors[index]}
+                      >
+                        {({ id, ...aria }) => (
+                          <Input
+                            id={id}
+                            {...aria}
+                            value={link.fileUrl}
+                            inputMode="url"
+                            placeholder="https://…"
+                            onChange={(event) =>
+                              update(
+                                'evidence',
+                                draft.evidence.map((item, i) =>
+                                  i === index ? { ...item, fileUrl: event.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                        )}
+                      </Field>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-5"
+                        aria-label={`Remove link ${index + 1}`}
+                        onClick={() =>
+                          update(
+                            'evidence',
+                            draft.evidence.filter((_, i) => i !== index),
+                          )
+                        }
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                      </Button>
+                    </div>
+
+                    <Field className="mt-3" label="What is it?">
+                      {({ id }) => (
+                        <Select
                           id={id}
-                          {...aria}
-                          value={link.fileUrl}
-                          inputMode="url"
-                          placeholder="https://…"
+                          value={link.type}
                           onChange={(event) =>
                             update(
                               'evidence',
                               draft.evidence.map((item, i) =>
-                                i === index ? { ...item, fileUrl: event.target.value } : item,
+                                i === index ? { ...item, type: event.target.value } : item,
                               ),
                             )
                           }
-                        />
+                        >
+                          {EVIDENCE_TYPES.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </Select>
                       )}
                     </Field>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-5"
-                      aria-label={`Remove link ${index + 1}`}
-                      onClick={() =>
-                        update(
-                          'evidence',
-                          draft.evidence.filter((_, i) => i !== index),
-                        )
-                      }
-                    >
-                      <Trash2 className="size-4" aria-hidden />
-                    </Button>
                   </div>
+                ))}
 
-                  <Field className="mt-3" label="What is it?">
-                    {({ id }) => (
-                      <Select
-                        id={id}
-                        value={link.type}
-                        onChange={(event) =>
-                          update(
-                            'evidence',
-                            draft.evidence.map((item, i) =>
-                              i === index ? { ...item, type: event.target.value } : item,
-                            ),
-                          )
-                        }
-                      >
-                        {EVIDENCE_TYPES.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </Field>
-                </div>
-              ))}
+                {draft.evidence.length < MAX_EVIDENCE_LINKS ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Plus className="size-4" aria-hidden />}
+                    onClick={() =>
+                      update('evidence', [
+                        ...draft.evidence,
+                        { fileUrl: '', type: EVIDENCE_TYPES[0].value },
+                      ])
+                    }
+                  >
+                    Add a link
+                  </Button>
+                ) : null}
 
-              {draft.evidence.length < MAX_EVIDENCE_LINKS ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<Plus className="size-4" aria-hidden />}
-                  onClick={() =>
-                    update('evidence', [
-                      ...draft.evidence,
-                      { fileUrl: '', type: EVIDENCE_TYPES[0].value },
-                    ])
-                  }
-                >
-                  Add a link
-                </Button>
-              ) : null}
-
-              {/* The contract has no binary upload, so this is not a limitation to
-                  apologise for in prose — it is the actual shape of the feature. */}
-              <p className="flex items-start gap-1.5 text-[11px] text-ink-faint">
-                <Link2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                <span>
-                  Up to {MAX_EVIDENCE_LINKS} links. The file has to be hosted somewhere you can
-                  share a link to — this app cannot take a file straight from your phone yet.
-                </span>
-              </p>
+                <p className="flex items-start gap-1.5 text-[11px] text-ink-faint">
+                  <Link2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                  <span>
+                    Up to {MAX_EVIDENCE_LINKS} links. The file has to be hosted somewhere you can
+                    share a link to.
+                  </span>
+                </p>
+              </div>
             </div>
           ) : null}
 
           {step.key === 'review' ? (
-            <ReviewStep draft={draft} onEdit={setStepIndex} />
+            <ReviewStep draft={draft} photos={photos} onEdit={setStepIndex} />
           ) : null}
 
           {stepBlocked && step.key !== 'review' ? (
@@ -890,9 +1047,11 @@ function UnitOption({
 
 function ReviewStep({
   draft,
+  photos,
   onEdit,
 }: {
   draft: ReportDraft
+  photos: PhotoFile[]
   onEdit: (index: number) => void
 }) {
   // `useUnits`, not `useNearbyUnits`: this only needs a name for an id the
@@ -929,15 +1088,20 @@ function ReviewStep({
       </SummaryRow>
 
       <SummaryRow label="Evidence" onEdit={() => onEdit(2)}>
-        {links.length === 0 ? (
-          <p className="text-sm text-ink-muted">No links</p>
+        {(links.length === 0 && photos.length === 0) ? (
+          <p className="text-sm text-ink-muted">No links or photos</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {links.map((link, index) => (
-              // Text, never an anchor: this is a URL the reporter typed, and the
-              // only thing this screen needs to do is show them what they entered.
-              <li key={index} className="truncate text-xs text-ink-muted">
+              <li key={index} className="truncate text-xs text-ink-muted flex items-center gap-1">
+                <Paperclip className="size-3" aria-hidden />
                 {link.type} · {link.fileUrl}
+              </li>
+            ))}
+            {photos.map((photo, index) => (
+              <li key={index} className="truncate text-xs text-ink-muted flex items-center gap-1">
+                <Image className="size-3" aria-hidden />
+                {photo.file.name} ({Math.round(photo.file.size / 1024)} KB)
               </li>
             ))}
           </ul>
@@ -989,6 +1153,9 @@ function SummaryRow({
 interface AttachmentState extends DraftEvidenceLink {
   status: 'queued' | 'sending' | 'done' | 'failed'
   message?: string
+  /** For photos, the type (e.g., 'photo') and a preview URL */
+  isPhoto?: boolean
+  preview?: string
 }
 
 /**

@@ -443,6 +443,12 @@ export interface EvidenceCreateResponse {
   evidence: Evidence
 }
 
+export interface PresignEvidenceResponse {
+  uploadUrl: string
+  key: string
+  expiresAt: string
+}
+
 export interface UnitsResponse {
   units: SecurityUnit[]
 }

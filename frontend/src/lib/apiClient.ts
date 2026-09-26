@@ -233,6 +233,72 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
  * bearer token, and a 401 from *bad credentials* must not tear down a session
  * the user already has — only an authenticated request can do that.
  */
+/**
+ * Multipart upload helper — uses the same 401/refresh pipeline as `request`.
+ *
+ * Do NOT set Content-Type; the browser sets it with the correct multipart boundary.
+ */
+async function requestUpload<T>(
+  path: string,
+  file: File,
+  fieldName: string,
+  anonymous: boolean,
+): Promise<T> {
+  const formData = new FormData()
+  formData.append(fieldName, file)
+
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  const token = tokenStore.get()
+  if (token && !anonymous) headers.Authorization = `Bearer ${token}`
+
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
+    throw new ApiError(0, 'Network unavailable — check your connection.', cause)
+  }
+
+  // Same 401 handling as request(): refresh once, replay, then clear session.
+  if (response.status === 401 && !anonymous) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) {
+      const retryHeaders: Record<string, string> = { Accept: 'application/json' }
+      const newToken = tokenStore.get()
+      if (newToken) retryHeaders.Authorization = `Bearer ${newToken}`
+      response = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: retryHeaders,
+        body: formData,
+      })
+    }
+  }
+
+  if (response.status === 401 && !anonymous) {
+    tokenStore.clear()
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+    }
+    const { message } = await readError(response)
+    throw new ApiError(401, message)
+  }
+
+  if (!response.ok) {
+    const { message, body: errorBody } = await readError(response)
+    throw new ApiError(response.status, message, errorBody)
+  }
+
+  if (response.status === 204) return undefined as T
+
+  const text = await response.text()
+  if (!text) return undefined as T
+  return JSON.parse(text) as T
+}
+
 export const api = {
   get: <T>(path: string, signal?: AbortSignal) => request<T>(path, { method: 'GET', signal }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
@@ -241,4 +307,8 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  upload: <T>(path: string, file: File, fieldName = 'file'): Promise<T> =>
+    requestUpload<T>(path, file, fieldName, false),
+  uploadAnonymous: <T>(path: string, file: File, fieldName = 'file'): Promise<T> =>
+    requestUpload<T>(path, file, fieldName, true),
 }
