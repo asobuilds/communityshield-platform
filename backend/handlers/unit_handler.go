@@ -66,6 +66,18 @@ func derefFormationDate(raw *string) string {
 	return *raw
 }
 
+// validateShiftPattern checks the registration form's shift enum. An empty
+// value is accepted: the field is optional, and an omitted key must not block
+// a submission. Returns (errorMessage, true) when the value is acceptable.
+func validateShiftPattern(pattern string) (string, bool) {
+	switch pattern {
+	case "", "day", "night", "24h":
+		return "", true
+	default:
+		return "shiftPattern must be one of day, night, 24h", false
+	}
+}
+
 // GetNearbyUnits returns units near a location
 func GetNearbyUnits(c *gin.Context) {
 	latStr := c.Query("lat")
@@ -243,10 +255,35 @@ func CreateUnit(c *gin.Context) {
 		FormationDate *string `json:"formationDate"`
 		Ward          string  `json:"ward"`
 		TotalMembers  int     `json:"totalMembers"`
+
+		// Section B — commander.
+		CommanderName            string `json:"commanderName"`
+		CommanderNIN             string `json:"commanderNin"`
+		CommanderPhoneAlt        string `json:"commanderPhoneAlt"`
+		CommanderOccupation      string `json:"commanderOccupation"`
+		CommanderPriorExperience string `json:"commanderPriorExperience"`
+
+		// Section C — operational profile.
+		HasUniform         bool   `json:"hasUniform"`
+		UniformDescription string `json:"uniformDescription"`
+		ShiftPattern       string `json:"shiftPattern"`
+		PermittedTools     string `json:"permittedTools"`
+		WeaponsRegistered  bool   `json:"weaponsRegistered"`
+
+		// Section D — traditional endorsement.
+		KindredHeadName  string `json:"kindredHeadName"`
+		KindredHeadPhone string `json:"kindredHeadPhone"`
+		WardHeadName     string `json:"wardHeadName"`
+		WardHeadPhone    string `json:"wardHeadPhone"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if msg, ok := validateShiftPattern(input.ShiftPattern); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
 
@@ -299,6 +336,23 @@ func CreateUnit(c *gin.Context) {
 		TotalMembers:       input.TotalMembers,
 		Status:             "active",
 		IsVerified:         false,
+
+		CommanderName:            input.CommanderName,
+		CommanderNIN:             input.CommanderNIN,
+		CommanderPhoneAlt:        input.CommanderPhoneAlt,
+		CommanderOccupation:      input.CommanderOccupation,
+		CommanderPriorExperience: input.CommanderPriorExperience,
+
+		HasUniform:         input.HasUniform,
+		UniformDescription: input.UniformDescription,
+		ShiftPattern:       input.ShiftPattern,
+		PermittedTools:     input.PermittedTools,
+		WeaponsRegistered:  input.WeaponsRegistered,
+
+		KindredHeadName:  input.KindredHeadName,
+		KindredHeadPhone: input.KindredHeadPhone,
+		WardHeadName:     input.WardHeadName,
+		WardHeadPhone:    input.WardHeadPhone,
 	}
 
 	// `RegistrationNumber` carries a unique index with no default, so two
@@ -359,10 +413,35 @@ func UpdateUnit(c *gin.Context) {
 		FormationDate *string `json:"formationDate"`
 		Ward          string  `json:"ward"`
 		TotalMembers  int     `json:"totalMembers"`
+
+		// Section B — commander.
+		CommanderName            string `json:"commanderName"`
+		CommanderNIN             string `json:"commanderNin"`
+		CommanderPhoneAlt        string `json:"commanderPhoneAlt"`
+		CommanderOccupation      string `json:"commanderOccupation"`
+		CommanderPriorExperience string `json:"commanderPriorExperience"`
+
+		// Section C — operational profile.
+		HasUniform         bool   `json:"hasUniform"`
+		UniformDescription string `json:"uniformDescription"`
+		ShiftPattern       string `json:"shiftPattern"`
+		PermittedTools     string `json:"permittedTools"`
+		WeaponsRegistered  bool   `json:"weaponsRegistered"`
+
+		// Section D — traditional endorsement.
+		KindredHeadName  string `json:"kindredHeadName"`
+		KindredHeadPhone string `json:"kindredHeadPhone"`
+		WardHeadName     string `json:"wardHeadName"`
+		WardHeadPhone    string `json:"wardHeadPhone"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if msg, ok := validateShiftPattern(input.ShiftPattern); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
 
@@ -437,6 +516,48 @@ func UpdateUnit(c *gin.Context) {
 	}
 	if input.TotalMembers != 0 {
 		unit.TotalMembers = input.TotalMembers
+	}
+
+	// Registration form fields. Strings follow the same "non-zero means set"
+	// guard used above; the bools are plain values with no pointer, so they
+	// are written through as sent.
+	if input.CommanderName != "" {
+		unit.CommanderName = input.CommanderName
+	}
+	if input.CommanderNIN != "" {
+		unit.CommanderNIN = input.CommanderNIN
+	}
+	if input.CommanderPhoneAlt != "" {
+		unit.CommanderPhoneAlt = input.CommanderPhoneAlt
+	}
+	if input.CommanderOccupation != "" {
+		unit.CommanderOccupation = input.CommanderOccupation
+	}
+	if input.CommanderPriorExperience != "" {
+		unit.CommanderPriorExperience = input.CommanderPriorExperience
+	}
+	unit.HasUniform = input.HasUniform
+	if input.UniformDescription != "" {
+		unit.UniformDescription = input.UniformDescription
+	}
+	if input.ShiftPattern != "" {
+		unit.ShiftPattern = input.ShiftPattern
+	}
+	if input.PermittedTools != "" {
+		unit.PermittedTools = input.PermittedTools
+	}
+	unit.WeaponsRegistered = input.WeaponsRegistered
+	if input.KindredHeadName != "" {
+		unit.KindredHeadName = input.KindredHeadName
+	}
+	if input.KindredHeadPhone != "" {
+		unit.KindredHeadPhone = input.KindredHeadPhone
+	}
+	if input.WardHeadName != "" {
+		unit.WardHeadName = input.WardHeadName
+	}
+	if input.WardHeadPhone != "" {
+		unit.WardHeadPhone = input.WardHeadPhone
 	}
 	// Only touch the date when the caller sent the key at all. Every other
 	// field above uses the same "non-zero means set" guard, but a date has a
