@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Briefcase, Users, Loader2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -27,15 +27,16 @@ export function ProfilePage() {
     phone: '',
   })
 
-  // Keep form in sync with profile data
-  if (profile) {
-    setForm((prev) => ({
-      ...prev,
-      firstName: profile.firstName ?? '',
-      lastName: profile.lastName ?? '',
-      phone: profile.phone ?? '',
-    }))
-  }
+  useEffect(() => {
+    if (profile) {
+      setForm((prev) => ({
+        ...prev,
+        firstName: profile.firstName ?? '',
+        lastName: profile.lastName ?? '',
+        phone: profile.phone ?? '',
+      }))
+    }
+  }, [profile])
 
   const handleChange = (key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }))
