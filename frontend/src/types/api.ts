@@ -249,6 +249,14 @@ export interface SecurityUnit {
   contactPhone?: string
   contactEmail?: string
   registrationNumber?: string
+  /** Local government ward. Omitted by the API when unset (`omitempty`). */
+  ward?: string
+  /** `YYYY-MM-DD`. Omitted by the API when unset (`omitempty`). */
+  formationDate?: string
+  totalMembers?: number
+  brandName?: string
+  memberCount?: number
+  adminCount?: number
   status: string
   isVerified: boolean
   verificationStatus?: string

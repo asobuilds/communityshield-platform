@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -34,6 +36,34 @@ func validateGeography(state, lga string) (string, bool) {
 		return "unknown LGA " + lga + " for state " + st.Name, false
 	}
 	return "", true
+}
+
+// parseFormationDate reads a caller-supplied "YYYY-MM-DD" date.
+//
+// It returns (nil, true) for an absent value, so an omitted field is never
+// confused with a malformed one. The pointer type on the request structs is
+// what makes that distinction possible: JSON `null`/absent decodes to nil,
+// while `"formationDate": ""` decodes to a pointer to the empty string, which
+// is how a client clears the value on update.
+func parseFormationDate(raw string) (*time.Time, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
+// derefFormationDate unwraps the optional JSON field to the raw string,
+// treating an absent key as an empty one. On update the caller checks the
+// pointer separately; on create both cases mean "unset".
+func derefFormationDate(raw *string) string {
+	if raw == nil {
+		return ""
+	}
+	return *raw
 }
 
 // GetNearbyUnits returns units near a location
@@ -208,6 +238,11 @@ func CreateUnit(c *gin.Context) {
 		ContactPhone       string  `json:"contactPhone"`
 		ContactEmail       string  `json:"contactEmail"`
 		RegistrationNumber string  `json:"registrationNumber"`
+		// Pointer so an absent `formationDate` is distinguishable from an
+		// explicit `""`; both are legal on create and mean "unset".
+		FormationDate *string `json:"formationDate"`
+		Ward          string  `json:"ward"`
+		TotalMembers  int     `json:"totalMembers"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -239,6 +274,12 @@ func CreateUnit(c *gin.Context) {
 		input.OperationalRadius = 10
 	}
 
+	formationDate, err := parseFormationDate(derefFormationDate(input.FormationDate))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid formationDate (expected YYYY-MM-DD)"})
+		return
+	}
+
 	unit := models.SecurityUnit{
 		Name:               input.Name,
 		Type:               input.Type,
@@ -253,11 +294,21 @@ func CreateUnit(c *gin.Context) {
 		ContactPhone:       input.ContactPhone,
 		ContactEmail:       input.ContactEmail,
 		RegistrationNumber: input.RegistrationNumber,
+		Ward:               input.Ward,
+		FormationDate:      formationDate,
+		TotalMembers:       input.TotalMembers,
 		Status:             "active",
 		IsVerified:         false,
 	}
 
-if err := config.DB.Create(&unit).Error; err != nil {
+	// `RegistrationNumber` carries a unique index with no default, so two
+	// units created without one collide and the loser gets a bare 500.
+	// Generate a readable placeholder instead; the field stays editable.
+	if unit.RegistrationNumber == "" {
+		unit.RegistrationNumber = "REG-" + strings.ToUpper(uuid.NewString()[:8])
+	}
+
+	if err := config.DB.Create(&unit).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create unit"})
 		return
 	}
@@ -303,6 +354,11 @@ func UpdateUnit(c *gin.Context) {
 		ContactPhone      string  `json:"contactPhone"`
 		ContactEmail      string  `json:"contactEmail"`
 		Status            string  `json:"status"`
+		// Pointer for the same reason as CreateUnit: nil is "leave alone",
+		// `""` is "clear this field".
+		FormationDate *string `json:"formationDate"`
+		Ward          string  `json:"ward"`
+		TotalMembers  int     `json:"totalMembers"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -328,7 +384,7 @@ func UpdateUnit(c *gin.Context) {
 		return
 	}
 
-var unit models.SecurityUnit
+	var unit models.SecurityUnit
 	if err := config.DB.First(&unit, "id = ?", unitID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Unit not found"})
 		return
@@ -376,8 +432,26 @@ var unit models.SecurityUnit
 	if input.Status != "" {
 		unit.Status = input.Status
 	}
+	if input.Ward != "" {
+		unit.Ward = input.Ward
+	}
+	if input.TotalMembers != 0 {
+		unit.TotalMembers = input.TotalMembers
+	}
+	// Only touch the date when the caller sent the key at all. Every other
+	// field above uses the same "non-zero means set" guard, but a date has a
+	// meaningful zero: `""` is how a client clears it, and an update that
+	// omits `formationDate` entirely must not wipe a date it never mentioned.
+	if input.FormationDate != nil {
+		parsed, err := parseFormationDate(*input.FormationDate)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid formationDate (expected YYYY-MM-DD)"})
+			return
+		}
+		unit.FormationDate = parsed
+	}
 
-if err := config.DB.Save(&unit).Error; err != nil {
+	if err := config.DB.Save(&unit).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update unit"})
 		return
 	}
