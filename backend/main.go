@@ -27,6 +27,10 @@ func main() {
 	config.ConnectDatabase()
 	defer config.CloseDatabase()
 
+	if err := config.AutoMigrateAll(); err != nil {
+		log.Fatalf("auto-migration failed: %v", err)
+	}
+
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.DebugMode)
 	} else {

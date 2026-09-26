@@ -8,6 +8,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"security-solution/config"
 	"security-solution/models"
 )
 
@@ -35,120 +36,10 @@ func main() {
 	log.Println("Connected to security_platform")
 	log.Println("Running schema migration...")
 
-	err = db.AutoMigrate(
-		&models.User{},
-		&models.SecurityUnit{},
-		&models.Officer{},
-		&models.GovernmentIDVerification{},
+	config.DB = db
 
-		&models.Case{},
-		&models.CaseAccountabilityEvent{},
-		&models.Evidence{},
-		&models.Progress{},
-		&models.CaseFeedback{},
-		&models.CaseOfficer{},
-		&models.CaseProgress{},
-		&models.CaseTemplate{},
-		&models.CaseTimeline{},
-		&models.CaseTransfer{},
-		&models.TransferRequest{},
-		&models.TransferApproval{},
-
-		&models.Rating{},
-		&models.Notification{},
-		&models.OTP{},
-		&models.PasswordReset{},
-		&models.PushSubscription{},
-		&models.PushToken{},
-
-		&models.AIAnalysis{},
-		&models.Alert{},
-		&models.Announcement{},
-		&models.News{},
-		&models.NewsAlert{},
-
-		&models.SOSAlert{},
-		&models.BankAccount{},
-		&models.Donation{},
-		&models.Transaction{},
-		&models.TransactionApproval{},
-		&models.Budget{},
-		&models.FinancialReport{},
-
-		&models.ForumPost{},
-		&models.ForumReply{},
-		&models.CommunityAnnouncement{},
-		&models.CommunityEvent{},
-		&models.EventAttendee{},
-		&models.CommunityAlert{},
-		&models.AlertSubscription{},
-
-		&models.AuditLog{},
-		&models.SystemHealth{},
-		&models.ActivityLog{},
-		&models.NotificationLog{},
-
-		&models.DataExport{},
-		&models.EmailTemplate{},
-		&models.SystemSettings{},
-		&models.SystemBackup{},
-		&models.UserOnboarding{},
-
-		&models.PeaceCommittee{},
-		&models.CommitteeMember{},
-		&models.ConflictResolution{},
-		&models.CommunityTrustScore{},
-		&models.PeaceMetric{},
-
-		&models.Suspect{},
-		&models.SuspectAssociation{},
-		&models.SuspectSighting{},
-		&models.SuspectCase{},
-
-		&models.Camera{},
-		&models.VideoAlert{},
-		&models.SocialMediaPost{},
-
-		&models.CommunicationRoom{},
-		&models.CommunicationMessage{},
-		&models.VoiceCall{},
-		&models.CommunicationSync{},
-
-		&models.ChatMessage{},
-		&models.Report{},
-		&models.CaseReview{},
-		&models.CaseWeeklyUpdate{},
-		&models.UnitMembership{},
-		&models.UnitAuth{},
-		&models.UnitInvite{},
-		&models.UnitAdminSeat{},
-		&models.UnitAdminElection{},
-		&models.AdminVote{},
-		&models.HeadAdminVote{},
-		&models.CaseAdminAssignment{},
-		&models.RevocationCycle{},
-		&models.RevocationVote{},
-
-		&models.RevokedToken{},
-		&models.RefreshToken{},
-		&models.UserSession{},
-		&models.IdempotencyRecord{},
-
-		&models.FinancialLedger{},
-		&models.LedgerSequence{},
-		&models.UnitFinancialYear{},
-		&models.PlatformDonation{},
-
-		&models.OfficerScore{},
-		&models.UnitScore{},
-		&models.CounterStatement{},
-		&models.Appeal{},
-		&models.AgeAudit{},
-		&models.GeocodeCache{},
-	)
-
-	if err != nil {
-		log.Fatal("schema migration failed:", err)
+	if err := config.AutoMigrateAll(); err != nil {
+		log.Fatalf("migration failed: %v", err)
 	}
 
 	log.Println("Schema migration completed successfully.")
